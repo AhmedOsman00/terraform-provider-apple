@@ -9,8 +9,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"terraform-provider-apple/internal/apple/models"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 const HostURL string = "https://api.appstoreconnect.apple.com"

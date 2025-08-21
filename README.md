@@ -1,18 +1,8 @@
-# Terraform Provider Scaffolding (Terraform Plugin Framework)
+# Terraform Apple Provider
 
-_This template repository is built on the [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework). The template repository built on the [Terraform Plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk) can be found at [terraform-provider-scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding). See [Which SDK Should I Use?](https://developer.hashicorp.com/terraform/plugin/framework-benefits) in the Terraform documentation for additional information._
+A Terraform provider for managing Apple App Store Connect resources using the [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework).
 
-This repository is a *template* for a [Terraform](https://www.terraform.io) provider. It is intended as a starting point for creating Terraform providers, containing:
-
-- A resource and a data source (`internal/provider/`),
-- Examples (`examples/`) and generated documentation (`docs/`),
-- Miscellaneous meta files.
-
-These files contain boilerplate code that you will need to edit to create your own Terraform provider. Tutorials for creating Terraform providers can be found on the [HashiCorp Developer](https://developer.hashicorp.com/terraform/tutorials/providers-plugin-framework) platform. _Terraform Plugin Framework specific guides are titled accordingly._
-
-Please see the [GitHub template repository documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/creating-a-repository-from-a-template) for how to create a new repository from this template on GitHub.
-
-Once you've written your provider, you'll want to [publish it on the Terraform Registry](https://developer.hashicorp.com/terraform/registry/providers/publishing) so that others can use it.
+This provider allows you to manage Apple App Store Connect resources such as Bundle IDs through Terraform configuration, using JWT authentication with the Apple App Store Connect API.
 
 ## Requirements
 
@@ -45,7 +35,52 @@ Then commit the changes to `go.mod` and `go.sum`.
 
 ## Using the provider
 
-Fill this in for each provider
+### Authentication
+
+The provider requires Apple App Store Connect API credentials:
+
+- **issuer_id**: Your App Store Connect API Key Issuer ID
+- **api_key**: Your App Store Connect API Key ID  
+- **private_key**: Your App Store Connect API Private Key (PEM format)
+
+These can be configured via provider configuration or environment variables:
+
+```bash
+export APPLE_APP_STORE_CONNECT_ISSUER_ID="your-issuer-id"
+export APPLE_APP_STORE_CONNECT_API_KEY="your-api-key-id"
+export APPLE_APP_STORE_CONNECT_PRIVATE_KEY="$(cat AuthKey_XXXXXXXXXX.p8)"
+```
+
+### Example Usage
+
+```terraform
+terraform {
+  required_providers {
+    apple = {
+      source = "theaostudio.com/hashicorp/apple"
+    }
+  }
+}
+
+# Configure the Apple Provider
+provider "apple" {
+  issuer_id    = "your-issuer-id"
+  api_key      = "your-api-key-id"
+  private_key  = file("AuthKey_XXXXXXXXXX.p8")
+}
+
+# Create a Bundle ID
+resource "apple_bundle_id" "example" {
+  identifier = "com.example.myapp"
+  name       = "My Example App"
+  platform   = "IOS"
+}
+
+# Query existing Bundle IDs
+data "apple_bundle_ids" "ios_apps" {
+  platform = "IOS"
+}
+```
 
 ## Developing the Provider
 
