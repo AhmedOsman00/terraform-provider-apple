@@ -269,6 +269,7 @@ func (p *appleProvider) Configure(ctx context.Context, req provider.ConfigureReq
 func (p *appleProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		bundle.NewBundleIDsDataSource,
+		bundle.NewBundleIDCapabilitiesDataSource,
 	}
 }
 
@@ -276,5 +277,6 @@ func (p *appleProvider) DataSources(_ context.Context) []func() datasource.DataS
 func (p *appleProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		bundle.NewBundleIDResource,
+		bundle.NewBundleIDCapabilityResource,
 	}
 }
