@@ -9,6 +9,7 @@ import (
 	"terraform-provider-apple/internal/provider/bundle"
 	"terraform-provider-apple/internal/provider/certificate"
 	"terraform-provider-apple/internal/provider/device"
+	"terraform-provider-apple/internal/provider/profile"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -274,6 +275,7 @@ func (p *appleProvider) DataSources(_ context.Context) []func() datasource.DataS
 		bundle.NewBundleIDCapabilitiesDataSource,
 		certificate.NewCertificatesDataSource,
 		device.NewDevicesDataSource,
+		profile.NewProfilesDataSource,
 	}
 }
 
@@ -284,5 +286,6 @@ func (p *appleProvider) Resources(_ context.Context) []func() resource.Resource 
 		bundle.NewBundleIDCapabilityResource,
 		certificate.NewCertificateResource,
 		device.NewDeviceResource,
+		profile.NewProfileResource,
 	}
 }
