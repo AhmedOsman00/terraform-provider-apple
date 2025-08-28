@@ -29,14 +29,17 @@ The documentation generation tool looks for files in the following locations by 
 * **`data-sources/apple_bundle_id_capabilities/data-source.tf`** - Example usage of the Bundle ID Capabilities data source
 * **`data-sources/apple_certificates/data-source.tf`** - Example usage of the Certificates data source
 * **`data-sources/apple_devices/data-source.tf`** - Example usage of the Devices data source
+* **`data-sources/apple_profiles/data-source.tf`** - **NEW** Example usage of the Provisioning Profiles data source
 * **`resources/apple_bundle_id/resource.tf`** - Example usage of the Bundle ID resource with capabilities
 * **`resources/apple_bundle_id_capability/resource.tf`** - Example usage of the Bundle ID Capability resource
 * **`resources/apple_certificate/resource.tf`** - Example usage of the Certificate resource
 * **`resources/apple_device/resource.tf`** - Example usage of the Device resource
+* **`resources/apple_profile/resource.tf`** - **NEW** Example usage of the Provisioning Profile resource
 
 ### Runnable Examples
 
-* **`main.tf`** - Complete example that demonstrates Bundle ID creation, capability management, certificate creation, device registration, and data source querying
+* **`main.tf`** - Complete example that demonstrates Bundle ID creation, capability management, certificate creation, device registration, **provisioning profile creation**, and data source querying
+* **`profile/main.tf`** - **NEW** Comprehensive provisioning profile management example with multiple platforms and distribution methods
 
 ## Running the Examples
 
@@ -64,15 +67,20 @@ The documentation generation tool looks for files in the following locations by 
 - **Bundle ID Capabilities**: Adding and configuring app capabilities like push notifications, iCloud, Apple Pay, etc.
 - **Certificate Management**: Creating and managing development and distribution certificates
 - **Device Management**: Registering and managing iOS, macOS, tvOS, watchOS, and visionOS devices for development and testing
-- **Data Source Usage**: Querying existing Bundle IDs, capabilities, certificates, and devices with filtering and sorting options
+- **Provisioning Profile Management**: **NEW** Creating and managing provisioning profiles for different distribution methods
+- **Data Source Usage**: Querying existing Bundle IDs, capabilities, certificates, devices, and **profiles** with filtering and sorting options
 - **Multi-platform Support**: Examples for iOS, macOS, tvOS, watchOS, and visionOS resources
 - **Certificate Types**: Examples of different certificate types (development, distribution, Developer ID, etc.)
 - **Device Types**: Examples of registering different device types (iPhone, iPad, Mac, Apple TV, Apple Watch, Vision Pro)
+- **Profile Types**: **NEW** Examples of different provisioning profile types (development, App Store, Ad Hoc, enterprise distribution)
 - **Settings Configuration**: How to configure complex capability settings for services like iCloud, App Groups, and Apple Pay
 - **Capability Management**: Full lifecycle management of Bundle ID capabilities including creation, updates, and deletion
 - **Certificate Lifecycle**: Certificate creation, querying, and revocation management
 - **Device Registration**: Device registration with UDID validation and platform-specific requirements
-- **Security Best Practices**: Handling sensitive certificate content, CSR data, and device UDIDs
+- **Profile Lifecycle**: **NEW** Provisioning profile creation, updates, import, and deletion
+- **Resource Relationships**: **NEW** How to link Bundle IDs, certificates, and devices through provisioning profiles
+- **Distribution Workflows**: **NEW** Complete workflows for development, testing (Ad Hoc), and App Store distribution
+- **Security Best Practices**: Handling sensitive certificate content, CSR data, device UDIDs, and profile content
 
 ## Important Notes
 
@@ -113,9 +121,63 @@ The device examples include placeholder UDID values. In practice, you need to ob
 - Settings > General > About > Identifier
 - UDID format: UUID format
 
+### Provisioning Profiles
+
+The provisioning profile examples demonstrate the complete workflow for code signing and app distribution:
+
+#### Profile Types
+- **Development Profiles**: For running apps on registered devices during development
+- **App Store Distribution**: For distributing apps through the App Store (no devices required)
+- **Ad Hoc Distribution**: For distributing apps to specific devices outside the App Store
+- **Enterprise Distribution**: For internal distribution within organizations
+
+#### Key Relationships
+- Each profile must be linked to exactly one Bundle ID
+- Each profile requires one or more certificates (appropriate for the profile type)
+- Development and Ad Hoc profiles require registered devices
+- App Store and Enterprise profiles don't require devices
+
+#### Profile Management
+- Profile names can be updated after creation
+- Other profile attributes (Bundle ID, certificates, devices) cannot be changed
+- Profiles have expiration dates and need to be regenerated periodically
+- Profiles can be imported by Apple ID or profile name
+
+#### Example Workflow
+```hcl
+# 1. Create Bundle ID
+resource "apple_bundle_id" "app" {
+  identifier = "com.example.myapp"
+  name       = "My App"
+  platform   = "IOS"
+}
+
+# 2. Create development certificate (with real CSR)
+resource "apple_certificate" "development" {
+  certificate_type = "IOS_DEVELOPMENT"
+  csr_content      = var.development_csr
+}
+
+# 3. Register test devices
+resource "apple_device" "test_iphone" {
+  name     = "Test iPhone"
+  udid     = var.test_device_udid
+  platform = "IOS"
+}
+
+# 4. Create development profile linking all components
+resource "apple_profile" "development" {
+  name         = "Development Profile"
+  platform     = "IOS"
+  bundle_id    = apple_bundle_id.app.id
+  certificates = [apple_certificate.development.id]
+  devices      = [apple_device.test_iphone.id]
+}
+```
+
 ### Resource Creation
 
-The acceptance tests create real resources in your Apple Developer account and may affect your Bundle ID, certificate, and device quotas. Always review the planned changes before applying.
+The acceptance tests create real resources in your Apple Developer account and may affect your Bundle ID, certificate, device, and **provisioning profile quotas**. Always review the planned changes before applying.
 
 ### Certificate Management
 
@@ -132,3 +194,13 @@ The acceptance tests create real resources in your Apple Developer account and m
 - Each Apple Developer account has limits on the number of devices that can be registered
 - Device names can be updated, but UDIDs and platforms cannot be changed
 - iOS platform includes iPhone, iPad, iPod touch, and Apple Watch devices
+
+### Provisioning Profile Management
+
+- Provisioning profiles link Bundle IDs, certificates, and devices for code signing
+- Profile names can be updated, but other attributes require replacement
+- Profiles have expiration dates (typically 1 year) and must be renewed
+- Development profiles require registered devices; App Store profiles do not
+- Each profile type has specific use cases and certificate requirements
+- Profile content is Base64-encoded and marked as sensitive
+- Profiles can be imported by Apple ID or name for managing existing resources

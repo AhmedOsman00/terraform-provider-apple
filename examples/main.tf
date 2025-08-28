@@ -130,6 +130,60 @@ data "apple_devices" "iphones" {
   status       = "ENABLED"
 }
 
+# ============================================================================
+# PROVISIONING PROFILES
+# ============================================================================
+
+# Create a development profile for the Bundle ID
+resource "apple_profile" "example_development" {
+  name         = "Development Profile for ${apple_bundle_id.example_app.name}"
+  platform     = "IOS"
+  bundle_id    = apple_bundle_id.example_app.id
+  certificates = [apple_certificate.ios_development.id]
+  devices      = [apple_device.dev_iphone.id, apple_device.dev_ipad.id]
+}
+
+# Create an App Store distribution profile
+resource "apple_profile" "example_app_store" {
+  name         = "App Store Profile for ${apple_bundle_id.example_app.name}"
+  platform     = "IOS"
+  bundle_id    = apple_bundle_id.example_app.id
+  certificates = [apple_certificate.ios_distribution.id]
+  # Note: No devices for App Store distribution profiles
+}
+
+# Create an Ad Hoc distribution profile
+resource "apple_profile" "example_adhoc" {
+  name         = "Ad Hoc Profile for ${apple_bundle_id.example_app.name}"
+  platform     = "IOS"
+  bundle_id    = apple_bundle_id.example_app.id
+  certificates = [apple_certificate.ios_distribution.id]
+  devices      = [apple_device.dev_iphone.id, apple_device.dev_ipad.id]
+}
+
+# Query all profiles
+data "apple_profiles" "all_profiles" {
+  depends_on = [
+    apple_profile.example_development,
+    apple_profile.example_app_store,
+    apple_profile.example_adhoc,
+  ]
+}
+
+# Query active iOS profiles
+data "apple_profiles" "active_ios_profiles" {
+  platform      = "IOS"
+  profile_state = "ACTIVE"
+  sort_by       = "created_date"
+  sort_order    = "desc"
+}
+
+# Query development profiles by name pattern
+data "apple_profiles" "development_profiles" {
+  name_pattern = ".*Development.*"
+  platform     = "IOS"
+}
+
 # Output the new Bundle ID details
 output "new_bundle_id" {
   value = {
@@ -260,4 +314,74 @@ output "ios_device_details" {
       added_date   = device.added_date
     }
   ]
+}
+
+# Output created profiles
+output "created_profiles" {
+  value = {
+    development_profile = {
+      id              = apple_profile.example_development.id
+      name            = apple_profile.example_development.name
+      uuid            = apple_profile.example_development.uuid
+      profile_state   = apple_profile.example_development.profile_state
+      profile_type    = apple_profile.example_development.profile_type
+      created_date    = apple_profile.example_development.created_date
+      expiration_date = apple_profile.example_development.expiration_date
+      device_count    = length(apple_profile.example_development.devices)
+      certificate_count = length(apple_profile.example_development.certificates)
+    }
+    
+    app_store_profile = {
+      id              = apple_profile.example_app_store.id
+      name            = apple_profile.example_app_store.name
+      uuid            = apple_profile.example_app_store.uuid
+      profile_state   = apple_profile.example_app_store.profile_state
+      profile_type    = apple_profile.example_app_store.profile_type
+      created_date    = apple_profile.example_app_store.created_date
+      expiration_date = apple_profile.example_app_store.expiration_date
+    }
+    
+    adhoc_profile = {
+      id              = apple_profile.example_adhoc.id
+      name            = apple_profile.example_adhoc.name
+      uuid            = apple_profile.example_adhoc.uuid
+      profile_state   = apple_profile.example_adhoc.profile_state
+      profile_type    = apple_profile.example_adhoc.profile_type
+      created_date    = apple_profile.example_adhoc.created_date
+      expiration_date = apple_profile.example_adhoc.expiration_date
+      device_count    = length(apple_profile.example_adhoc.devices)
+      certificate_count = length(apple_profile.example_adhoc.certificates)
+    }
+  }
+}
+
+# Output profile statistics
+output "profile_statistics" {
+  value = {
+    total_profiles = data.apple_profiles.all_profiles.total_count
+    active_ios_profiles = data.apple_profiles.active_ios_profiles.filtered_count
+    development_profiles = data.apple_profiles.development_profiles.filtered_count
+    last_updated = data.apple_profiles.all_profiles.last_updated
+  }
+}
+
+# Output active iOS profiles
+output "active_ios_profiles" {
+  value = [for profile in data.apple_profiles.active_ios_profiles.profiles : {
+    name            = profile.name
+    uuid            = profile.uuid
+    profile_type    = profile.profile_type
+    profile_state   = profile.profile_state
+    expiration_date = profile.expiration_date
+  }]
+}
+
+# Output development profiles
+output "development_profiles" {
+  value = [for profile in data.apple_profiles.development_profiles.profiles : {
+    name         = profile.name
+    uuid         = profile.uuid
+    profile_type = profile.profile_type
+    created_date = profile.created_date
+  }]
 }
