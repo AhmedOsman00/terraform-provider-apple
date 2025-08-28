@@ -6,13 +6,8 @@ Commit Code in Staging
 2. Format and organize code
    - Apply consistent code style.
    - Remove unused imports, variables, and dead code.
-3. Stage changes
-
-```bash
-git add <file>   # or `git add .` for all changes
-```
-
-4. Commit changes
+3. Commit changes
+   - Remove claude signature from all commit messages
    - Use imperative mood in commit messages.
    - Be specific, concise, and ≤ 3 lines.
    - Split into multiple commits if changes are substantial (e.g., one for bug fix, one for refactor).

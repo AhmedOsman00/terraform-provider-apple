@@ -26,11 +26,13 @@ The documentation generation tool looks for files in the following locations by 
 
 * **`provider/provider.tf`** - Example configuration for the Apple provider (used on the provider index page)
 * **`data-sources/apple_bundle_ids/data-source.tf`** - Example usage of the Bundle IDs data source
-* **`resources/apple_bundle_id/resource.tf`** - Example usage of the Bundle ID resource
+* **`data-sources/apple_bundle_id_capabilities/data-source.tf`** - Example usage of the Bundle ID Capabilities data source
+* **`resources/apple_bundle_id/resource.tf`** - Example usage of the Bundle ID resource with capabilities
+* **`resources/apple_bundle_id_capability/resource.tf`** - Example usage of the Bundle ID Capability resource
 
 ### Runnable Examples
 
-* **`main.tf`** - Complete example that demonstrates both resource creation and data source querying
+* **`main.tf`** - Complete example that demonstrates Bundle ID creation, capability management, and data source querying
 
 ## Running the Examples
 
@@ -55,8 +57,11 @@ The documentation generation tool looks for files in the following locations by 
 
 - **Provider Configuration**: How to configure the Apple provider with authentication
 - **Bundle ID Management**: Creating, updating, and managing Apple App Store Connect Bundle IDs
-- **Data Source Usage**: Querying existing Bundle IDs with filtering and sorting options
+- **Bundle ID Capabilities**: Adding and configuring app capabilities like push notifications, iCloud, Apple Pay, etc.
+- **Data Source Usage**: Querying existing Bundle IDs and capabilities with filtering and sorting options
 - **Multi-platform Support**: Examples for iOS, macOS, tvOS, and watchOS Bundle IDs
+- **Settings Configuration**: How to configure complex capability settings for services like iCloud, App Groups, and Apple Pay
+- **Capability Management**: Full lifecycle management of Bundle ID capabilities including creation, updates, and deletion
 
 ## Note
 
