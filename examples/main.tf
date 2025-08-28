@@ -95,6 +95,41 @@ data "apple_certificates" "production_certificates" {
   sort_by      = "display_name"
 }
 
+# Register development devices
+resource "apple_device" "dev_iphone" {
+  name     = "Development iPhone"
+  udid     = "12345678-90123456789012345678901234567890" # Replace with actual UDID
+  platform = "IOS"
+}
+
+resource "apple_device" "dev_ipad" {
+  name     = "Development iPad"
+  udid     = "abcdef12-34567890123456789012345678901234" # Replace with actual UDID
+  platform = "IOS"
+}
+
+resource "apple_device" "test_mac" {
+  name     = "Test MacBook"
+  udid     = "550e8400-e29b-41d4-a716-446655440000" # Replace with actual UDID
+  platform = "MAC_OS"
+}
+
+# Query existing devices
+data "apple_devices" "all_devices" {}
+
+# Query iOS devices only
+data "apple_devices" "ios_devices" {
+  platform   = "IOS"
+  sort_by    = "name"
+  sort_order = "asc"
+}
+
+# Query enabled devices by device class
+data "apple_devices" "iphones" {
+  device_class = "IPHONE"
+  status       = "ENABLED"
+}
+
 # Output the new Bundle ID details
 output "new_bundle_id" {
   value = {
@@ -165,4 +200,64 @@ output "production_certificates" {
     serial_number    = cert.serial_number
     expiration_date  = cert.expiration_date
   }]
+}
+
+# Output registered devices
+output "registered_devices" {
+  value = {
+    dev_iphone = {
+      id           = apple_device.dev_iphone.id
+      name         = apple_device.dev_iphone.name
+      udid         = apple_device.dev_iphone.udid
+      platform     = apple_device.dev_iphone.platform
+      device_class = apple_device.dev_iphone.device_class
+      status       = apple_device.dev_iphone.status
+    }
+    test_mac = {
+      id           = apple_device.test_mac.id
+      name         = apple_device.test_mac.name
+      udid         = apple_device.test_mac.udid
+      platform     = apple_device.test_mac.platform
+      device_class = apple_device.test_mac.device_class
+      status       = apple_device.test_mac.status
+    }
+  }
+}
+
+# Output device statistics
+output "device_statistics" {
+  value = {
+    total_devices     = data.apple_devices.all_devices.total_count
+    ios_device_count  = data.apple_devices.ios_devices.filtered_count
+    iphone_count      = data.apple_devices.iphones.filtered_count
+    
+    devices_by_platform = {
+      for platform in ["IOS", "MAC_OS", "TV_OS", "WATCH_OS", "VISION_OS"] :
+      platform => length([
+        for device in data.apple_devices.all_devices.devices :
+        device if device.platform == platform
+      ])
+    }
+    
+    devices_by_status = {
+      for status in ["ENABLED", "PROCESSING", "INELIGIBLE"] :
+      status => length([
+        for device in data.apple_devices.all_devices.devices :
+        device if device.status == status
+      ])
+    }
+  }
+}
+
+# Output iOS device details
+output "ios_device_details" {
+  value = [
+    for device in data.apple_devices.ios_devices.devices : {
+      name         = device.name
+      device_class = device.device_class
+      model        = device.model
+      status       = device.status
+      added_date   = device.added_date
+    }
+  ]
 }
