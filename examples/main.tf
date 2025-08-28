@@ -57,6 +57,44 @@ data "apple_bundle_id_capabilities" "example_app_capabilities" {
   bundle_id = apple_bundle_id.example_app.id
 }
 
+# Example CSR for certificate creation
+locals {
+  example_csr = <<-EOT
+    -----BEGIN CERTIFICATE REQUEST-----
+    MIICljCCAX4CAQAwUTELMAkGA1UEBhMCVVMxCzAJBgNVBAgMAkNBMRYwFAYDVQQH
+    DA1TYW4gRnJhbmNpc2NvMR0wGwYDVQQKDBRFeGFtcGxlIENvbXBhbnksIEluYzCC
+    ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAM7K2+Xk3nWoQ5j+9fGOZjXf
+    ... (truncated for example - use a real CSR)
+    -----END CERTIFICATE REQUEST-----
+  EOT
+}
+
+# Create certificates for development and distribution
+resource "apple_certificate" "ios_development" {
+  certificate_type = "IOS_DEVELOPMENT"
+  csr_content      = local.example_csr
+}
+
+resource "apple_certificate" "ios_distribution" {
+  certificate_type = "IOS_DISTRIBUTION"
+  csr_content      = local.example_csr
+}
+
+# Query existing certificates
+data "apple_certificates" "development_certificates" {
+  certificate_type = "IOS_DEVELOPMENT"
+  platform         = "IOS"
+  sort_by          = "expiration_date"
+  sort_order       = "desc"
+  limit            = 5
+}
+
+# Query all certificates with name pattern
+data "apple_certificates" "production_certificates" {
+  name_pattern = "*Production*"
+  sort_by      = "display_name"
+}
+
 # Output the new Bundle ID details
 output "new_bundle_id" {
   value = {
@@ -80,5 +118,51 @@ output "existing_ios_bundle_ids" {
     identifier = bid.identifier
     name       = bid.name
     platform   = bid.platform
+  }]
+}
+
+# Output certificate details (excluding sensitive content)
+output "created_certificates" {
+  value = {
+    ios_development = {
+      id               = apple_certificate.ios_development.id
+      serial_number    = apple_certificate.ios_development.serial_number
+      display_name     = apple_certificate.ios_development.display_name
+      certificate_type = apple_certificate.ios_development.certificate_type
+      expiration_date  = apple_certificate.ios_development.expiration_date
+      platform         = apple_certificate.ios_development.platform
+    }
+    ios_distribution = {
+      id               = apple_certificate.ios_distribution.id
+      serial_number    = apple_certificate.ios_distribution.serial_number
+      display_name     = apple_certificate.ios_distribution.display_name
+      certificate_type = apple_certificate.ios_distribution.certificate_type
+      expiration_date  = apple_certificate.ios_distribution.expiration_date
+      platform         = apple_certificate.ios_distribution.platform
+    }
+  }
+}
+
+# Output development certificates from data source
+output "development_certificates" {
+  value = {
+    total_count     = data.apple_certificates.development_certificates.total_count
+    filtered_count  = data.apple_certificates.development_certificates.filtered_count
+    certificates    = [for cert in data.apple_certificates.development_certificates.certificates : {
+      display_name    = cert.display_name
+      serial_number   = cert.serial_number
+      expiration_date = cert.expiration_date
+      requester_email = cert.requester_email
+    }]
+  }
+}
+
+# Output production certificates
+output "production_certificates" {
+  value = [for cert in data.apple_certificates.production_certificates.certificates : {
+    display_name     = cert.display_name
+    certificate_type = cert.certificate_type
+    serial_number    = cert.serial_number
+    expiration_date  = cert.expiration_date
   }]
 }
