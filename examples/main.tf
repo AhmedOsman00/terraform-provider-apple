@@ -51,7 +51,7 @@ resource "apple_bundle_id_capability" "in_app_purchase" {
 resource "apple_bundle_id_capability" "apple_pay" {
   bundle_id       = apple_bundle_id.example_app.id
   capability_type = "APPLE_PAY"
-  
+
   # Reference the created Merchant ID
   settings {
     key   = "APPLE_PAY_IDENTIFIERS"
@@ -62,12 +62,12 @@ resource "apple_bundle_id_capability" "apple_pay" {
 resource "apple_bundle_id_capability" "icloud" {
   bundle_id       = apple_bundle_id.example_app.id
   capability_type = "ICLOUD"
-  
+
   settings {
     key   = "ICLOUD_VERSION"
     value = "XCODE_5"
   }
-  
+
   settings {
     key   = "ICLOUD_SERVICES"
     value = "CloudKit"
@@ -96,13 +96,61 @@ data "apple_merchant_ids" "all_merchants" {
 # Query Merchant IDs with identifier prefix
 data "apple_merchant_ids" "example_merchants" {
   identifier_prefix = "merchant.com.example"
-  sort_by          = "display_name"
-  sort_order       = "asc"
+  sort_by           = "display_name"
+  sort_order        = "asc"
 }
 
 # Query Merchant IDs with display name pattern
 data "apple_merchant_ids" "store_merchants" {
   display_name_pattern = ".*Store.*"
+}
+
+# ============================================================================
+# PASS TYPE IDs (Apple Wallet Pass Management)
+# ============================================================================
+
+# Create Pass Type IDs for different types of passes
+resource "apple_pass_type_id" "loyalty_card" {
+  identifier = "pass.com.example.loyalty"
+  name       = "Example Store Loyalty Card"
+}
+
+resource "apple_pass_type_id" "event_tickets" {
+  identifier = "pass.com.example.events"
+  name       = "Event Ticket Passes"
+}
+
+resource "apple_pass_type_id" "store_card" {
+  identifier = "pass.com.example.storecard"
+  name       = "Store Card Passes"
+}
+
+resource "apple_pass_type_id" "coupon_pass" {
+  identifier = "pass.com.example.coupons"
+  name       = "Promotional Coupons"
+}
+
+# Query all Pass Type IDs
+data "apple_pass_type_ids" "all_pass_types" {
+  depends_on = [
+    apple_pass_type_id.loyalty_card,
+    apple_pass_type_id.event_tickets,
+    apple_pass_type_id.store_card,
+    apple_pass_type_id.coupon_pass,
+  ]
+}
+
+# Query Pass Type IDs with identifier prefix
+data "apple_pass_type_ids" "example_passes" {
+  identifier_prefix = "pass.com.example"
+  sort_by           = "name"
+  sort_order        = "asc"
+}
+
+# Query Pass Type IDs with name pattern
+data "apple_pass_type_ids" "card_passes" {
+  name_pattern = ".*Card.*"
+  sort_by      = "identifier"
 }
 
 # Example CSR for certificate creation
@@ -128,6 +176,17 @@ resource "apple_certificate" "ios_distribution" {
   csr_content      = local.example_csr
 }
 
+# Create Pass Type ID certificates for Wallet passes
+resource "apple_certificate" "loyalty_pass_cert" {
+  certificate_type = "PASS_TYPE_ID"
+  csr_content      = local.example_csr
+}
+
+resource "apple_certificate" "nfc_pass_cert" {
+  certificate_type = "PASS_TYPE_ID_WITH_NFC"
+  csr_content      = local.example_csr
+}
+
 # Query existing certificates
 data "apple_certificates" "development_certificates" {
   certificate_type = "IOS_DEVELOPMENT"
@@ -141,6 +200,19 @@ data "apple_certificates" "development_certificates" {
 data "apple_certificates" "production_certificates" {
   name_pattern = "*Production*"
   sort_by      = "display_name"
+}
+
+# Query Pass Type ID certificates
+data "apple_certificates" "pass_certificates" {
+  certificate_type = "PASS_TYPE_ID"
+  sort_by          = "expiration_date"
+  sort_order       = "desc"
+}
+
+# Query NFC-enabled Pass Type ID certificates
+data "apple_certificates" "nfc_pass_certificates" {
+  certificate_type = "PASS_TYPE_ID_WITH_NFC"
+  sort_by          = "display_name"
 }
 
 # Register development devices
@@ -265,10 +337,10 @@ output "created_merchant_ids" {
 # Output Merchant ID statistics
 output "merchant_id_statistics" {
   value = {
-    total_merchants     = data.apple_merchant_ids.all_merchants.total_count
-    example_merchants   = data.apple_merchant_ids.example_merchants.filtered_count
-    store_merchants     = data.apple_merchant_ids.store_merchants.filtered_count
-    last_updated       = data.apple_merchant_ids.all_merchants.last_updated
+    total_merchants   = data.apple_merchant_ids.all_merchants.total_count
+    example_merchants = data.apple_merchant_ids.example_merchants.filtered_count
+    store_merchants   = data.apple_merchant_ids.store_merchants.filtered_count
+    last_updated      = data.apple_merchant_ids.all_merchants.last_updated
   }
 }
 
@@ -330,9 +402,9 @@ output "created_certificates" {
 # Output development certificates from data source
 output "development_certificates" {
   value = {
-    total_count     = data.apple_certificates.development_certificates.total_count
-    filtered_count  = data.apple_certificates.development_certificates.filtered_count
-    certificates    = [for cert in data.apple_certificates.development_certificates.certificates : {
+    total_count    = data.apple_certificates.development_certificates.total_count
+    filtered_count = data.apple_certificates.development_certificates.filtered_count
+    certificates = [for cert in data.apple_certificates.development_certificates.certificates : {
       display_name    = cert.display_name
       serial_number   = cert.serial_number
       expiration_date = cert.expiration_date
@@ -376,10 +448,10 @@ output "registered_devices" {
 # Output device statistics
 output "device_statistics" {
   value = {
-    total_devices     = data.apple_devices.all_devices.total_count
-    ios_device_count  = data.apple_devices.ios_devices.filtered_count
-    iphone_count      = data.apple_devices.iphones.filtered_count
-    
+    total_devices    = data.apple_devices.all_devices.total_count
+    ios_device_count = data.apple_devices.ios_devices.filtered_count
+    iphone_count     = data.apple_devices.iphones.filtered_count
+
     devices_by_platform = {
       for platform in ["IOS", "MAC_OS", "TV_OS", "WATCH_OS", "VISION_OS"] :
       platform => length([
@@ -387,7 +459,7 @@ output "device_statistics" {
         device if device.platform == platform
       ])
     }
-    
+
     devices_by_status = {
       for status in ["ENABLED", "PROCESSING", "INELIGIBLE"] :
       status => length([
@@ -415,17 +487,17 @@ output "ios_device_details" {
 output "created_profiles" {
   value = {
     development_profile = {
-      id              = apple_profile.example_development.id
-      name            = apple_profile.example_development.name
-      uuid            = apple_profile.example_development.uuid
-      profile_state   = apple_profile.example_development.profile_state
-      profile_type    = apple_profile.example_development.profile_type
-      created_date    = apple_profile.example_development.created_date
-      expiration_date = apple_profile.example_development.expiration_date
-      device_count    = length(apple_profile.example_development.devices)
+      id                = apple_profile.example_development.id
+      name              = apple_profile.example_development.name
+      uuid              = apple_profile.example_development.uuid
+      profile_state     = apple_profile.example_development.profile_state
+      profile_type      = apple_profile.example_development.profile_type
+      created_date      = apple_profile.example_development.created_date
+      expiration_date   = apple_profile.example_development.expiration_date
+      device_count      = length(apple_profile.example_development.devices)
       certificate_count = length(apple_profile.example_development.certificates)
     }
-    
+
     app_store_profile = {
       id              = apple_profile.example_app_store.id
       name            = apple_profile.example_app_store.name
@@ -435,16 +507,16 @@ output "created_profiles" {
       created_date    = apple_profile.example_app_store.created_date
       expiration_date = apple_profile.example_app_store.expiration_date
     }
-    
+
     adhoc_profile = {
-      id              = apple_profile.example_adhoc.id
-      name            = apple_profile.example_adhoc.name
-      uuid            = apple_profile.example_adhoc.uuid
-      profile_state   = apple_profile.example_adhoc.profile_state
-      profile_type    = apple_profile.example_adhoc.profile_type
-      created_date    = apple_profile.example_adhoc.created_date
-      expiration_date = apple_profile.example_adhoc.expiration_date
-      device_count    = length(apple_profile.example_adhoc.devices)
+      id                = apple_profile.example_adhoc.id
+      name              = apple_profile.example_adhoc.name
+      uuid              = apple_profile.example_adhoc.uuid
+      profile_state     = apple_profile.example_adhoc.profile_state
+      profile_type      = apple_profile.example_adhoc.profile_type
+      created_date      = apple_profile.example_adhoc.created_date
+      expiration_date   = apple_profile.example_adhoc.expiration_date
+      device_count      = length(apple_profile.example_adhoc.devices)
       certificate_count = length(apple_profile.example_adhoc.certificates)
     }
   }
@@ -453,10 +525,10 @@ output "created_profiles" {
 # Output profile statistics
 output "profile_statistics" {
   value = {
-    total_profiles = data.apple_profiles.all_profiles.total_count
-    active_ios_profiles = data.apple_profiles.active_ios_profiles.filtered_count
+    total_profiles       = data.apple_profiles.all_profiles.total_count
+    active_ios_profiles  = data.apple_profiles.active_ios_profiles.filtered_count
     development_profiles = data.apple_profiles.development_profiles.filtered_count
-    last_updated = data.apple_profiles.all_profiles.last_updated
+    last_updated         = data.apple_profiles.all_profiles.last_updated
   }
 }
 
@@ -479,4 +551,106 @@ output "development_profiles" {
     profile_type = profile.profile_type
     created_date = profile.created_date
   }]
+}
+
+# ============================================================================
+# PASS TYPE ID OUTPUTS
+# ============================================================================
+
+# Output created Pass Type IDs
+output "created_pass_type_ids" {
+  value = {
+    loyalty_card = {
+      id         = apple_pass_type_id.loyalty_card.id
+      identifier = apple_pass_type_id.loyalty_card.identifier
+      name       = apple_pass_type_id.loyalty_card.name
+    }
+    event_tickets = {
+      id         = apple_pass_type_id.event_tickets.id
+      identifier = apple_pass_type_id.event_tickets.identifier
+      name       = apple_pass_type_id.event_tickets.name
+    }
+    store_card = {
+      id         = apple_pass_type_id.store_card.id
+      identifier = apple_pass_type_id.store_card.identifier
+      name       = apple_pass_type_id.store_card.name
+    }
+    coupon_pass = {
+      id         = apple_pass_type_id.coupon_pass.id
+      identifier = apple_pass_type_id.coupon_pass.identifier
+      name       = apple_pass_type_id.coupon_pass.name
+    }
+  }
+}
+
+# Output Pass Type ID statistics
+output "pass_type_id_statistics" {
+  value = {
+    total_pass_types   = data.apple_pass_type_ids.all_pass_types.total_count
+    example_pass_types = data.apple_pass_type_ids.example_passes.filtered_count
+    card_pass_types    = data.apple_pass_type_ids.card_passes.filtered_count
+    last_updated       = data.apple_pass_type_ids.all_pass_types.last_updated
+  }
+}
+
+# Output example Pass Type IDs details
+output "example_pass_type_ids" {
+  value = [for pass in data.apple_pass_type_ids.example_passes.pass_type_ids : {
+    identifier = pass.identifier
+    name       = pass.name
+  }]
+}
+
+# Output card-related Pass Type IDs
+output "card_pass_type_ids" {
+  value = [for pass in data.apple_pass_type_ids.card_passes.pass_type_ids : {
+    identifier = pass.identifier
+    name       = pass.name
+  }]
+}
+
+# Output Pass Type ID certificates (excluding sensitive content)
+output "pass_certificates" {
+  value = {
+    loyalty_pass_cert = {
+      id               = apple_certificate.loyalty_pass_cert.id
+      serial_number    = apple_certificate.loyalty_pass_cert.serial_number
+      display_name     = apple_certificate.loyalty_pass_cert.display_name
+      certificate_type = apple_certificate.loyalty_pass_cert.certificate_type
+      expiration_date  = apple_certificate.loyalty_pass_cert.expiration_date
+    }
+    nfc_pass_cert = {
+      id               = apple_certificate.nfc_pass_cert.id
+      serial_number    = apple_certificate.nfc_pass_cert.serial_number
+      display_name     = apple_certificate.nfc_pass_cert.display_name
+      certificate_type = apple_certificate.nfc_pass_cert.certificate_type
+      expiration_date  = apple_certificate.nfc_pass_cert.expiration_date
+    }
+  }
+}
+
+# Output Pass Type ID certificate statistics
+output "pass_certificate_statistics" {
+  value = {
+    pass_certificates     = data.apple_certificates.pass_certificates.filtered_count
+    nfc_pass_certificates = data.apple_certificates.nfc_pass_certificates.filtered_count
+  }
+}
+
+# Example configuration for pass generation (JSON output)
+output "pass_generation_config" {
+  value = {
+    for key, pass_type_id in {
+      loyalty_card  = apple_pass_type_id.loyalty_card
+      event_tickets = apple_pass_type_id.event_tickets
+      store_card    = apple_pass_type_id.store_card
+      coupon_pass   = apple_pass_type_id.coupon_pass
+      } : key => {
+      passTypeIdentifier = pass_type_id.identifier
+      description        = pass_type_id.name
+      formatVersion      = 1
+      organizationName   = "Example Company"
+      teamIdentifier     = "TEAM123456" # Replace with your team identifier
+    }
+  }
 }
