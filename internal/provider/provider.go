@@ -10,6 +10,7 @@ import (
 	"terraform-provider-apple/internal/provider/certificate"
 	"terraform-provider-apple/internal/provider/device"
 	"terraform-provider-apple/internal/provider/merchant"
+	"terraform-provider-apple/internal/provider/passtypeid"
 	"terraform-provider-apple/internal/provider/profile"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
@@ -277,6 +278,7 @@ func (p *appleProvider) DataSources(_ context.Context) []func() datasource.DataS
 		certificate.NewCertificatesDataSource,
 		device.NewDevicesDataSource,
 		merchant.NewMerchantIDsDataSource,
+		passtypeid.NewPassTypeIDsDataSource,
 		profile.NewProfilesDataSource,
 	}
 }
@@ -289,6 +291,7 @@ func (p *appleProvider) Resources(_ context.Context) []func() resource.Resource 
 		certificate.NewCertificateResource,
 		device.NewDeviceResource,
 		merchant.NewMerchantIDResource,
+		passtypeid.NewPassTypeIDResource,
 		profile.NewProfileResource,
 	}
 }
