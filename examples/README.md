@@ -29,16 +29,18 @@ The documentation generation tool looks for files in the following locations by 
 * **`data-sources/apple_bundle_id_capabilities/data-source.tf`** - Example usage of the Bundle ID Capabilities data source
 * **`data-sources/apple_certificates/data-source.tf`** - Example usage of the Certificates data source
 * **`data-sources/apple_devices/data-source.tf`** - Example usage of the Devices data source
-* **`data-sources/apple_profiles/data-source.tf`** - **NEW** Example usage of the Provisioning Profiles data source
+* **`data-sources/apple_merchant_ids/data-source.tf`** - Example usage of the Merchant IDs data source
+* **`data-sources/apple_profiles/data-source.tf`** - Example usage of the Provisioning Profiles data source
 * **`resources/apple_bundle_id/resource.tf`** - Example usage of the Bundle ID resource with capabilities
 * **`resources/apple_bundle_id_capability/resource.tf`** - Example usage of the Bundle ID Capability resource
 * **`resources/apple_certificate/resource.tf`** - Example usage of the Certificate resource
 * **`resources/apple_device/resource.tf`** - Example usage of the Device resource
-* **`resources/apple_profile/resource.tf`** - **NEW** Example usage of the Provisioning Profile resource
+* **`resources/apple_merchant_id/resource.tf`** - Example usage of the Merchant ID resource
+* **`resources/apple_profile/resource.tf`** - Example usage of the Provisioning Profile resource
 
 ### Runnable Examples
 
-* **`main.tf`** - Complete example that demonstrates Bundle ID creation, capability management, certificate creation, device registration, **provisioning profile creation**, and data source querying
+* **`main.tf`** - Complete example that demonstrates Bundle ID creation, Merchant ID management, capability management, certificate creation, device registration, provisioning profile creation, and data source querying
 * **`profile/main.tf`** - **NEW** Comprehensive provisioning profile management example with multiple platforms and distribution methods
 
 ## Running the Examples
@@ -65,10 +67,11 @@ The documentation generation tool looks for files in the following locations by 
 - **Provider Configuration**: How to configure the Apple provider with authentication
 - **Bundle ID Management**: Creating, updating, and managing Apple App Store Connect Bundle IDs
 - **Bundle ID Capabilities**: Adding and configuring app capabilities like push notifications, iCloud, Apple Pay, etc.
+- **Merchant ID Management**: Creating and managing Merchant IDs for Apple Pay functionality
 - **Certificate Management**: Creating and managing development and distribution certificates
 - **Device Management**: Registering and managing iOS, macOS, tvOS, watchOS, and visionOS devices for development and testing
-- **Provisioning Profile Management**: **NEW** Creating and managing provisioning profiles for different distribution methods
-- **Data Source Usage**: Querying existing Bundle IDs, capabilities, certificates, devices, and **profiles** with filtering and sorting options
+- **Provisioning Profile Management**: Creating and managing provisioning profiles for different distribution methods
+- **Data Source Usage**: Querying existing Bundle IDs, capabilities, certificates, devices, Merchant IDs, and profiles with filtering and sorting options
 - **Multi-platform Support**: Examples for iOS, macOS, tvOS, watchOS, and visionOS resources
 - **Certificate Types**: Examples of different certificate types (development, distribution, Developer ID, etc.)
 - **Device Types**: Examples of registering different device types (iPhone, iPad, Mac, Apple TV, Apple Watch, Vision Pro)
@@ -120,6 +123,48 @@ The device examples include placeholder UDID values. In practice, you need to ob
 #### Apple Vision Pro  
 - Settings > General > About > Identifier
 - UDID format: UUID format
+
+### Merchant IDs
+
+The Merchant ID examples demonstrate Apple Pay payment processing setup:
+
+#### Merchant ID Management
+- **Identifier Format**: Must follow the format `merchant.domain.identifier` (e.g., `merchant.com.example.myapp`)
+- **Display Names**: User-friendly names for identifying merchants in Apple Pay contexts
+- **Apple Pay Integration**: Required for enabling Apple Pay capabilities in Bundle IDs
+- **Multiple Merchants**: Organizations can have multiple Merchant IDs for different purposes
+
+#### Key Features
+- Create and manage Merchant IDs for Apple Pay functionality
+- Update display names after creation (identifiers are immutable)
+- Query existing Merchant IDs with filtering and sorting
+- Import existing Merchant IDs by Apple ID or identifier
+
+#### Example Usage
+```hcl
+# Create a Merchant ID for Apple Pay
+resource "apple_merchant_id" "store" {
+  identifier   = "merchant.com.example.myapp"
+  display_name = "My App Store"
+}
+
+# Use in Bundle ID capability
+resource "apple_bundle_id_capability" "apple_pay" {
+  bundle_id       = apple_bundle_id.app.id
+  capability_type = "APPLE_PAY"
+  
+  settings {
+    key   = "APPLE_PAY_IDENTIFIERS"
+    value = apple_merchant_id.store.identifier
+  }
+}
+
+# Query Merchant IDs
+data "apple_merchant_ids" "all" {
+  identifier_prefix = "merchant.com.example"
+  sort_by          = "display_name"
+}
+```
 
 ### Provisioning Profiles
 
@@ -177,7 +222,7 @@ resource "apple_profile" "development" {
 
 ### Resource Creation
 
-The acceptance tests create real resources in your Apple Developer account and may affect your Bundle ID, certificate, device, and **provisioning profile quotas**. Always review the planned changes before applying.
+The acceptance tests create real resources in your Apple Developer account and may affect your Bundle ID, certificate, device, Merchant ID, and provisioning profile quotas. Always review the planned changes before applying.
 
 ### Certificate Management
 
@@ -194,6 +239,16 @@ The acceptance tests create real resources in your Apple Developer account and m
 - Each Apple Developer account has limits on the number of devices that can be registered
 - Device names can be updated, but UDIDs and platforms cannot be changed
 - iOS platform includes iPhone, iPad, iPod touch, and Apple Watch devices
+
+### Merchant ID Management
+
+- Merchant IDs are required for Apple Pay functionality in mobile apps
+- Identifier format must follow `merchant.domain.identifier` pattern and cannot be changed after creation
+- Display names can be updated after creation to provide user-friendly identification
+- Merchant IDs can be deleted via the API unlike some other resource types
+- Each Merchant ID is unique across the entire Apple ecosystem (not just your account)
+- Merchant IDs are referenced in Bundle ID capabilities to enable Apple Pay features
+- Import functionality supports both Apple-generated IDs and merchant identifiers
 
 ### Provisioning Profile Management
 
