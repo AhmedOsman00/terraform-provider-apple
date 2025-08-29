@@ -21,6 +21,22 @@ resource "apple_bundle_id" "example_app" {
   platform   = "IOS"
 }
 
+# Create Merchant IDs for Apple Pay functionality
+resource "apple_merchant_id" "example_store" {
+  identifier   = "merchant.com.example.myapp"
+  display_name = "My Example App Store"
+}
+
+resource "apple_merchant_id" "premium_store" {
+  identifier   = "merchant.com.example.myapp.premium"
+  display_name = "My Example App Premium Store"
+}
+
+resource "apple_merchant_id" "subscriptions" {
+  identifier   = "merchant.com.example.myapp.subscriptions"
+  display_name = "My Example App Subscriptions"
+}
+
 # Add capabilities to the Bundle ID
 resource "apple_bundle_id_capability" "push_notifications" {
   bundle_id       = apple_bundle_id.example_app.id
@@ -30,6 +46,17 @@ resource "apple_bundle_id_capability" "push_notifications" {
 resource "apple_bundle_id_capability" "in_app_purchase" {
   bundle_id       = apple_bundle_id.example_app.id
   capability_type = "IN_APP_PURCHASE"
+}
+
+resource "apple_bundle_id_capability" "apple_pay" {
+  bundle_id       = apple_bundle_id.example_app.id
+  capability_type = "APPLE_PAY"
+  
+  # Reference the created Merchant ID
+  settings {
+    key   = "APPLE_PAY_IDENTIFIERS"
+    value = apple_merchant_id.example_store.identifier
+  }
 }
 
 resource "apple_bundle_id_capability" "icloud" {
@@ -55,6 +82,27 @@ data "apple_bundle_ids" "ios_apps" {
 # Query Bundle ID capabilities
 data "apple_bundle_id_capabilities" "example_app_capabilities" {
   bundle_id = apple_bundle_id.example_app.id
+}
+
+# Query all Merchant IDs
+data "apple_merchant_ids" "all_merchants" {
+  depends_on = [
+    apple_merchant_id.example_store,
+    apple_merchant_id.premium_store,
+    apple_merchant_id.subscriptions,
+  ]
+}
+
+# Query Merchant IDs with identifier prefix
+data "apple_merchant_ids" "example_merchants" {
+  identifier_prefix = "merchant.com.example"
+  sort_by          = "display_name"
+  sort_order       = "asc"
+}
+
+# Query Merchant IDs with display name pattern
+data "apple_merchant_ids" "store_merchants" {
+  display_name_pattern = ".*Store.*"
 }
 
 # Example CSR for certificate creation
@@ -191,6 +239,53 @@ output "new_bundle_id" {
     identifier = apple_bundle_id.example_app.identifier
     name       = apple_bundle_id.example_app.name
   }
+}
+
+# Output created Merchant IDs
+output "created_merchant_ids" {
+  value = {
+    example_store = {
+      id           = apple_merchant_id.example_store.id
+      identifier   = apple_merchant_id.example_store.identifier
+      display_name = apple_merchant_id.example_store.display_name
+    }
+    premium_store = {
+      id           = apple_merchant_id.premium_store.id
+      identifier   = apple_merchant_id.premium_store.identifier
+      display_name = apple_merchant_id.premium_store.display_name
+    }
+    subscriptions = {
+      id           = apple_merchant_id.subscriptions.id
+      identifier   = apple_merchant_id.subscriptions.identifier
+      display_name = apple_merchant_id.subscriptions.display_name
+    }
+  }
+}
+
+# Output Merchant ID statistics
+output "merchant_id_statistics" {
+  value = {
+    total_merchants     = data.apple_merchant_ids.all_merchants.total_count
+    example_merchants   = data.apple_merchant_ids.example_merchants.filtered_count
+    store_merchants     = data.apple_merchant_ids.store_merchants.filtered_count
+    last_updated       = data.apple_merchant_ids.all_merchants.last_updated
+  }
+}
+
+# Output example Merchant IDs details
+output "example_merchant_ids" {
+  value = [for mid in data.apple_merchant_ids.example_merchants.merchant_ids : {
+    identifier   = mid.identifier
+    display_name = mid.display_name
+  }]
+}
+
+# Output store-related Merchant IDs
+output "store_merchant_ids" {
+  value = [for mid in data.apple_merchant_ids.store_merchants.merchant_ids : {
+    identifier   = mid.identifier
+    display_name = mid.display_name
+  }]
 }
 
 # Output Bundle ID capabilities

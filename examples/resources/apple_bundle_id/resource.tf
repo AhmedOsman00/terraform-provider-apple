@@ -62,14 +62,20 @@ resource "apple_bundle_id_capability" "app_groups" {
   }
 }
 
+# Create Merchant ID for Apple Pay
+resource "apple_merchant_id" "ios_app_merchant" {
+  identifier   = "merchant.com.example.myapp"
+  display_name = "My iOS App Merchant"
+}
+
 resource "apple_bundle_id_capability" "apple_pay" {
   bundle_id       = apple_bundle_id.ios_app.id
   capability_type = "APPLE_PAY"
   
-  # Apple Pay configuration
+  # Apple Pay configuration using the created Merchant ID
   settings {
     key   = "APPLE_PAY_IDENTIFIERS"
-    value = "merchant.com.example.myapp"
+    value = apple_merchant_id.ios_app_merchant.identifier
   }
 }
 
@@ -89,4 +95,39 @@ resource "apple_bundle_id_capability" "homekit_macos" {
   bundle_id       = apple_bundle_id.macos_app.id
   capability_type = "HOME_KIT"
   # HomeKit doesn't require additional settings for basic functionality
+}
+
+# Additional Merchant IDs for different purposes
+resource "apple_merchant_id" "premium_features" {
+  identifier   = "merchant.com.example.myapp.premium"
+  display_name = "My App Premium Features"
+}
+
+resource "apple_merchant_id" "subscriptions" {
+  identifier   = "merchant.com.example.myapp.subscriptions"
+  display_name = "My App Subscriptions"
+}
+
+# Query existing Merchant IDs using data source
+data "apple_merchant_ids" "example_merchants" {
+  identifier_prefix = "merchant.com.example"
+  sort_by          = "display_name"
+  depends_on = [
+    apple_merchant_id.ios_app_merchant,
+    apple_merchant_id.premium_features,
+    apple_merchant_id.subscriptions,
+  ]
+}
+
+# Example of using multiple Merchant IDs in a single capability
+# Note: This is for demonstration - typically you'd use one merchant ID per capability
+resource "apple_bundle_id_capability" "apple_pay_premium" {
+  bundle_id       = apple_bundle_id.app_with_seed.id
+  capability_type = "APPLE_PAY"
+  
+  # Using multiple merchant identifiers (comma-separated)
+  settings {
+    key   = "APPLE_PAY_IDENTIFIERS"
+    value = "${apple_merchant_id.premium_features.identifier},${apple_merchant_id.subscriptions.identifier}"
+  }
 }
