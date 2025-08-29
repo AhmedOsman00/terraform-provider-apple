@@ -31,16 +31,18 @@ The documentation generation tool looks for files in the following locations by 
 * **`data-sources/apple_devices/data-source.tf`** - Example usage of the Devices data source
 * **`data-sources/apple_merchant_ids/data-source.tf`** - Example usage of the Merchant IDs data source
 * **`data-sources/apple_profiles/data-source.tf`** - Example usage of the Provisioning Profiles data source
+* **`data-sources/apple_pass_type_ids/data-source.tf`** - Example usage of the Pass Type IDs data source
 * **`resources/apple_bundle_id/resource.tf`** - Example usage of the Bundle ID resource with capabilities
 * **`resources/apple_bundle_id_capability/resource.tf`** - Example usage of the Bundle ID Capability resource
 * **`resources/apple_certificate/resource.tf`** - Example usage of the Certificate resource
 * **`resources/apple_device/resource.tf`** - Example usage of the Device resource
 * **`resources/apple_merchant_id/resource.tf`** - Example usage of the Merchant ID resource
+* **`resources/apple_pass_type_id/resource.tf`** - Example usage of the Pass Type ID resource
 * **`resources/apple_profile/resource.tf`** - Example usage of the Provisioning Profile resource
 
 ### Runnable Examples
 
-* **`main.tf`** - Complete example that demonstrates Bundle ID creation, Merchant ID management, capability management, certificate creation, device registration, provisioning profile creation, and data source querying
+* **`main.tf`** - Complete example that demonstrates Bundle ID creation, Merchant ID management, Pass Type ID management, capability management, certificate creation, device registration, provisioning profile creation, and data source querying
 * **`profile/main.tf`** - **NEW** Comprehensive provisioning profile management example with multiple platforms and distribution methods
 
 ## Running the Examples
@@ -68,10 +70,11 @@ The documentation generation tool looks for files in the following locations by 
 - **Bundle ID Management**: Creating, updating, and managing Apple App Store Connect Bundle IDs
 - **Bundle ID Capabilities**: Adding and configuring app capabilities like push notifications, iCloud, Apple Pay, etc.
 - **Merchant ID Management**: Creating and managing Merchant IDs for Apple Pay functionality
-- **Certificate Management**: Creating and managing development and distribution certificates
+- **Pass Type ID Management**: Creating and managing Pass Type IDs for Apple Wallet passes
+- **Certificate Management**: Creating and managing development and distribution certificates including Pass Type ID certificates
 - **Device Management**: Registering and managing iOS, macOS, tvOS, watchOS, and visionOS devices for development and testing
 - **Provisioning Profile Management**: Creating and managing provisioning profiles for different distribution methods
-- **Data Source Usage**: Querying existing Bundle IDs, capabilities, certificates, devices, Merchant IDs, and profiles with filtering and sorting options
+- **Data Source Usage**: Querying existing Bundle IDs, capabilities, certificates, devices, Merchant IDs, Pass Type IDs, and profiles with filtering and sorting options
 - **Multi-platform Support**: Examples for iOS, macOS, tvOS, watchOS, and visionOS resources
 - **Certificate Types**: Examples of different certificate types (development, distribution, Developer ID, etc.)
 - **Device Types**: Examples of registering different device types (iPhone, iPad, Mac, Apple TV, Apple Watch, Vision Pro)
@@ -166,6 +169,64 @@ data "apple_merchant_ids" "all" {
 }
 ```
 
+### Pass Type IDs
+
+The Pass Type ID examples demonstrate Apple Wallet pass management setup:
+
+#### Pass Type ID Management
+- **Identifier Format**: Must start with `pass.` followed by reverse domain format (e.g., `pass.com.example.loyalty`)
+- **Pass Names**: User-friendly names for identifying pass types in Apple Wallet contexts
+- **Apple Wallet Integration**: Required for creating and distributing passes for Apple Wallet
+- **Multiple Pass Types**: Organizations can have multiple Pass Type IDs for different pass categories
+
+#### Key Features
+- Create and manage Pass Type IDs for Apple Wallet passes
+- Update pass names after creation (identifiers are immutable)
+- Query existing Pass Type IDs with filtering and sorting
+- Import existing Pass Type IDs by Apple ID or identifier
+- Support for both standard and NFC-enabled pass certificates
+
+#### Example Usage
+```hcl
+# Create a Pass Type ID for loyalty cards
+resource "apple_pass_type_id" "loyalty_card" {
+  identifier = "pass.com.example.loyalty"
+  name       = "Store Loyalty Card"
+}
+
+# Create certificates for Pass Type IDs
+resource "apple_certificate" "loyalty_pass_cert" {
+  certificate_type = "PASS_TYPE_ID"
+  csr_content      = var.pass_csr_content
+}
+
+# For NFC-enabled passes
+resource "apple_certificate" "nfc_pass_cert" {
+  certificate_type = "PASS_TYPE_ID_WITH_NFC"
+  csr_content      = var.nfc_pass_csr_content
+}
+
+# Query Pass Type IDs
+data "apple_pass_type_ids" "company_passes" {
+  identifier_prefix = "pass.com.example"
+  sort_by          = "name"
+}
+```
+
+#### Pass Type Categories
+Pass Type IDs can be used for various types of Apple Wallet passes:
+- **Store Cards**: Loyalty cards, membership cards, store credit cards
+- **Boarding Passes**: Airline, train, bus, and other transportation passes
+- **Event Tickets**: Concert tickets, movie tickets, sports event tickets
+- **Coupons**: Discount coupons, promotional offers, vouchers
+- **Generic Passes**: Custom passes for unique business needs
+
+#### Certificate Requirements
+- Pass Type IDs require dedicated certificates for signing passes
+- `PASS_TYPE_ID` certificates for standard passes
+- `PASS_TYPE_ID_WITH_NFC` certificates for NFC-enabled contactless passes
+- Each certificate must be created with a valid Certificate Signing Request (CSR)
+
 ### Provisioning Profiles
 
 The provisioning profile examples demonstrate the complete workflow for code signing and app distribution:
@@ -222,7 +283,7 @@ resource "apple_profile" "development" {
 
 ### Resource Creation
 
-The acceptance tests create real resources in your Apple Developer account and may affect your Bundle ID, certificate, device, Merchant ID, and provisioning profile quotas. Always review the planned changes before applying.
+The acceptance tests create real resources in your Apple Developer account and may affect your Bundle ID, certificate, device, Merchant ID, Pass Type ID, and provisioning profile quotas. Always review the planned changes before applying.
 
 ### Certificate Management
 
@@ -259,3 +320,14 @@ The acceptance tests create real resources in your Apple Developer account and m
 - Each profile type has specific use cases and certificate requirements
 - Profile content is Base64-encoded and marked as sensitive
 - Profiles can be imported by Apple ID or name for managing existing resources
+
+### Pass Type ID Management
+
+- Pass Type IDs are required for creating and distributing passes for Apple Wallet
+- Identifier format must start with `pass.` followed by reverse domain format (e.g., `pass.com.example.loyalty`)
+- Pass names can be updated after creation to provide user-friendly identification
+- Pass Type IDs can be deleted via the API unlike some other resource types
+- Each Pass Type ID is unique across the entire Apple ecosystem (not just your account)
+- Pass Type IDs require dedicated certificates for signing pass files
+- Import functionality supports both Apple-generated IDs and pass type identifiers
+- Pass Type IDs support both standard and NFC-enabled certificates for contactless functionality
