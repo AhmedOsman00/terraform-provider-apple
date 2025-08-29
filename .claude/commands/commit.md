@@ -9,7 +9,7 @@ Commit Code in Staging
 3. Commit changes
    - Remove claude signature from all commit messages
    - Use imperative mood in commit messages.
-   - Be specific, concise, and ≤ 3 lines.
+   - Be specific, concise, and ≤ 3 bullets.
    - Split into multiple commits if changes are substantial (e.g., one for bug fix, one for refactor).
    - Example:
 
