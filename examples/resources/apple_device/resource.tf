@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     apple = {
-      source = "theaostudio.com/hashicorp/apple"
+      source = "aostudio.com/aostudio/apple"
     }
   }
 }
@@ -16,14 +16,14 @@ provider "apple" {
 # Register an iOS device
 resource "apple_device" "my_iphone" {
   name     = "My iPhone 15 Pro"
-  udid     = "12345678-90123456789012345678901234567890" # 40-character hex string for iOS devices
+  udid     = "00008130-000A1B2C3D4E5F60" # 8-16 hex, reported by iPhone XS and later
   platform = "IOS"
 }
 
 # Register an iPad
 resource "apple_device" "my_ipad" {
   name     = "Development iPad"
-  udid     = "abcdef12-34567890123456789012345678901234" # 40-character hex string for iOS devices
+  udid     = "00008027-001122334455667E" # 8-16 hex, reported by A12 and later iPads
   platform = "IOS"
 }
 
@@ -44,14 +44,14 @@ resource "apple_device" "my_apple_tv" {
 # Register an Apple Watch (via paired iPhone)
 resource "apple_device" "my_watch" {
   name     = "Apple Watch Series 9"
-  udid     = "87654321-43218765432187654321876543218765" # 40-character hex string
-  platform = "IOS" # Apple Watch devices are registered under iOS platform
+  udid     = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678" # 40-character hex, reported by iPhone X and earlier
+  platform = "IOS"                                      # Apple Watch devices are registered under iOS platform
 }
 
 # Register an Apple Vision Pro
 resource "apple_device" "my_vision_pro" {
   name     = "Vision Pro Dev Unit"
-  udid     = "visionpro-1234-5678-9abc-def012345678" # UUID format for Vision devices
+  udid     = "7c9e6679-7425-40de-944b-e07fc1f90ae7" # UUID format for Vision devices
   platform = "VISION_OS"
 }
 
@@ -59,12 +59,12 @@ resource "apple_device" "my_vision_pro" {
 output "device_ids" {
   description = "Apple-assigned IDs for registered devices"
   value = {
-    iphone      = apple_device.my_iphone.id
-    ipad        = apple_device.my_ipad.id
-    mac         = apple_device.my_mac.id
-    apple_tv    = apple_device.my_apple_tv.id
-    watch       = apple_device.my_watch.id
-    vision_pro  = apple_device.my_vision_pro.id
+    iphone     = apple_device.my_iphone.id
+    ipad       = apple_device.my_ipad.id
+    mac        = apple_device.my_mac.id
+    apple_tv   = apple_device.my_apple_tv.id
+    watch      = apple_device.my_watch.id
+    vision_pro = apple_device.my_vision_pro.id
   }
 }
 
@@ -96,11 +96,11 @@ output "device_details" {
 # To import: terraform import apple_device.existing_device <device_id_or_udid>
 resource "apple_device" "existing_device" {
   name     = "Previously Registered Device"
-  udid     = "existing-device-udid-here"
+  udid     = "00008110-000E4C8A0C50401E" # The UDID the device already registered under
   platform = "IOS"
-  
+
   # This resource can be imported using either the Apple device ID or UDID
-  # terraform import apple_device.existing_device 12345678-90123456789012345678901234567890
+  # terraform import apple_device.existing_device 00008110-000E4C8A0C50401E
   # or
   # terraform import apple_device.existing_device ABC123DEF456
 }
@@ -117,7 +117,7 @@ locals {
   enabled_ios_udids = [
     for device in data.apple_devices.existing_ios_devices.devices : device.udid
   ]
-  
+
   # Create a map of device names to UDIDs
   device_name_to_udid = {
     for device in data.apple_devices.existing_ios_devices.devices :

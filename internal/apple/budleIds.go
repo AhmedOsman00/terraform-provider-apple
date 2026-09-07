@@ -9,28 +9,12 @@ import (
 	"terraform-provider-apple/internal/apple/models"
 )
 
-// GetBundleIDs retrieves all Bundle IDs for the team
+// GetBundleIDs retrieves all Bundle IDs for the team.
 func (c *Client) GetBundleIDs() ([]models.BundleID, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/bundleIds", c.HostURL), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := c.doRequest(req, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	response := models.ListResponse[models.BundleID]{}
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
+	return getAllPages[models.BundleID](c, "/v1/bundleIds", defaultPageSize)
 }
 
-// GetBundleID retrieves a specific Bundle ID by its ID
+// GetBundleID retrieves a specific Bundle ID by its ID.
 func (c *Client) GetBundleID(bundleID string) (*models.BundleID, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/bundleIds/%s", c.HostURL, bundleID), nil)
 	if err != nil {
@@ -51,7 +35,7 @@ func (c *Client) GetBundleID(bundleID string) (*models.BundleID, error) {
 	return &response.Data, nil
 }
 
-// CreateBundleID creates a new Bundle ID
+// CreateBundleID creates a new Bundle ID.
 func (c *Client) CreateBundleID(identifier, name string, platform models.BundleIDPlatform, authToken *string) (*models.BundleID, error) {
 	bundleIDRequest := models.BundleIDCreateRequest{
 		Type: "bundleIds",
@@ -90,7 +74,7 @@ func (c *Client) CreateBundleID(identifier, name string, platform models.BundleI
 	return &response.Data, nil
 }
 
-// UpdateBundleID updates a Bundle ID's name (only field that can be updated)
+// UpdateBundleID updates a Bundle ID's name (only field that can be updated).
 func (c *Client) UpdateBundleID(bundleID, name string, authToken *string) (*models.BundleID, error) {
 	bundleIDRequest := models.BundleIDUpdateRequest{
 		Type: "bundleIds",
@@ -128,7 +112,7 @@ func (c *Client) UpdateBundleID(bundleID, name string, authToken *string) (*mode
 	return &response.Data, nil
 }
 
-// DeleteBundleID deletes a Bundle ID
+// DeleteBundleID deletes a Bundle ID.
 func (c *Client) DeleteBundleID(bundleID string, authToken *string) error {
 	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/v1/bundleIds/%s", c.HostURL, bundleID), nil)
 	if err != nil {
@@ -144,7 +128,7 @@ func (c *Client) DeleteBundleID(bundleID string, authToken *string) error {
 	return nil
 }
 
-// GetBundleIDByIdentifier finds a Bundle ID by its identifier string
+// GetBundleIDByIdentifier finds a Bundle ID by its identifier string.
 func (c *Client) GetBundleIDByIdentifier(identifier string) (*models.BundleID, error) {
 	bundleIDs, err := c.GetBundleIDs()
 	if err != nil {

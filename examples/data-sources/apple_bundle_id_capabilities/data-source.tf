@@ -8,7 +8,7 @@ data "apple_bundle_id_capabilities" "all" {
 
 # Filter capabilities by Bundle ID
 data "apple_bundle_id_capabilities" "ios_app_capabilities" {
-  bundle_id = "com.example.myapp"  # Can use Bundle identifier
+  bundle_id = "com.example.myapp" # Can use Bundle identifier
   limit     = 50
 }
 
@@ -60,7 +60,7 @@ locals {
 # Conditionally create a push notification capability
 resource "apple_bundle_id_capability" "conditional_push" {
   count = local.has_push_notifications ? 0 : 1
-  
+
   bundle_id       = "com.example.myapp"
   capability_type = "PUSH_NOTIFICATIONS"
 }

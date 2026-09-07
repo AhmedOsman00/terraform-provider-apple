@@ -9,28 +9,12 @@ import (
 	"terraform-provider-apple/internal/apple/models"
 )
 
-// GetMerchantIDs retrieves all Merchant IDs for the team
+// GetMerchantIDs retrieves all Merchant IDs for the team.
 func (c *Client) GetMerchantIDs() ([]models.MerchantID, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/merchantIds", c.HostURL), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := c.doRequest(req, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	response := models.ListResponse[models.MerchantID]{}
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
+	return getAllPages[models.MerchantID](c, "/v1/merchantIds", defaultPageSize)
 }
 
-// GetMerchantID retrieves a specific Merchant ID by its ID
+// GetMerchantID retrieves a specific Merchant ID by its ID.
 func (c *Client) GetMerchantID(merchantID string) (*models.MerchantID, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/merchantIds/%s", c.HostURL, merchantID), nil)
 	if err != nil {
@@ -51,7 +35,7 @@ func (c *Client) GetMerchantID(merchantID string) (*models.MerchantID, error) {
 	return &response.Data, nil
 }
 
-// CreateMerchantID creates a new Merchant ID
+// CreateMerchantID creates a new Merchant ID.
 func (c *Client) CreateMerchantID(identifier, displayName string, authToken *string) (*models.MerchantID, error) {
 	merchantIDRequest := models.MerchantIDCreateRequest{
 		Type: "merchantIds",
@@ -89,7 +73,7 @@ func (c *Client) CreateMerchantID(identifier, displayName string, authToken *str
 	return &response.Data, nil
 }
 
-// UpdateMerchantID updates a Merchant ID's display name (only field that can be updated)
+// UpdateMerchantID updates a Merchant ID's display name (only field that can be updated).
 func (c *Client) UpdateMerchantID(merchantID, displayName string, authToken *string) (*models.MerchantID, error) {
 	merchantIDRequest := models.MerchantIDUpdateRequest{
 		Type: "merchantIds",
@@ -127,7 +111,7 @@ func (c *Client) UpdateMerchantID(merchantID, displayName string, authToken *str
 	return &response.Data, nil
 }
 
-// DeleteMerchantID deletes a Merchant ID
+// DeleteMerchantID deletes a Merchant ID.
 func (c *Client) DeleteMerchantID(merchantID string, authToken *string) error {
 	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/v1/merchantIds/%s", c.HostURL, merchantID), nil)
 	if err != nil {
@@ -143,7 +127,7 @@ func (c *Client) DeleteMerchantID(merchantID string, authToken *string) error {
 	return nil
 }
 
-// GetMerchantIDByIdentifier finds a Merchant ID by its identifier string
+// GetMerchantIDByIdentifier finds a Merchant ID by its identifier string.
 func (c *Client) GetMerchantIDByIdentifier(identifier string) (*models.MerchantID, error) {
 	merchantIDs, err := c.GetMerchantIDs()
 	if err != nil {

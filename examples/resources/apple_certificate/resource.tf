@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     apple = {
-      source = "theaostudio.com/hashicorp/apple"
+      source = "aostudio.com/aostudio/apple"
     }
   }
 }
@@ -33,10 +33,19 @@ resource "apple_certificate" "ios_development" {
   csr_content      = local.example_csr
 }
 
-# Create an iOS Distribution certificate
+# Create an iOS Distribution certificate that replaces itself 30 days before it
+# expires. The window is evaluated during `terraform plan`, so this only takes
+# effect when Terraform runs -- schedule a periodic plan/apply if you rely on it.
 resource "apple_certificate" "ios_distribution" {
-  certificate_type = "IOS_DISTRIBUTION"
-  csr_content      = local.example_csr
+  certificate_type    = "IOS_DISTRIBUTION"
+  csr_content         = local.example_csr
+  early_renewal_hours = 720 # 30 days
+
+  # Certificates are immutable, so renewal is a replacement. Create the new
+  # certificate before revoking the old one to avoid a signing gap.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Create a Mac App Development certificate
@@ -67,12 +76,13 @@ output "ios_development_certificate" {
 
 output "ios_distribution_certificate" {
   value = {
-    id               = apple_certificate.ios_distribution.id
-    serial_number    = apple_certificate.ios_distribution.serial_number
-    display_name     = apple_certificate.ios_distribution.display_name
-    certificate_type = apple_certificate.ios_distribution.certificate_type
-    platform         = apple_certificate.ios_distribution.platform
-    expiration_date  = apple_certificate.ios_distribution.expiration_date
+    id                = apple_certificate.ios_distribution.id
+    serial_number     = apple_certificate.ios_distribution.serial_number
+    display_name      = apple_certificate.ios_distribution.display_name
+    certificate_type  = apple_certificate.ios_distribution.certificate_type
+    platform          = apple_certificate.ios_distribution.platform
+    expiration_date   = apple_certificate.ios_distribution.expiration_date
+    ready_for_renewal = apple_certificate.ios_distribution.ready_for_renewal
   }
 }
 
@@ -99,10 +109,10 @@ output "developer_id_certificate" {
 # Output all certificate serial numbers for reference
 output "all_certificate_serials" {
   value = {
-    ios_development       = apple_certificate.ios_development.serial_number
-    ios_distribution      = apple_certificate.ios_distribution.serial_number
-    mac_development       = apple_certificate.mac_development.serial_number
-    developer_id_app      = apple_certificate.developer_id_application.serial_number
+    ios_development  = apple_certificate.ios_development.serial_number
+    ios_distribution = apple_certificate.ios_distribution.serial_number
+    mac_development  = apple_certificate.mac_development.serial_number
+    developer_id_app = apple_certificate.developer_id_application.serial_number
   }
 }
 

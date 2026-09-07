@@ -1,21 +1,35 @@
 package merchant
 
 import (
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
 	"terraform-provider-apple/internal/apple/models"
 )
 
-// MerchantIDFilters represents the filtering configuration for Merchant IDs
+// MerchantIDFilters represents the filtering configuration for Merchant IDs.
 type MerchantIDFilters struct {
 	IdentifierPattern  string
 	IdentifierPrefix   string
 	DisplayNamePattern string
 }
 
-// FilterMerchantIDs applies filters to a list of Merchant IDs
-func FilterMerchantIDs(merchantIDs []models.MerchantID, filters MerchantIDFilters) []models.MerchantID {
+// FilterMerchantIDs applies filters to a list of Merchant IDs.
+func FilterMerchantIDs(merchantIDs []models.MerchantID, filters MerchantIDFilters) ([]models.MerchantID, error) {
+	// Reject malformed patterns up front rather than silently matching nothing.
+	if filters.IdentifierPattern != "" {
+		if _, err := regexp.Compile(filters.IdentifierPattern); err != nil {
+			return nil, fmt.Errorf("invalid identifier_pattern %q: %w", filters.IdentifierPattern, err)
+		}
+	}
+	if filters.DisplayNamePattern != "" {
+		// Matching is case-insensitive, so validate the pattern as it is used.
+		if _, err := regexp.Compile("(?i)" + filters.DisplayNamePattern); err != nil {
+			return nil, fmt.Errorf("invalid display_name_pattern %q: %w", filters.DisplayNamePattern, err)
+		}
+	}
+
 	filtered := make([]models.MerchantID, 0, len(merchantIDs))
 
 	// Apply filters
@@ -25,10 +39,10 @@ func FilterMerchantIDs(merchantIDs []models.MerchantID, filters MerchantIDFilter
 		}
 	}
 
-	return filtered
+	return filtered, nil
 }
 
-// shouldIncludeMerchantID determines if a Merchant ID should be included based on filters
+// shouldIncludeMerchantID determines if a Merchant ID should be included based on filters.
 func shouldIncludeMerchantID(merchantID models.MerchantID, filters MerchantIDFilters) bool {
 	// Identifier pattern filter (regex)
 	if filters.IdentifierPattern != "" {
@@ -62,7 +76,7 @@ func shouldIncludeMerchantID(merchantID models.MerchantID, filters MerchantIDFil
 	return true
 }
 
-// SortMerchantIDs sorts Merchant IDs by the specified field and order
+// SortMerchantIDs sorts Merchant IDs by the specified field and order.
 func SortMerchantIDs(merchantIDs []models.MerchantID, sortBy, sortOrder string) {
 	ascending := sortOrder != "desc"
 

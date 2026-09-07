@@ -10,28 +10,12 @@ import (
 	"terraform-provider-apple/internal/apple/models"
 )
 
-// GetPassTypeIDs retrieves all Pass Type IDs for the team
+// GetPassTypeIDs retrieves all Pass Type IDs for the team.
 func (c *Client) GetPassTypeIDs() ([]models.PassTypeIDResource, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/passTypeIds", c.HostURL), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := c.doRequest(req, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	response := models.ListResponse[models.PassTypeIDResource]{}
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
+	return getAllPages[models.PassTypeIDResource](c, "/v1/passTypeIds", defaultPageSize)
 }
 
-// GetPassTypeID retrieves a specific Pass Type ID by its ID
+// GetPassTypeID retrieves a specific Pass Type ID by its ID.
 func (c *Client) GetPassTypeID(passTypeID string) (*models.PassTypeIDResource, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/passTypeIds/%s", c.HostURL, passTypeID), nil)
 	if err != nil {
@@ -52,7 +36,7 @@ func (c *Client) GetPassTypeID(passTypeID string) (*models.PassTypeIDResource, e
 	return &response.Data, nil
 }
 
-// GetPassTypeIDByIdentifier retrieves a specific Pass Type ID by its identifier (e.g., "pass.com.example.mypass")
+// GetPassTypeIDByIdentifier retrieves a specific Pass Type ID by its identifier (e.g., "pass.com.example.mypass").
 func (c *Client) GetPassTypeIDByIdentifier(identifier string) (*models.PassTypeIDResource, error) {
 	passTypeIDs, err := c.GetPassTypeIDs()
 	if err != nil {
@@ -65,10 +49,10 @@ func (c *Client) GetPassTypeIDByIdentifier(identifier string) (*models.PassTypeI
 		}
 	}
 
-	return nil, fmt.Errorf("Pass Type ID with identifier '%s' not found", identifier)
+	return nil, fmt.Errorf("pass type ID with identifier %q not found", identifier)
 }
 
-// CreatePassTypeID creates a new Pass Type ID
+// CreatePassTypeID creates a new Pass Type ID.
 func (c *Client) CreatePassTypeID(identifier, name string) (*models.PassTypeIDResource, error) {
 	requestBody := models.Request[models.PassTypeIDCreateRequest]{
 		Data: models.PassTypeIDCreateRequest{
@@ -104,7 +88,7 @@ func (c *Client) CreatePassTypeID(identifier, name string) (*models.PassTypeIDRe
 	return &response.Data, nil
 }
 
-// UpdatePassTypeID updates an existing Pass Type ID (only name can be updated)
+// UpdatePassTypeID updates an existing Pass Type ID (only name can be updated).
 func (c *Client) UpdatePassTypeID(passTypeID, name string) (*models.PassTypeIDResource, error) {
 	requestBody := models.Request[models.PassTypeIDUpdateRequest]{
 		Data: models.PassTypeIDUpdateRequest{
@@ -140,7 +124,7 @@ func (c *Client) UpdatePassTypeID(passTypeID, name string) (*models.PassTypeIDRe
 	return &response.Data, nil
 }
 
-// DeletePassTypeID deletes a Pass Type ID
+// DeletePassTypeID deletes a Pass Type ID.
 func (c *Client) DeletePassTypeID(passTypeID string) error {
 	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/v1/passTypeIds/%s", c.HostURL, passTypeID), nil)
 	if err != nil {
@@ -151,7 +135,7 @@ func (c *Client) DeletePassTypeID(passTypeID string) error {
 	if err != nil {
 		// Handle specific error cases
 		if strings.Contains(err.Error(), "404") {
-			return fmt.Errorf("Pass Type ID not found (it may have already been deleted)")
+			return fmt.Errorf("pass type ID not found (it may have already been deleted)")
 		}
 		return err
 	}

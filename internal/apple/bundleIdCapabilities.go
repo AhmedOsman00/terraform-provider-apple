@@ -9,28 +9,12 @@ import (
 	"terraform-provider-apple/internal/apple/models"
 )
 
-// GetBundleIDCapabilities retrieves all capabilities for a specific Bundle ID
+// GetBundleIDCapabilities retrieves all capabilities for a specific Bundle ID.
 func (c *Client) GetBundleIDCapabilities(bundleID string) ([]models.BundleIDCapability, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/bundleIds/%s/bundleIdCapabilities", c.HostURL, bundleID), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := c.doRequest(req, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	response := models.ListResponse[models.BundleIDCapability]{}
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
+	return getAllPages[models.BundleIDCapability](c, fmt.Sprintf("/v1/bundleIds/%s/bundleIdCapabilities", bundleID), relationshipPageSize)
 }
 
-// GetBundleIDCapability retrieves a specific Bundle ID capability by its ID
+// GetBundleIDCapability retrieves a specific Bundle ID capability by its ID.
 func (c *Client) GetBundleIDCapability(capabilityID string) (*models.BundleIDCapability, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/bundleIdCapabilities/%s", c.HostURL, capabilityID), nil)
 	if err != nil {
@@ -51,7 +35,7 @@ func (c *Client) GetBundleIDCapability(capabilityID string) (*models.BundleIDCap
 	return &response.Data, nil
 }
 
-// CreateBundleIDCapability creates a new Bundle ID capability
+// CreateBundleIDCapability creates a new Bundle ID capability.
 func (c *Client) CreateBundleIDCapability(bundleID string, capabilityType models.CapabilityType, settings []models.CapabilitySetting, authToken *string) (*models.BundleIDCapability, error) {
 	capabilityRequest := models.BundleIDCapabilityCreateRequest{
 		Type: "bundleIdCapabilities",
@@ -103,7 +87,7 @@ func (c *Client) CreateBundleIDCapability(bundleID string, capabilityType models
 	return &response.Data, nil
 }
 
-// UpdateBundleIDCapability updates a Bundle ID capability's settings
+// UpdateBundleIDCapability updates a Bundle ID capability's settings.
 func (c *Client) UpdateBundleIDCapability(capabilityID string, capabilityType *models.CapabilityType, settings []models.CapabilitySetting, authToken *string) (*models.BundleIDCapability, error) {
 	capabilityRequest := models.BundleIDCapabilityUpdateRequest{
 		Type: "bundleIdCapabilities",
@@ -142,7 +126,7 @@ func (c *Client) UpdateBundleIDCapability(capabilityID string, capabilityType *m
 	return &response.Data, nil
 }
 
-// DeleteBundleIDCapability deletes a Bundle ID capability
+// DeleteBundleIDCapability deletes a Bundle ID capability.
 func (c *Client) DeleteBundleIDCapability(capabilityID string, authToken *string) error {
 	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/v1/bundleIdCapabilities/%s", c.HostURL, capabilityID), nil)
 	if err != nil {
@@ -158,7 +142,7 @@ func (c *Client) DeleteBundleIDCapability(capabilityID string, authToken *string
 	return nil
 }
 
-// GetBundleIDCapabilityByType finds a Bundle ID capability by bundle ID and capability type
+// GetBundleIDCapabilityByType finds a Bundle ID capability by bundle ID and capability type.
 func (c *Client) GetBundleIDCapabilityByType(bundleID string, capabilityType models.CapabilityType) (*models.BundleIDCapability, error) {
 	capabilities, err := c.GetBundleIDCapabilities(bundleID)
 	if err != nil {

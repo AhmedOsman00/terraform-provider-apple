@@ -38,33 +38,32 @@ type bundleIDsDataSourceModel struct {
 	BundleIDs []bundleIDModel `tfsdk:"bundle_ids"`
 
 	// Computed metadata
-	TotalCount    types.Int64  `tfsdk:"total_count"`
-	FilteredCount types.Int64  `tfsdk:"filtered_count"`
-	LastUpdated   types.String `tfsdk:"last_updated"`
+	TotalCount    types.Int64 `tfsdk:"total_count"`
+	FilteredCount types.Int64 `tfsdk:"filtered_count"`
 }
 
-// Bundle ID platform constants and validators
+// Bundle ID platform constants and validators.
 var (
-	// ValidPlatforms contains all supported Bundle ID platforms
+	// ValidPlatforms contains all supported Bundle ID platforms.
 	ValidPlatforms = []string{"IOS", "MAC_OS", "TV_OS", "WATCH_OS"}
 
-	// PlatformValidator validates platform values
+	// PlatformValidator validates platform values.
 	PlatformValidator = stringvalidator.OneOf(ValidPlatforms...)
 
-	// BundleIdentifierValidator validates Bundle ID identifier format
+	// BundleIdentifierValidator validates Bundle ID identifier format.
 	BundleIdentifierValidator = stringvalidator.RegexMatches(
 		regexp.MustCompile(`^[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+$`),
 		"Bundle identifier must follow reverse domain format (e.g., com.example.myapp)",
 	)
 
-	// SortByValidator validates sort field options
+	// SortByValidator validates sort field options.
 	SortByValidator = stringvalidator.OneOf("name", "identifier", "platform")
 
-	// SortOrderValidator validates sort order options
+	// SortOrderValidator validates sort order options.
 	SortOrderValidator = stringvalidator.OneOf("asc", "desc")
 )
 
-// GetIdentifierValidator returns validators for Bundle ID identifier fields
+// GetIdentifierValidator returns validators for Bundle ID identifier fields.
 func GetIdentifierValidator() []validator.String {
 	return []validator.String{
 		BundleIdentifierValidator,
@@ -72,14 +71,14 @@ func GetIdentifierValidator() []validator.String {
 	}
 }
 
-// GetNameValidator returns validators for Bundle ID name fields
+// GetNameValidator returns validators for Bundle ID name fields.
 func GetNameValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.LengthBetween(1, 64),
 	}
 }
 
-// GetPatternValidator returns validators for pattern fields (regex patterns)
+// GetPatternValidator returns validators for pattern fields (regex patterns).
 func GetPatternValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.LengthBetween(1, 255),

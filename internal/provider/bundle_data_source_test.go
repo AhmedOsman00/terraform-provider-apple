@@ -24,7 +24,6 @@ func TestAccBundleIDsDataSource_basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("data.apple_bundle_ids.test", "bundle_ids.#"),
 					resource.TestCheckResourceAttrSet("data.apple_bundle_ids.test", "total_count"),
 					resource.TestCheckResourceAttrSet("data.apple_bundle_ids.test", "filtered_count"),
-					resource.TestCheckResourceAttrSet("data.apple_bundle_ids.test", "last_updated"),
 				),
 			},
 		},
@@ -44,7 +43,6 @@ func TestAccBundleIDsDataSource_empty(t *testing.T) {
 					resource.TestCheckResourceAttrSet("data.apple_bundle_ids.test", "bundle_ids.#"),
 					resource.TestCheckResourceAttrSet("data.apple_bundle_ids.test", "total_count"),
 					resource.TestCheckResourceAttrSet("data.apple_bundle_ids.test", "filtered_count"),
-					resource.TestCheckResourceAttrSet("data.apple_bundle_ids.test", "last_updated"),
 				),
 			},
 		},
@@ -132,14 +130,14 @@ func TestAccBundleIDsDataSource_validation(t *testing.T) {
 	})
 }
 
-// Basic data source configuration without any resources
+// Basic data source configuration without any resources.
 func testAccBundleIDsDataSourceConfig() string {
 	return `
 data "apple_bundle_ids" "test" {}
 `
 }
 
-// Data source configuration with a single Bundle ID resource
+// Data source configuration with a single Bundle ID resource.
 func testAccBundleIDsDataSourceConfigWithResource() string {
 	return `
 resource "apple_bundle_id" "test" {
@@ -154,7 +152,7 @@ data "apple_bundle_ids" "test" {
 `
 }
 
-// Data source configuration with filtering
+// Data source configuration with filtering.
 func testAccBundleIDsDataSourceConfigWithFiltering() string {
 	return `
 resource "apple_bundle_id" "ios" {
@@ -198,7 +196,7 @@ data "apple_bundle_ids" "prefix_filter" {
 `
 }
 
-// Data source configuration with sorting
+// Data source configuration with sorting.
 func testAccBundleIDsDataSourceConfigWithSorting() string {
 	return `
 resource "apple_bundle_id" "sort1" {
@@ -235,7 +233,7 @@ data "apple_bundle_ids" "sorted_desc" {
 `
 }
 
-// Data source configuration with limit
+// Data source configuration with limit.
 func testAccBundleIDsDataSourceConfigWithLimit() string {
 	return `
 data "apple_bundle_ids" "limited" {
@@ -244,7 +242,7 @@ data "apple_bundle_ids" "limited" {
 `
 }
 
-// Invalid configurations for validation testing
+// Invalid configurations for validation testing.
 func testAccBundleIDsDataSourceConfigInvalidPlatform() string {
 	return `
 data "apple_bundle_ids" "test" {

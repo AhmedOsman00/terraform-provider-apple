@@ -2,6 +2,7 @@ package bundle
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -11,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// FilterOptions represents the filtering configuration for Bundle IDs
+// FilterOptions represents the filtering configuration for Bundle IDs.
 type FilterOptions struct {
 	Platform          string
 	Platforms         []string
@@ -23,7 +24,7 @@ type FilterOptions struct {
 	SortOrder         string
 }
 
-// FilterBundleIDs applies filters and sorting to a list of Bundle IDs
+// FilterBundleIDs applies filters and sorting to a list of Bundle IDs.
 func FilterBundleIDs(ctx context.Context, bundleIDs []models.BundleID, options FilterOptions) ([]models.BundleID, error) {
 	tflog.Debug(ctx, "Filtering Bundle IDs", map[string]interface{}{
 		"total_count":        len(bundleIDs),
@@ -36,6 +37,20 @@ func FilterBundleIDs(ctx context.Context, bundleIDs []models.BundleID, options F
 		"sort_by":            options.SortBy,
 		"sort_order":         options.SortOrder,
 	})
+
+	// Reject malformed patterns up front. Left to the per-item match calls, a
+	// typo silently matches nothing and the data source returns an empty list
+	// instead of reporting the bad pattern.
+	if options.IdentifierPattern != "" {
+		if _, err := regexp.Compile(options.IdentifierPattern); err != nil {
+			return nil, fmt.Errorf("invalid identifier_pattern %q: %w", options.IdentifierPattern, err)
+		}
+	}
+	if options.NamePattern != "" {
+		if _, err := filepath.Match(options.NamePattern, ""); err != nil {
+			return nil, fmt.Errorf("invalid name_pattern %q: %w", options.NamePattern, err)
+		}
+	}
 
 	filtered := make([]models.BundleID, 0, len(bundleIDs))
 
@@ -71,7 +86,7 @@ func FilterBundleIDs(ctx context.Context, bundleIDs []models.BundleID, options F
 	return filtered, nil
 }
 
-// shouldIncludeBundleID determines if a Bundle ID should be included based on filters
+// shouldIncludeBundleID determines if a Bundle ID should be included based on filters.
 func shouldIncludeBundleID(ctx context.Context, bundleID models.BundleID, options FilterOptions) bool {
 	// Platform filter (single)
 	if options.Platform != "" && string(bundleID.Attributes.Platform) != options.Platform {
@@ -130,7 +145,7 @@ func shouldIncludeBundleID(ctx context.Context, bundleID models.BundleID, option
 	return true
 }
 
-// sortBundleIDs sorts Bundle IDs by the specified field and order
+// sortBundleIDs sorts Bundle IDs by the specified field and order.
 func sortBundleIDs(bundleIDs []models.BundleID, sortBy, sortOrder string) {
 	ascending := sortOrder != "desc"
 
@@ -156,7 +171,7 @@ func sortBundleIDs(bundleIDs []models.BundleID, sortBy, sortOrder string) {
 	})
 }
 
-// ParseFilterOptions extracts filter options from the data source model
+// ParseFilterOptions extracts filter options from the data source model.
 func ParseFilterOptions(ctx context.Context, config bundleIDsDataSourceModel) (FilterOptions, error) {
 	options := FilterOptions{}
 

@@ -3,6 +3,7 @@ package provider
 import (
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -18,7 +19,7 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 	"apple": providerserver.NewProtocol6WithError(New("test")()),
 }
 
-// testAccPreCheck verifies and sets up necessary testing prerequisites
+// testAccPreCheck verifies and sets up necessary testing prerequisites.
 func testAccPreCheck(t *testing.T) {
 	// Check if running in acceptance test mode
 	if os.Getenv("TF_ACC") == "" {
@@ -32,10 +33,19 @@ func testAccPreCheck(t *testing.T) {
 		"APPLE_APP_STORE_CONNECT_PRIVATE_KEY",
 	}
 
+	var missing []string
 	for _, envVar := range required {
 		if os.Getenv(envVar) == "" {
-			t.Fatalf("Environment variable %s must be set for acceptance tests", envVar)
+			missing = append(missing, envVar)
 		}
+	}
+
+	// Skip rather than fail: a checkout without App Store Connect credentials
+	// is the normal case for contributors and for CI on forks. Failing there
+	// reports a red build for tests that were never runnable, which hides real
+	// regressions.
+	if len(missing) > 0 {
+		t.Skipf("skipping acceptance test: %s must be set", strings.Join(missing, ", "))
 	}
 }
 

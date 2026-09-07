@@ -43,60 +43,74 @@ type devicesDataSourceModel struct {
 	Devices []deviceModel `tfsdk:"devices"`
 
 	// Computed metadata
-	TotalCount    types.Int64  `tfsdk:"total_count"`
-	FilteredCount types.Int64  `tfsdk:"filtered_count"`
-	LastUpdated   types.String `tfsdk:"last_updated"`
+	TotalCount    types.Int64 `tfsdk:"total_count"`
+	FilteredCount types.Int64 `tfsdk:"filtered_count"`
 }
 
-// Device platform constants and validators
+// Device platform constants and validators.
 var (
-	// ValidPlatforms contains all supported Device platforms
+	// ValidPlatforms contains all supported Device platforms.
 	ValidPlatforms = []string{"IOS", "MAC_OS", "TV_OS", "VISION_OS"}
 
-	// ValidDeviceClasses contains all supported Device classes
+	// ValidDeviceClasses contains all supported Device classes.
 	ValidDeviceClasses = []string{"IPHONE", "IPAD", "IPOD", "APPLE_TV", "APPLE_WATCH", "MAC", "APPLE_VISION_PRO"}
 
-	// ValidStatuses contains all supported Device statuses
+	// ValidStatuses contains all supported Device statuses.
 	ValidStatuses = []string{"ENABLED", "PROCESSING", "INELIGIBLE"}
 
-	// PlatformValidator validates platform values
+	// PlatformValidator validates platform values.
 	PlatformValidator = stringvalidator.OneOf(ValidPlatforms...)
 
-	// DeviceClassValidator validates device class values
+	// DeviceClassValidator validates device class values.
 	DeviceClassValidator = stringvalidator.OneOf(ValidDeviceClasses...)
 
-	// StatusValidator validates status values
+	// StatusValidator validates status values.
 	StatusValidator = stringvalidator.OneOf(ValidStatuses...)
 
-	// UDIDValidator validates UDID format (40-character hex string for iOS devices, 8-4-4-4-12 format for others)
+	// UDIDValidator keeps out values that cannot be a UDID at all -- a
+	// placeholder, an empty string, a path -- and deliberately does not pin the
+	// exact shape. Apple has shipped at least three (40 hex up to the iPhone X;
+	// 8-16 hex such as 00008030-000A4D8E0AB8802E since the A12; a UUID on Mac,
+	// Apple TV and Vision Pro) and owes no notice before shipping a fourth.
+	//
+	// Apple rejects a malformed UDID at create time with its own message, and
+	// Create surfaces that as an "Invalid Device Data" diagnostic, so a stricter
+	// rule here would buy a plan-time error rather than an apply-time one and
+	// cost a provider release every time the guess went stale. An earlier
+	// exact-shape regex did exactly that: it rejected the form most devices in
+	// service report. A wrong UDID that is still well formed -- the mistake that
+	// actually costs a slot in the annual device allowance -- is invisible to any
+	// regex.
 	UDIDValidator = stringvalidator.RegexMatches(
-		regexp.MustCompile(`^([0-9a-fA-F]{40}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$`),
-		"UDID must be a 40-character hex string (iOS devices) or UUID format (other devices)",
+		regexp.MustCompile(`^[0-9a-fA-F-]+$`),
+		"UDID must contain only hexadecimal characters and dashes",
 	)
 
-	// SortByValidator validates sort field options
+	// SortByValidator validates sort field options.
 	SortByValidator = stringvalidator.OneOf("name", "udid", "platform", "device_class", "status", "added_date")
 
-	// SortOrderValidator validates sort order options
+	// SortOrderValidator validates sort order options.
 	SortOrderValidator = stringvalidator.OneOf("asc", "desc")
 )
 
-// GetUDIDValidator returns validators for Device UDID fields
+// GetUDIDValidator returns validators for Device UDID fields. The bounds are
+// loose on purpose: the shortest UDID Apple currently issues is 25 characters
+// and the longest 40, so this only rules out lengths no format plausibly takes.
 func GetUDIDValidator() []validator.String {
 	return []validator.String{
 		UDIDValidator,
-		stringvalidator.LengthBetween(1, 255),
+		stringvalidator.LengthBetween(16, 64),
 	}
 }
 
-// GetNameValidator returns validators for Device name fields
+// GetNameValidator returns validators for Device name fields.
 func GetNameValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.LengthBetween(1, 64),
 	}
 }
 
-// GetPatternValidator returns validators for pattern fields (regex patterns)
+// GetPatternValidator returns validators for pattern fields (regex patterns).
 func GetPatternValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.LengthBetween(1, 255),

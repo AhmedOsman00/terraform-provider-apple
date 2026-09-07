@@ -9,28 +9,12 @@ import (
 	"terraform-provider-apple/internal/apple/models"
 )
 
-// GetProfiles retrieves all Profiles for the team
+// GetProfiles retrieves all Profiles for the team.
 func (c *Client) GetProfiles() ([]models.Profile, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/profiles", c.HostURL), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := c.doRequest(req, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	response := models.ListResponse[models.Profile]{}
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
+	return getAllPages[models.Profile](c, "/v1/profiles", defaultPageSize)
 }
 
-// GetProfile retrieves a specific Profile by its ID
+// GetProfile retrieves a specific Profile by its ID.
 func (c *Client) GetProfile(profileID string) (*models.Profile, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/profiles/%s", c.HostURL, profileID), nil)
 	if err != nil {
@@ -51,35 +35,40 @@ func (c *Client) GetProfile(profileID string) (*models.Profile, error) {
 	return &response.Data, nil
 }
 
-// CreateProfile creates a new Profile
-func (c *Client) CreateProfile(name string, platform models.ProfilePlatform, bundleIDID string, certificateIDs []string, deviceIDs []string, authToken *string) (*models.Profile, error) {
+// CreateProfile creates a new Profile.
+func (c *Client) CreateProfile(name string, profileType models.ProfileType, bundleIDID string, certificateIDs []string, deviceIDs []string, authToken *string) (*models.Profile, error) {
 	// Convert certificate IDs to resource identifiers
-	certificates := make([]models.ResourceIdentifier, len(certificateIDs))
+	certificates := models.ResourceIdentifiers{
+		Data: make([]models.ResourceData, len(certificateIDs)),
+	}
 	for i, certID := range certificateIDs {
-		certificates[i] = models.ResourceIdentifier{
-			Data: models.ResourceData{
-				Type: "certificates",
-				ID:   certID,
-			},
+		certificates.Data[i] = models.ResourceData{
+			Type: "certificates",
+			ID:   certID,
 		}
 	}
 
-	// Convert device IDs to resource identifiers (optional)
-	devices := make([]models.ResourceIdentifier, len(deviceIDs))
-	for i, deviceID := range deviceIDs {
-		devices[i] = models.ResourceIdentifier{
-			Data: models.ResourceData{
+	// Convert device IDs to resource identifiers. App Store and Developer ID
+	// profiles have no devices, and Apple rejects an empty devices relationship,
+	// so the key is left out entirely rather than sent as an empty list.
+	var devices *models.ResourceIdentifiers
+	if len(deviceIDs) > 0 {
+		devices = &models.ResourceIdentifiers{
+			Data: make([]models.ResourceData, len(deviceIDs)),
+		}
+		for i, deviceID := range deviceIDs {
+			devices.Data[i] = models.ResourceData{
 				Type: "devices",
 				ID:   deviceID,
-			},
+			}
 		}
 	}
 
 	profileRequest := models.ProfileCreateRequest{
 		Type: "profiles",
 		Attributes: models.ProfileCreateAttributes{
-			Name:     name,
-			Platform: platform,
+			Name:        name,
+			ProfileType: profileType,
 		},
 		Relationships: models.ProfileCreateRelationships{
 			BundleID: models.ResourceIdentifier{
@@ -121,7 +110,7 @@ func (c *Client) CreateProfile(name string, platform models.ProfilePlatform, bun
 	return &response.Data, nil
 }
 
-// UpdateProfile updates a Profile's name (only field that can be updated)
+// UpdateProfile updates a Profile's name (only field that can be updated).
 func (c *Client) UpdateProfile(profileID, name string, authToken *string) (*models.Profile, error) {
 	profileRequest := models.ProfileUpdateRequest{
 		Type: "profiles",
@@ -159,7 +148,7 @@ func (c *Client) UpdateProfile(profileID, name string, authToken *string) (*mode
 	return &response.Data, nil
 }
 
-// DeleteProfile deletes a Profile
+// DeleteProfile deletes a Profile.
 func (c *Client) DeleteProfile(profileID string, authToken *string) error {
 	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/v1/profiles/%s", c.HostURL, profileID), nil)
 	if err != nil {
@@ -175,7 +164,7 @@ func (c *Client) DeleteProfile(profileID string, authToken *string) error {
 	return nil
 }
 
-// GetProfileByName finds a Profile by its name
+// GetProfileByName finds a Profile by its name.
 func (c *Client) GetProfileByName(name string) (*models.Profile, error) {
 	profiles, err := c.GetProfiles()
 	if err != nil {

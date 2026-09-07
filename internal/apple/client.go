@@ -22,11 +22,15 @@ type Client struct {
 	Token      string
 	IssuerID   string
 	KeyID      string
-	PrivateKey string
-	Scope      []string
 }
 
 // NewClient creates a new Apple API client with a generated JWT token.
+//
+// The token is minted once here and is immutable for the life of the client.
+// App Store Connect tokens are valid for 20 minutes, which comfortably outlives
+// a single Terraform command: every operation this provider performs is one
+// fast REST call, and `plan` and `apply` run as separate processes that each
+// construct their own client. The signing key is therefore not retained.
 func NewClient(issuerID, keyID, privateKeyPEM string, scope []string) (*Client, error) {
 	token, err := createToken(keyID, issuerID, privateKeyPEM, scope)
 	if err != nil {
@@ -39,19 +43,7 @@ func NewClient(issuerID, keyID, privateKeyPEM string, scope []string) (*Client, 
 		Token:      token,
 		IssuerID:   issuerID,
 		KeyID:      keyID,
-		PrivateKey: privateKeyPEM,
-		Scope:      scope,
 	}, nil
-}
-
-// RefreshToken generates a new JWT token when the current one expires
-func (c *Client) RefreshToken() error {
-	token, err := createToken(c.KeyID, c.IssuerID, c.PrivateKey, c.Scope)
-	if err != nil {
-		return fmt.Errorf("failed to refresh token: %v", err)
-	}
-	c.Token = token
-	return nil
 }
 
 func createToken(keyID, issuerID, privateKeyPEM string, scope []string) (string, error) {
@@ -124,35 +116,20 @@ func (c *Client) doRequest(req *http.Request, authToken *string) ([]byte, error)
 		return body, nil
 	}
 
-	// Handle error responses
-	if res.StatusCode == 401 {
-		// Token might be expired, try to refresh
-		if err := c.RefreshToken(); err != nil {
-			return nil, fmt.Errorf("authentication failed and token refresh failed: %v", err)
-		}
-		// Retry the request with new token
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.Token))
-		res, err = c.HTTPClient.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		defer res.Body.Close()
-
-		body, err = io.ReadAll(res.Body)
-		if err != nil {
-			return nil, err
-		}
-
-		if res.StatusCode >= 200 && res.StatusCode < 300 {
-			return body, nil
-		}
-	}
-
-	// Parse error response
+	// Prefer Apple's own structured error message when it supplies one.
 	var errorResponse models.ErrorResponse
 	if err := json.Unmarshal(body, &errorResponse); err == nil && len(errorResponse.Errors) > 0 {
 		return nil, fmt.Errorf("API error (status %d): %s - %s",
 			res.StatusCode, errorResponse.Errors[0].Title, errorResponse.Errors[0].Detail)
+	}
+
+	// A 401 means the credentials themselves were rejected. Re-signing a token
+	// with the same key would produce an equivalent token and be rejected
+	// identically, so report the failure instead of retrying.
+	if res.StatusCode == http.StatusUnauthorized {
+		return nil, fmt.Errorf("authentication failed (status 401): App Store Connect rejected the API credentials. "+
+			"Verify the issuer ID, key ID, and private key are correct and that the key has not been revoked in "+
+			"App Store Connect under Users and Access > Keys. Response: %s", body)
 	}
 
 	return nil, fmt.Errorf("HTTP error: status %d, body: %s", res.StatusCode, body)

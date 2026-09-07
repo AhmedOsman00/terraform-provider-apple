@@ -1,6 +1,6 @@
 package models
 
-// Merchant ID resource model
+// Merchant ID resource model.
 type MerchantID struct {
 	Type       string               `json:"type"`
 	ID         string               `json:"id"`
@@ -8,7 +8,7 @@ type MerchantID struct {
 	Links      *ResourceLinks       `json:"links,omitempty"`
 }
 
-// Request models for Merchant ID operations
+// Request models for Merchant ID operations.
 type MerchantIDCreateRequest struct {
 	Type       string               `json:"type"`
 	Attributes MerchantIDAttributes `json:"attributes"`
@@ -20,13 +20,13 @@ type MerchantIDUpdateRequest struct {
 	Attributes MerchantIDUpdateAttributes `json:"attributes"`
 }
 
-// Merchant ID attributes
+// Merchant ID attributes.
 type MerchantIDAttributes struct {
 	Identifier  string `json:"identifier"`
 	DisplayName string `json:"displayName"`
 }
 
-// Update attributes (only displayName can be updated for Merchant IDs)
+// Update attributes (only displayName can be updated for Merchant IDs).
 type MerchantIDUpdateAttributes struct {
 	DisplayName string `json:"displayName"`
 }

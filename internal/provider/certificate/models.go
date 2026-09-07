@@ -3,7 +3,9 @@
 package certificate
 
 import (
+	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -27,6 +29,29 @@ type certificateModel struct {
 	RequesterEmail     types.String `tfsdk:"requester_email"`
 }
 
+// certificateResourceModel extends certificateModel with the resource-only
+// attributes that drive early renewal. It is kept separate because
+// certificateModel doubles as the data source's nested object, where a
+// user-supplied renewal window has no meaning.
+type certificateResourceModel struct {
+	ID                 types.String `tfsdk:"id"`
+	SerialNumber       types.String `tfsdk:"serial_number"`
+	CertificateContent types.String `tfsdk:"certificate_content"`
+	DisplayName        types.String `tfsdk:"display_name"`
+	Name               types.String `tfsdk:"name"`
+	CsrContent         types.String `tfsdk:"csr_content"`
+	Platform           types.String `tfsdk:"platform"`
+	ExpirationDate     types.String `tfsdk:"expiration_date"`
+	CertificateType    types.String `tfsdk:"certificate_type"`
+	RequesterFirstName types.String `tfsdk:"requester_first_name"`
+	RequesterLastName  types.String `tfsdk:"requester_last_name"`
+	RequesterEmail     types.String `tfsdk:"requester_email"`
+
+	// Early renewal
+	EarlyRenewalHours types.Int64 `tfsdk:"early_renewal_hours"`
+	ReadyForRenewal   types.Bool  `tfsdk:"ready_for_renewal"`
+}
+
 // certificatesDataSourceModel maps the data source schema for listing Certificates.
 type certificatesDataSourceModel struct {
 	// Filter configuration
@@ -46,14 +71,13 @@ type certificatesDataSourceModel struct {
 	Certificates []certificateModel `tfsdk:"certificates"`
 
 	// Computed metadata
-	TotalCount    types.Int64  `tfsdk:"total_count"`
-	FilteredCount types.Int64  `tfsdk:"filtered_count"`
-	LastUpdated   types.String `tfsdk:"last_updated"`
+	TotalCount    types.Int64 `tfsdk:"total_count"`
+	FilteredCount types.Int64 `tfsdk:"filtered_count"`
 }
 
-// Certificate type constants and validators
+// Certificate type constants and validators.
 var (
-	// ValidCertificateTypes contains all supported Certificate types
+	// ValidCertificateTypes contains all supported Certificate types.
 	ValidCertificateTypes = []string{
 		"IOS_DEVELOPMENT",
 		"IOS_DISTRIBUTION",
@@ -72,23 +96,23 @@ var (
 		"DEVELOPER_ID_KEXT_G2",
 	}
 
-	// ValidPlatforms contains all supported Certificate platforms
+	// ValidPlatforms contains all supported Certificate platforms.
 	ValidPlatforms = []string{"IOS", "MAC_OS", "TV_OS", "WATCH_OS"}
 
-	// CertificateTypeValidator validates certificate type values
+	// CertificateTypeValidator validates certificate type values.
 	CertificateTypeValidator = stringvalidator.OneOf(ValidCertificateTypes...)
 
-	// PlatformValidator validates platform values
+	// PlatformValidator validates platform values.
 	PlatformValidator = stringvalidator.OneOf(ValidPlatforms...)
 
-	// SortByValidator validates sort field options
+	// SortByValidator validates sort field options.
 	SortByValidator = stringvalidator.OneOf("display_name", "name", "serial_number", "certificate_type", "expiration_date")
 
-	// SortOrderValidator validates sort order options
+	// SortOrderValidator validates sort order options.
 	SortOrderValidator = stringvalidator.OneOf("asc", "desc")
 )
 
-// GetCsrContentValidator returns validators for CSR content fields
+// GetCsrContentValidator returns validators for CSR content fields.
 func GetCsrContentValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.RegexMatches(
@@ -99,14 +123,14 @@ func GetCsrContentValidator() []validator.String {
 	}
 }
 
-// GetNameValidator returns validators for Certificate name fields
+// GetNameValidator returns validators for Certificate name fields.
 func GetNameValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.LengthBetween(1, 255),
 	}
 }
 
-// GetPatternValidator returns validators for pattern fields (regex patterns)
+// GetPatternValidator returns validators for pattern fields (regex patterns).
 func GetPatternValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.LengthBetween(1, 255),
@@ -118,7 +142,7 @@ func GetPatternValidator() []validator.String {
 	}
 }
 
-// GetSerialNumberValidator returns validators for serial number fields
+// GetSerialNumberValidator returns validators for serial number fields.
 func GetSerialNumberValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.LengthBetween(1, 64),
@@ -127,4 +151,26 @@ func GetSerialNumberValidator() []validator.String {
 			"Serial number must be a hexadecimal string",
 		),
 	}
+}
+
+// readyForRenewal reports whether a certificate expiring at expirationDate has
+// entered its early renewal window. A zero, negative, null or unknown window
+// disables renewal, as does an expiration date Apple did not report.
+func readyForRenewal(expirationDate types.String, earlyRenewalHours types.Int64, now time.Time) (bool, error) {
+	if earlyRenewalHours.IsNull() || earlyRenewalHours.IsUnknown() || earlyRenewalHours.ValueInt64() <= 0 {
+		return false, nil
+	}
+
+	if expirationDate.IsNull() || expirationDate.IsUnknown() {
+		return false, nil
+	}
+
+	expiresAt, err := time.Parse(time.RFC3339, expirationDate.ValueString())
+	if err != nil {
+		return false, fmt.Errorf("could not parse expiration_date %q as RFC3339: %w", expirationDate.ValueString(), err)
+	}
+
+	renewAt := expiresAt.Add(-time.Duration(earlyRenewalHours.ValueInt64()) * time.Hour)
+
+	return now.After(renewAt), nil
 }

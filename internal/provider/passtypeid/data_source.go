@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"terraform-provider-apple/internal/apple"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -129,10 +128,6 @@ func (d *passTypeIDsDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 				MarkdownDescription: "Number of Pass Type IDs after applying filters (before limiting).",
 				Computed:            true,
 			},
-			"last_updated": schema.StringAttribute{
-				MarkdownDescription: "Timestamp when this data was last updated.",
-				Computed:            true,
-			},
 		},
 	}
 }
@@ -195,7 +190,14 @@ func (d *passTypeIDsDataSource) Read(ctx context.Context, req datasource.ReadReq
 		namePattern = config.NamePattern.ValueString()
 	}
 
-	filteredPassTypeIDs := FilterPassTypeIDs(passTypeIDs, identifierPattern, identifierPrefix, namePattern)
+	filteredPassTypeIDs, err := FilterPassTypeIDs(passTypeIDs, identifierPattern, identifierPrefix, namePattern)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Invalid Pass Type ID Filter",
+			err.Error(),
+		)
+		return
+	}
 	filteredCount := len(filteredPassTypeIDs)
 
 	tflog.Debug(ctx, "Applied filtering to Pass Type IDs", map[string]interface{}{
@@ -253,7 +255,6 @@ func (d *passTypeIDsDataSource) Read(ctx context.Context, req datasource.ReadReq
 		PassTypeIDs:       passTypeIDModels,
 		TotalCount:        types.Int64Value(int64(originalCount)),
 		FilteredCount:     types.Int64Value(int64(filteredCount)),
-		LastUpdated:       types.StringValue(time.Now().UTC().Format(time.RFC3339)),
 	}
 
 	tflog.Info(ctx, "Pass Type IDs data source read successfully", map[string]interface{}{

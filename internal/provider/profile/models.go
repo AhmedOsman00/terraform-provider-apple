@@ -46,20 +46,19 @@ type profilesDataSourceModel struct {
 	Profiles []profileModel `tfsdk:"profiles"`
 
 	// Computed metadata
-	TotalCount    types.Int64  `tfsdk:"total_count"`
-	FilteredCount types.Int64  `tfsdk:"filtered_count"`
-	LastUpdated   types.String `tfsdk:"last_updated"`
+	TotalCount    types.Int64 `tfsdk:"total_count"`
+	FilteredCount types.Int64 `tfsdk:"filtered_count"`
 }
 
-// Profile platform constants and validators
+// Profile platform constants and validators.
 var (
-	// ValidPlatforms contains all supported Profile platforms
+	// ValidPlatforms contains all supported Profile platforms.
 	ValidPlatforms = []string{"IOS", "MAC_OS", "TV_OS", "WATCH_OS"}
 
-	// ValidProfileStates contains all supported Profile states
+	// ValidProfileStates contains all supported Profile states.
 	ValidProfileStates = []string{"ACTIVE", "INVALID", "EXPIRED"}
 
-	// ValidProfileTypes contains all supported Profile types
+	// ValidProfileTypes contains all supported Profile types.
 	ValidProfileTypes = []string{
 		"IOS_APP_DEVELOPMENT",
 		"IOS_APP_ADHOC",
@@ -74,30 +73,30 @@ var (
 		"TVOS_APP_INHOUSE",
 	}
 
-	// PlatformValidator validates platform values
+	// PlatformValidator validates platform values.
 	PlatformValidator = stringvalidator.OneOf(ValidPlatforms...)
 
-	// ProfileStateValidator validates profile state values
+	// ProfileStateValidator validates profile state values.
 	ProfileStateValidator = stringvalidator.OneOf(ValidProfileStates...)
 
-	// ProfileTypeValidator validates profile type values
+	// ProfileTypeValidator validates profile type values.
 	ProfileTypeValidator = stringvalidator.OneOf(ValidProfileTypes...)
 
-	// SortByValidator validates sort field options
+	// SortByValidator validates sort field options.
 	SortByValidator = stringvalidator.OneOf("name", "platform", "profile_state", "profile_type", "created_date", "expiration_date")
 
-	// SortOrderValidator validates sort order options
+	// SortOrderValidator validates sort order options.
 	SortOrderValidator = stringvalidator.OneOf("asc", "desc")
 )
 
-// GetNameValidator returns validators for Profile name fields
+// GetNameValidator returns validators for Profile name fields.
 func GetNameValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.LengthBetween(1, 64),
 	}
 }
 
-// GetPatternValidator returns validators for pattern fields (regex patterns)
+// GetPatternValidator returns validators for pattern fields (regex patterns).
 func GetPatternValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.LengthBetween(1, 255),

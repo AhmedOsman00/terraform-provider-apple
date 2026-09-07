@@ -45,7 +45,9 @@ func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest,
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a device registered with Apple App Store Connect. " +
 			"Devices represent iOS, macOS, tvOS, and visionOS devices that can be used for development and testing. " +
-			"Each device is identified by its UDID (Unique Device Identifier).",
+			"Each device is identified by its UDID (Unique Device Identifier).\n\n" +
+			"~> **Note:** The App Store Connect API cannot delete devices. Destroying this resource disables the " +
+			"device instead and removes it from Terraform state; it remains listed in your Apple Developer account.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -58,9 +60,13 @@ func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Validators:          GetNameValidator(),
 			},
 			"udid": schema.StringAttribute{
-				MarkdownDescription: "Device UDID (Unique Device Identifier). This uniquely identifies the device and cannot be changed.",
-				Required:            true,
-				Validators:          GetUDIDValidator(),
+				MarkdownDescription: "Device UDID (Unique Device Identifier). This uniquely identifies the device and cannot be changed. " +
+					"The format varies by device -- a 40-character hex string on iPhone X and earlier, " +
+					"an 8-16 hex string such as `00008030-000A4D8E0AB8802E` on iPhone XS and later, " +
+					"a UUID on Mac, Apple TV and Vision Pro -- so the exact shape is validated by Apple rather than here. " +
+					"Report the UDID exactly as the device gives it.",
+				Required:   true,
+				Validators: GetUDIDValidator(),
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -265,16 +271,43 @@ func (r *DeviceResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	// Note: Apple App Store Connect API doesn't support device deletion
-	// Devices cannot be deleted via the API - they must be removed manually from the Apple Developer portal
-	resp.Diagnostics.AddError(
-		"Device Deletion Not Supported",
-		"Apple App Store Connect API does not support device deletion. Devices must be removed manually from the Apple Developer portal. "+
-			"This resource will be removed from Terraform state, but the device will remain in your Apple Developer account.",
+	// The App Store Connect API has no endpoint for deleting a device. The
+	// supported equivalent is disabling it, which releases the device from the
+	// team's provisioning profiles. Erroring here instead would make the
+	// resource impossible to destroy and permanently stuck in state.
+	deviceID := data.ID.ValueString()
+	disabled := models.DeviceStatusDISABLED
+
+	tflog.Debug(ctx, "Disabling device in place of deletion", map[string]interface{}{
+		"device_id": deviceID,
+		"udid":      data.UDID.ValueString(),
+	})
+
+	if _, err := r.client.UpdateDevice(deviceID, data.Name.ValueString(), &disabled, nil); err != nil {
+		// Already gone from Apple's side: let the delete succeed so Terraform
+		// drops it from state rather than wedging the resource.
+		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
+			tflog.Warn(ctx, "Device not found while disabling, treating as already removed", map[string]interface{}{
+				"device_id": deviceID,
+			})
+			return
+		}
+
+		resp.Diagnostics.AddError(
+			"Unable to Disable Device",
+			fmt.Sprintf("Apple's API cannot delete devices, so Terraform disables them instead. Disabling device '%s' failed: %s", deviceID, err),
+		)
+		return
+	}
+
+	resp.Diagnostics.AddWarning(
+		"Device Disabled Rather Than Deleted",
+		fmt.Sprintf("The App Store Connect API cannot delete devices. Device '%s' (UDID %s) has been disabled and removed from Terraform state, "+
+			"but it remains listed in your Apple Developer account.", data.Name.ValueString(), data.UDID.ValueString()),
 	)
 
-	tflog.Warn(ctx, "Device deletion attempted but not supported by Apple API", map[string]interface{}{
-		"device_id": data.ID.ValueString(),
+	tflog.Info(ctx, "Device disabled successfully", map[string]interface{}{
+		"device_id": deviceID,
 		"udid":      data.UDID.ValueString(),
 	})
 }
@@ -320,7 +353,7 @@ func (r *DeviceResource) ImportState(ctx context.Context, req resource.ImportSta
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), device.ID)...)
 }
 
-// mapDeviceToModel maps an Apple API device response to the Terraform model
+// mapDeviceToModel maps an Apple API device response to the Terraform model.
 func (r *DeviceResource) mapDeviceToModel(device *models.Device, data *deviceModel) {
 	data.ID = types.StringValue(device.ID)
 	data.Name = types.StringValue(device.Attributes.Name)

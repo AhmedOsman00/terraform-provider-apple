@@ -7,7 +7,6 @@ import (
 	"strings"
 	"terraform-provider-apple/internal/apple"
 	"terraform-provider-apple/internal/apple/models"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -157,10 +156,6 @@ func (d *bundleIDCapabilitiesDataSource) Schema(_ context.Context, _ datasource.
 			},
 			"filtered_count": schema.Int64Attribute{
 				MarkdownDescription: "Number of capabilities after applying filters but before limit.",
-				Computed:            true,
-			},
-			"last_updated": schema.StringAttribute{
-				MarkdownDescription: "Timestamp of when this data was last updated.",
 				Computed:            true,
 			},
 		},
@@ -319,7 +314,6 @@ func (d *bundleIDCapabilitiesDataSource) Read(ctx context.Context, req datasourc
 		Capabilities:   capabilityModels,
 		TotalCount:     types.Int64Value(int64(len(allCapabilities))),
 		FilteredCount:  types.Int64Value(int64(len(filteredCapabilities))),
-		LastUpdated:    types.StringValue(time.Now().UTC().Format(time.RFC3339)),
 	}
 
 	tflog.Info(ctx, "Bundle ID Capabilities data source read completed", map[string]interface{}{
@@ -355,7 +349,7 @@ func (d *bundleIDCapabilitiesDataSource) Configure(_ context.Context, req dataso
 	d.client = client
 }
 
-// sortCapabilities sorts capabilities based on the specified field and order
+// sortCapabilities sorts capabilities based on the specified field and order.
 func sortCapabilities(capabilities []models.BundleIDCapability, sortBy, sortOrder string) {
 	sort.Slice(capabilities, func(i, j int) bool {
 		var less bool

@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-// Profile platform enumeration - same as Bundle ID platforms
+// Profile platform enumeration - same as Bundle ID platforms.
 type ProfilePlatform string
 
 const (
@@ -12,7 +12,7 @@ const (
 	ProfileWATCHOS ProfilePlatform = "WATCH_OS"
 )
 
-// Profile type enumeration
+// Profile type enumeration.
 type ProfileType string
 
 const (
@@ -29,7 +29,7 @@ const (
 	ProfileTypeTVOSInHouse ProfileType = "TVOS_APP_INHOUSE"
 )
 
-// Profile state enumeration
+// Profile state enumeration.
 type ProfileState string
 
 const (
@@ -38,7 +38,7 @@ const (
 	ProfileStateExpired ProfileState = "EXPIRED"
 )
 
-// Profile resource model
+// Profile resource model.
 type Profile struct {
 	Type          string            `json:"type"`
 	ID            string            `json:"id"`
@@ -47,7 +47,7 @@ type Profile struct {
 	Links         *ResourceLinks    `json:"links,omitempty"`
 }
 
-// Request models for Profile operations
+// Request models for Profile operations.
 type ProfileCreateRequest struct {
 	Type          string                     `json:"type"`
 	Attributes    ProfileCreateAttributes    `json:"attributes"`
@@ -60,7 +60,7 @@ type ProfileUpdateRequest struct {
 	Attributes ProfileUpdateAttributes `json:"attributes"`
 }
 
-// Profile attributes
+// Profile attributes.
 type ProfileAttributes struct {
 	Name           string          `json:"name"`
 	Platform       ProfilePlatform `json:"platform"`
@@ -72,56 +72,70 @@ type ProfileAttributes struct {
 	ExpirationDate *time.Time      `json:"expirationDate,omitempty"`
 }
 
-// Create attributes
+// Create attributes.
+//
+// Apple's POST /v1/profiles takes profileType, not platform: the type encodes
+// the platform (IOS_APP_STORE implies IOS), and the response reports platform
+// back as a computed attribute. Sending platform here instead of profileType
+// is rejected for a missing required attribute.
 type ProfileCreateAttributes struct {
-	Name     string          `json:"name"`
-	Platform ProfilePlatform `json:"platform"`
+	Name        string      `json:"name"`
+	ProfileType ProfileType `json:"profileType"`
 }
 
-// Update attributes (only name can be updated for Profiles)
+// Update attributes (only name can be updated for Profiles).
 type ProfileUpdateAttributes struct {
 	Name string `json:"name"`
 }
 
-// Profile relationships for creation
+// Profile relationships for creation.
 type ProfileCreateRelationships struct {
 	BundleID     ResourceIdentifier   `json:"bundleId"`
-	Certificates []ResourceIdentifier `json:"certificates"`
-	Devices      []ResourceIdentifier `json:"devices,omitempty"` // Optional for App Store profiles
+	Certificates ResourceIdentifiers  `json:"certificates"`
+	Devices      *ResourceIdentifiers `json:"devices,omitempty"` // Omitted entirely for App Store profiles
 }
 
-// Resource identifier for relationships
+// Resource identifier for to-one relationships.
 type ResourceIdentifier struct {
 	Data ResourceData `json:"data"`
 }
 
-// Resource data for relationships
+// Resource identifiers for to-many relationships.
+//
+// JSON:API wraps a to-many relationship as a single object with an array under
+// "data" -- {"certificates":{"data":[...]}} -- not as an array of to-one
+// identifiers. Apple rejects the latter shape.
+type ResourceIdentifiers struct {
+	Data []ResourceData `json:"data"`
+}
+
+// Resource data for relationships.
 type ResourceData struct {
 	Type string `json:"type"`
 	ID   string `json:"id"`
 }
 
-// Profile relationships structure
+// Profile relationships structure.
 type Relationships struct {
 	BundleID     *Relationship `json:"bundleId,omitempty"`
 	Certificates *Relationship `json:"certificates,omitempty"`
 	Devices      *Relationship `json:"devices,omitempty"`
 }
 
-// Individual relationship structure
+// Individual relationship structure.
 type Relationship struct {
 	Links *RelationshipLinks `json:"links,omitempty"`
 	Data  interface{}        `json:"data,omitempty"`
 	Meta  *RelationshipMeta  `json:"meta,omitempty"`
 }
 
-// Relationship links
+// Relationship links.
 type RelationshipLinks struct {
 	Self    *string `json:"self,omitempty"`
 	Related *string `json:"related,omitempty"`
 }
 
-// Relationship metadata
+// Relationship metadata.
 type RelationshipMeta struct {
 	Paging *PagingInformation `json:"paging,omitempty"`
 }

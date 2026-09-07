@@ -1,6 +1,6 @@
 package models
 
-// Pass Type ID resource model
+// Pass Type ID resource model.
 type PassTypeIDResource struct {
 	Type       string               `json:"type"`
 	ID         string               `json:"id"`
@@ -8,7 +8,7 @@ type PassTypeIDResource struct {
 	Links      *ResourceLinks       `json:"links,omitempty"`
 }
 
-// Request models for Pass Type ID operations
+// Request models for Pass Type ID operations.
 type PassTypeIDCreateRequest struct {
 	Type       string               `json:"type"`
 	Attributes PassTypeIDAttributes `json:"attributes"`
@@ -20,13 +20,13 @@ type PassTypeIDUpdateRequest struct {
 	Attributes PassTypeIDUpdateAttributes `json:"attributes"`
 }
 
-// Pass Type ID attributes
+// Pass Type ID attributes.
 type PassTypeIDAttributes struct {
 	Identifier string `json:"identifier"`
 	Name       string `json:"name"`
 }
 
-// Update attributes (only name can be updated for Pass Type IDs)
+// Update attributes (only name can be updated for Pass Type IDs).
 type PassTypeIDUpdateAttributes struct {
 	Name string `json:"name"`
 }

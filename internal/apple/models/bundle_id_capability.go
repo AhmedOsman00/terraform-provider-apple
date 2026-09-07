@@ -1,6 +1,6 @@
 package models
 
-// Bundle ID Capability resource model
+// Bundle ID Capability resource model.
 type BundleIDCapability struct {
 	Type       string                       `json:"type"`
 	ID         string                       `json:"id"`
@@ -8,13 +8,13 @@ type BundleIDCapability struct {
 	Links      *ResourceLinks               `json:"links,omitempty"`
 }
 
-// Bundle ID Capability attributes
+// Bundle ID Capability attributes.
 type BundleIDCapabilityAttributes struct {
 	CapabilityType CapabilityType      `json:"capabilityType"`
 	Settings       []CapabilitySetting `json:"settings,omitempty"`
 }
 
-// Request models for Bundle ID Capability operations
+// Request models for Bundle ID Capability operations.
 type BundleIDCapabilityCreateRequest struct {
 	Type       string                       `json:"type"`
 	Attributes BundleIDCapabilityAttributes `json:"attributes"`
@@ -26,17 +26,17 @@ type BundleIDCapabilityUpdateRequest struct {
 	Attributes BundleIDCapabilityUpdateAttributes `json:"attributes"`
 }
 
-// Update attributes for Bundle ID Capabilities
+// Update attributes for Bundle ID Capabilities.
 type BundleIDCapabilityUpdateAttributes struct {
 	CapabilityType *CapabilityType     `json:"capabilityType,omitempty"`
 	Settings       []CapabilitySetting `json:"settings,omitempty"`
 }
 
-// Capability types enumeration
+// Capability types enumeration.
 type CapabilityType string
 
 const (
-	// Core capabilities
+	// Core capabilities.
 	AccessWifiInformation          CapabilityType = "ACCESS_WIFI_INFORMATION"
 	AppAttest                      CapabilityType = "APP_ATTEST"
 	AppGroups                      CapabilityType = "APP_GROUPS"
@@ -63,7 +63,7 @@ const (
 	WalletPasses                   CapabilityType = "WALLET_PASSES"
 	WirelessAccessoryConfiguration CapabilityType = "WIRELESS_ACCESSORY_CONFIGURATION"
 
-	// Extended capabilities
+	// Extended capabilities.
 	CommunicationNotifications  CapabilityType = "COMMUNICATION_NOTIFICATIONS"
 	DataProtection              CapabilityType = "DATA_PROTECTION"
 	ExtendedVirtualAddressing   CapabilityType = "EXTENDED_VIRTUAL_ADDRESSING"
@@ -76,7 +76,7 @@ const (
 	WeatherKit                  CapabilityType = "WEATHER_KIT"
 )
 
-// Capability setting for configurable capabilities
+// Capability setting for configurable capabilities.
 type CapabilitySetting struct {
 	Key      string                    `json:"key"`
 	Name     string                    `json:"name,omitempty"`
@@ -86,7 +86,7 @@ type CapabilitySetting struct {
 	Options  []CapabilitySettingOption `json:"options,omitempty"`
 }
 
-// Options for capability settings
+// Options for capability settings.
 type CapabilitySettingOption struct {
 	Key         string `json:"key"`
 	Name        string `json:"name"`
@@ -94,7 +94,7 @@ type CapabilitySettingOption struct {
 	Enabled     *bool  `json:"enabled,omitempty"`
 }
 
-// Valid capability types list for validation
+// Valid capability types list for validation.
 var ValidCapabilityTypes = []string{
 	string(AccessWifiInformation),
 	string(AppAttest),

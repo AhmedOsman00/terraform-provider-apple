@@ -112,7 +112,9 @@ The device examples include placeholder UDID values. In practice, you need to ob
 #### iOS Devices (iPhone, iPad, iPod touch, Apple Watch)
 - Use Xcode: Window > Devices and Simulators, select your device
 - Use iTunes/Finder: Connect device and view device information
-- UDID format: 40-character hexadecimal string (e.g., `12345678-90123456789012345678901234567890`)
+- UDID format: 8-16 hexadecimal characters on iPhone XS and later (e.g., `00008030-000A4D8E0AB8802E`),
+  or a 40-character hexadecimal string on iPhone X and earlier
+  (e.g., `a1b2c3d4e5f60718293a4b5c6d7e8f9012345678`)
 
 #### macOS Devices
 - Use System Information: Apple menu > About This Mac > More Info > System Report > Hardware

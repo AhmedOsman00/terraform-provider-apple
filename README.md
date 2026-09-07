@@ -7,7 +7,7 @@ This provider allows you to manage Apple App Store Connect resources such as Bun
 ## Requirements
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.22
+- [Go](https://golang.org/doc/install) >= 1.25
 
 ## Building The Provider
 
@@ -57,7 +57,7 @@ export APPLE_APP_STORE_CONNECT_PRIVATE_KEY="$(cat AuthKey_XXXXXXXXXX.p8)"
 terraform {
   required_providers {
     apple = {
-      source = "theaostudio.com/hashicorp/apple"
+      source = "aostudio.com/aostudio/apple"
     }
   }
 }
@@ -81,6 +81,19 @@ data "apple_bundle_ids" "ios_apps" {
   platform = "IOS"
 }
 ```
+
+### Replacing fastlane match
+
+`examples/signing/` is a complete, runnable module that manages everything
+`fastlane match` manages in the developer portal — App ID, capabilities,
+devices, signing certificates, and one provisioning profile per distribution
+method — together with `scripts/install-signing.sh`, which does the part match
+does on the machine: assembling a `.p12`, importing it into a keychain (login or
+a throwaway CI keychain), and installing profiles where Xcode looks for them.
+
+Read `examples/signing/README.md` before pointing it at a real team: Apple caps
+how many distribution certificates an account may hold, so one Terraform state
+must own them, and that state holds the signing private keys.
 
 ## Developing the Provider
 

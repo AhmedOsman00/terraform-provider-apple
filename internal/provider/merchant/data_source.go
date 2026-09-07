@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"terraform-provider-apple/internal/apple"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -118,10 +117,6 @@ func (d *merchantIDsDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 				MarkdownDescription: "Number of Merchant IDs matching the specified filters (before applying limit).",
 				Computed:            true,
 			},
-			"last_updated": schema.StringAttribute{
-				MarkdownDescription: "Timestamp when this data source was last updated (RFC3339 format).",
-				Computed:            true,
-			},
 		},
 	}
 }
@@ -165,11 +160,18 @@ func (d *merchantIDsDataSource) Read(ctx context.Context, req datasource.ReadReq
 	})
 
 	// Apply filters
-	filteredMerchantIDs := FilterMerchantIDs(merchantIDs, MerchantIDFilters{
+	filteredMerchantIDs, err := FilterMerchantIDs(merchantIDs, MerchantIDFilters{
 		IdentifierPattern:  config.IdentifierPattern.ValueString(),
 		IdentifierPrefix:   config.IdentifierPrefix.ValueString(),
 		DisplayNamePattern: config.DisplayNamePattern.ValueString(),
 	})
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Invalid Merchant ID Filter",
+			err.Error(),
+		)
+		return
+	}
 
 	filteredCount := len(filteredMerchantIDs)
 	tflog.Debug(ctx, "Applied filters", map[string]interface{}{
@@ -215,7 +217,6 @@ func (d *merchantIDsDataSource) Read(ctx context.Context, req datasource.ReadReq
 	config.MerchantIDs = merchantIDsModels
 	config.TotalCount = types.Int64Value(int64(totalCount))
 	config.FilteredCount = types.Int64Value(int64(filteredCount))
-	config.LastUpdated = types.StringValue(time.Now().Format(time.RFC3339))
 
 	tflog.Info(ctx, "Merchant IDs data source read completed", map[string]interface{}{
 		"total_count":    totalCount,

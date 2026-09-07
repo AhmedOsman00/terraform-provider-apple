@@ -34,27 +34,26 @@ type merchantIDsDataSourceModel struct {
 	MerchantIDs []merchantIDModel `tfsdk:"merchant_ids"`
 
 	// Computed metadata
-	TotalCount    types.Int64  `tfsdk:"total_count"`
-	FilteredCount types.Int64  `tfsdk:"filtered_count"`
-	LastUpdated   types.String `tfsdk:"last_updated"`
+	TotalCount    types.Int64 `tfsdk:"total_count"`
+	FilteredCount types.Int64 `tfsdk:"filtered_count"`
 }
 
-// Merchant ID identifier constants and validators
+// Merchant ID identifier constants and validators.
 var (
-	// MerchantIdentifierValidator validates Merchant ID identifier format
+	// MerchantIdentifierValidator validates Merchant ID identifier format.
 	MerchantIdentifierValidator = stringvalidator.RegexMatches(
 		regexp.MustCompile(`^merchant\.[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+$`),
 		"Merchant identifier must follow format merchant.domain.identifier (e.g., merchant.example.com.myapp)",
 	)
 
-	// SortByValidator validates sort field options
+	// SortByValidator validates sort field options.
 	SortByValidator = stringvalidator.OneOf("display_name", "identifier")
 
-	// SortOrderValidator validates sort order options
+	// SortOrderValidator validates sort order options.
 	SortOrderValidator = stringvalidator.OneOf("asc", "desc")
 )
 
-// GetIdentifierValidator returns validators for Merchant ID identifier fields
+// GetIdentifierValidator returns validators for Merchant ID identifier fields.
 func GetIdentifierValidator() []validator.String {
 	return []validator.String{
 		MerchantIdentifierValidator,
@@ -62,14 +61,14 @@ func GetIdentifierValidator() []validator.String {
 	}
 }
 
-// GetDisplayNameValidator returns validators for Merchant ID display name fields
+// GetDisplayNameValidator returns validators for Merchant ID display name fields.
 func GetDisplayNameValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.LengthBetween(1, 64),
 	}
 }
 
-// GetPatternValidator returns validators for pattern fields (regex patterns)
+// GetPatternValidator returns validators for pattern fields (regex patterns).
 func GetPatternValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.LengthBetween(1, 255),

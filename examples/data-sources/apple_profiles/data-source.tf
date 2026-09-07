@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     apple = {
-      source = "theaostudio.com/hashicorp/apple"
+      source = "aostudio.com/aostudio/apple"
     }
   }
 }
@@ -75,20 +75,19 @@ output "all_profiles_summary" {
   value = {
     total_count    = data.apple_profiles.all.total_count
     filtered_count = data.apple_profiles.all.filtered_count
-    last_updated   = data.apple_profiles.all.last_updated
   }
 }
 
 # Output iOS profiles
 output "ios_profiles" {
   value = [for profile in data.apple_profiles.ios_profiles.profiles : {
-    id             = profile.id
-    name           = profile.name
-    platform       = profile.platform
-    profile_state  = profile.profile_state
-    profile_type   = profile.profile_type
-    uuid           = profile.uuid
-    created_date   = profile.created_date
+    id              = profile.id
+    name            = profile.name
+    platform        = profile.platform
+    profile_state   = profile.profile_state
+    profile_type    = profile.profile_type
+    uuid            = profile.uuid
+    created_date    = profile.created_date
     expiration_date = profile.expiration_date
   }]
 }
@@ -118,9 +117,9 @@ output "active_profiles_summary" {
 # Output development profiles details
 output "development_profiles_details" {
   value = [for profile in data.apple_profiles.development_profiles.profiles : {
-    name         = profile.name
-    uuid         = profile.uuid
-    created_date = profile.created_date
+    name          = profile.name
+    uuid          = profile.uuid
+    created_date  = profile.created_date
     profile_state = profile.profile_state
   }]
 }
@@ -175,7 +174,7 @@ output "profile_statistics" {
         profile if profile.platform == platform
       ])
     }
-    
+
     by_state = {
       for state in ["ACTIVE", "INVALID", "EXPIRED"] :
       state => length([
@@ -183,7 +182,7 @@ output "profile_statistics" {
         profile if profile.profile_state == state
       ])
     }
-    
+
     by_type = {
       for type in distinct([for profile in data.apple_profiles.all.profiles : profile.profile_type]) :
       type => length([

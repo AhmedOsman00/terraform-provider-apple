@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     apple = {
-      source = "theaostudio.com/hashicorp/apple"
+      source = "aostudio.com/aostudio/apple"
     }
   }
 }
@@ -53,20 +53,20 @@ data "apple_certificates" "specific_certificate" {
 # Output all certificates
 output "all_certificates" {
   value = [for cert in data.apple_certificates.all.certificates : {
-    id                = cert.id
-    display_name      = cert.display_name
-    certificate_type  = cert.certificate_type
-    serial_number     = cert.serial_number
-    expiration_date   = cert.expiration_date
-    platform          = cert.platform
+    id               = cert.id
+    display_name     = cert.display_name
+    certificate_type = cert.certificate_type
+    serial_number    = cert.serial_number
+    expiration_date  = cert.expiration_date
+    platform         = cert.platform
   }]
 }
 
 # Output iOS Development certificates
 output "ios_dev_certificates" {
   value = {
-    count        = length(data.apple_certificates.ios_development.certificates)
-    total_count  = data.apple_certificates.ios_development.total_count
+    count       = length(data.apple_certificates.ios_development.certificates)
+    total_count = data.apple_certificates.ios_development.total_count
     certificates = [for cert in data.apple_certificates.ios_development.certificates : {
       display_name    = cert.display_name
       serial_number   = cert.serial_number
@@ -79,8 +79,7 @@ output "ios_dev_certificates" {
 output "distribution_certificates" {
   value = {
     filtered_count = data.apple_certificates.distribution_certificates.filtered_count
-    last_updated   = data.apple_certificates.distribution_certificates.last_updated
-    certificates   = [for cert in data.apple_certificates.distribution_certificates.certificates : {
+    certificates = [for cert in data.apple_certificates.distribution_certificates.certificates : {
       display_name     = cert.display_name
       certificate_type = cert.certificate_type
       expiration_date  = cert.expiration_date
@@ -100,11 +99,11 @@ output "production_certificates" {
 # Output specific certificate details (sensitive data excluded)
 output "specific_certificate" {
   value = length(data.apple_certificates.specific_certificate.certificates) > 0 ? {
-    found           = true
-    display_name    = data.apple_certificates.specific_certificate.certificates[0].display_name
+    found            = true
+    display_name     = data.apple_certificates.specific_certificate.certificates[0].display_name
     certificate_type = data.apple_certificates.specific_certificate.certificates[0].certificate_type
-    expiration_date = data.apple_certificates.specific_certificate.certificates[0].expiration_date
-  } : {
+    expiration_date  = data.apple_certificates.specific_certificate.certificates[0].expiration_date
+    } : {
     found = false
   }
 }

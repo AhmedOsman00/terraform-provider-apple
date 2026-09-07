@@ -1,14 +1,28 @@
 package passtypeid
 
 import (
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
 	"terraform-provider-apple/internal/apple/models"
 )
 
-// FilterPassTypeIDs applies filtering to a list of Pass Type IDs based on the provided criteria
-func FilterPassTypeIDs(passTypeIDs []models.PassTypeIDResource, identifierPattern, identifierPrefix, namePattern string) []models.PassTypeIDResource {
+// FilterPassTypeIDs applies filtering to a list of Pass Type IDs based on the provided criteria.
+func FilterPassTypeIDs(passTypeIDs []models.PassTypeIDResource, identifierPattern, identifierPrefix, namePattern string) ([]models.PassTypeIDResource, error) {
+	// Reject malformed patterns up front rather than silently matching nothing.
+	for _, p := range []struct{ name, value string }{
+		{"identifier_pattern", identifierPattern},
+		{"name_pattern", namePattern},
+	} {
+		if p.value == "" {
+			continue
+		}
+		if _, err := regexp.Compile(p.value); err != nil {
+			return nil, fmt.Errorf("invalid %s %q: %w", p.name, p.value, err)
+		}
+	}
+
 	var filtered []models.PassTypeIDResource
 
 	for _, passTypeID := range passTypeIDs {
@@ -38,10 +52,10 @@ func FilterPassTypeIDs(passTypeIDs []models.PassTypeIDResource, identifierPatter
 		filtered = append(filtered, passTypeID)
 	}
 
-	return filtered
+	return filtered, nil
 }
 
-// SortPassTypeIDs sorts a list of Pass Type IDs based on the specified field and order
+// SortPassTypeIDs sorts a list of Pass Type IDs based on the specified field and order.
 func SortPassTypeIDs(passTypeIDs []models.PassTypeIDResource, sortBy, sortOrder string) []models.PassTypeIDResource {
 	if sortBy == "" {
 		sortBy = "identifier" // Default sort field
@@ -81,7 +95,7 @@ func SortPassTypeIDs(passTypeIDs []models.PassTypeIDResource, sortBy, sortOrder 
 	return passTypeIDs
 }
 
-// LimitPassTypeIDs applies a limit to the list of Pass Type IDs
+// LimitPassTypeIDs applies a limit to the list of Pass Type IDs.
 func LimitPassTypeIDs(passTypeIDs []models.PassTypeIDResource, limit int) []models.PassTypeIDResource {
 	if limit <= 0 || limit >= len(passTypeIDs) {
 		return passTypeIDs

@@ -33,6 +33,15 @@ type profileResource struct {
 	client *apple.Client
 }
 
+// platformValue converts Apple's computed platform into state, mapping an
+// absent value to null rather than an empty string.
+func platformValue(p models.ProfilePlatform) types.String {
+	if p == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(string(p))
+}
+
 // Metadata returns the resource type name.
 func (r *profileResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_profile"
@@ -59,14 +68,32 @@ func (r *profileResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Validators:          GetNameValidator(),
 			},
 			"platform": schema.StringAttribute{
-				MarkdownDescription: "The platform for the Profile. Valid values are:\n" +
-					"- `IOS` - iOS platform\n" +
-					"- `MAC_OS` - macOS platform\n" +
-					"- `TV_OS` - tvOS platform\n" +
-					"- `WATCH_OS` - watchOS platform\n\n" +
+				MarkdownDescription: "The platform the Profile targets (`IOS`, `MAC_OS`, `TV_OS`, or `WATCH_OS`).\n\n" +
+					"This is derived by Apple from `profile_type` rather than set directly — " +
+					"an `IOS_APP_STORE` profile reports `IOS`, a `MAC_APP_DEVELOPMENT` profile reports `MAC_OS`.",
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"profile_type": schema.StringAttribute{
+				MarkdownDescription: "The type of Profile to create. This determines both the platform and the " +
+					"distribution method, and is the attribute that decides whether the profile can be used for " +
+					"development, ad hoc testing, or App Store submission. Valid values are:\n" +
+					"- `IOS_APP_DEVELOPMENT` - iOS development, requires `devices`\n" +
+					"- `IOS_APP_ADHOC` - iOS ad hoc distribution, requires `devices`\n" +
+					"- `IOS_APP_STORE` - iOS App Store distribution\n" +
+					"- `IOS_APP_INHOUSE` - iOS in-house (Enterprise) distribution\n" +
+					"- `MAC_APP_DEVELOPMENT` - macOS development\n" +
+					"- `MAC_APP_STORE` - macOS App Store distribution\n" +
+					"- `MAC_APP_DIRECT` - macOS Developer ID distribution\n" +
+					"- `TVOS_APP_DEVELOPMENT` - tvOS development, requires `devices`\n" +
+					"- `TVOS_APP_ADHOC` - tvOS ad hoc distribution, requires `devices`\n" +
+					"- `TVOS_APP_STORE` - tvOS App Store distribution\n" +
+					"- `TVOS_APP_INHOUSE` - tvOS in-house (Enterprise) distribution\n\n" +
 					"This cannot be changed after creation.",
 				Required:   true,
-				Validators: []validator.String{PlatformValidator},
+				Validators: []validator.String{ProfileTypeValidator},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -95,8 +122,9 @@ func (r *profileResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				},
 			},
 			"profile_content": schema.StringAttribute{
-				MarkdownDescription: "Base64-encoded profile content. This is computed by Apple.",
+				MarkdownDescription: "Base64-encoded `.mobileprovision` content. This is computed by Apple.",
 				Computed:            true,
+				Sensitive:           true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -110,13 +138,6 @@ func (r *profileResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			},
 			"profile_state": schema.StringAttribute{
 				MarkdownDescription: "The current state of the profile (ACTIVE, INVALID, or EXPIRED). This is computed by Apple.",
-				Computed:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
-			"profile_type": schema.StringAttribute{
-				MarkdownDescription: "The type of profile determined by Apple based on the configuration.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -154,7 +175,7 @@ func (r *profileResource) Create(ctx context.Context, req resource.CreateRequest
 
 	// Add structured logging
 	ctx = tflog.SetField(ctx, "profile_name", plan.Name.ValueString())
-	ctx = tflog.SetField(ctx, "profile_platform", plan.Platform.ValueString())
+	ctx = tflog.SetField(ctx, "profile_type", plan.ProfileType.ValueString())
 	ctx = tflog.SetField(ctx, "bundle_id", plan.BundleID.ValueString())
 
 	tflog.Debug(ctx, "Creating Profile with Apple API")
@@ -191,7 +212,7 @@ func (r *profileResource) Create(ctx context.Context, req resource.CreateRequest
 	// Create new Profile
 	profile, err := r.client.CreateProfile(
 		plan.Name.ValueString(),
-		models.ProfilePlatform(plan.Platform.ValueString()),
+		models.ProfileType(plan.ProfileType.ValueString()),
 		plan.BundleID.ValueString(),
 		certificateIDs,
 		deviceIDs,
@@ -232,25 +253,41 @@ func (r *profileResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	// Map response body to schema and populate computed attribute values
+	// Map response body to schema and populate computed attribute values.
+	// Every computed attribute must be given an explicit value, including null:
+	// one left unknown after apply fails with "Provider produced inconsistent
+	// result after apply".
 	plan.ID = types.StringValue(profile.ID)
+	plan.Platform = platformValue(profile.Attributes.Platform)
 	if profile.Attributes.ProfileContent != nil {
 		plan.ProfileContent = types.StringValue(*profile.Attributes.ProfileContent)
+	} else {
+		plan.ProfileContent = types.StringNull()
 	}
 	if profile.Attributes.UUID != nil {
 		plan.UUID = types.StringValue(*profile.Attributes.UUID)
+	} else {
+		plan.UUID = types.StringNull()
 	}
 	if profile.Attributes.ProfileState != nil {
 		plan.ProfileState = types.StringValue(string(*profile.Attributes.ProfileState))
+	} else {
+		plan.ProfileState = types.StringNull()
 	}
+	// profile_type is configured, so leave the planned value in place when Apple
+	// omits it: overwriting with null would contradict the config after apply.
 	if profile.Attributes.ProfileType != nil {
 		plan.ProfileType = types.StringValue(string(*profile.Attributes.ProfileType))
 	}
 	if profile.Attributes.CreatedDate != nil {
 		plan.CreatedDate = types.StringValue(profile.Attributes.CreatedDate.Format(time.RFC3339))
+	} else {
+		plan.CreatedDate = types.StringNull()
 	}
 	if profile.Attributes.ExpirationDate != nil {
 		plan.ExpirationDate = types.StringValue(profile.Attributes.ExpirationDate.Format(time.RFC3339))
+	} else {
+		plan.ExpirationDate = types.StringNull()
 	}
 
 	tflog.Info(ctx, "Profile created successfully", map[string]interface{}{
@@ -307,25 +344,37 @@ func (r *profileResource) Read(ctx context.Context, req resource.ReadRequest, re
 	// Overwrite Profile with refreshed state
 	state.ID = types.StringValue(profile.ID)
 	state.Name = types.StringValue(profile.Attributes.Name)
-	state.Platform = types.StringValue(string(profile.Attributes.Platform))
+	state.Platform = platformValue(profile.Attributes.Platform)
 
 	if profile.Attributes.ProfileContent != nil {
 		state.ProfileContent = types.StringValue(*profile.Attributes.ProfileContent)
+	} else {
+		state.ProfileContent = types.StringNull()
 	}
 	if profile.Attributes.UUID != nil {
 		state.UUID = types.StringValue(*profile.Attributes.UUID)
+	} else {
+		state.UUID = types.StringNull()
 	}
 	if profile.Attributes.ProfileState != nil {
 		state.ProfileState = types.StringValue(string(*profile.Attributes.ProfileState))
+	} else {
+		state.ProfileState = types.StringNull()
 	}
 	if profile.Attributes.ProfileType != nil {
 		state.ProfileType = types.StringValue(string(*profile.Attributes.ProfileType))
+	} else {
+		state.ProfileType = types.StringNull()
 	}
 	if profile.Attributes.CreatedDate != nil {
 		state.CreatedDate = types.StringValue(profile.Attributes.CreatedDate.Format(time.RFC3339))
+	} else {
+		state.CreatedDate = types.StringNull()
 	}
 	if profile.Attributes.ExpirationDate != nil {
 		state.ExpirationDate = types.StringValue(profile.Attributes.ExpirationDate.Format(time.RFC3339))
+	} else {
+		state.ExpirationDate = types.StringNull()
 	}
 
 	tflog.Debug(ctx, "Profile read successfully")
@@ -380,23 +429,36 @@ func (r *profileResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	// Update the plan with the updated values
 	plan.ID = types.StringValue(profile.ID)
+	plan.Platform = platformValue(profile.Attributes.Platform)
 	if profile.Attributes.ProfileContent != nil {
 		plan.ProfileContent = types.StringValue(*profile.Attributes.ProfileContent)
+	} else {
+		plan.ProfileContent = types.StringNull()
 	}
 	if profile.Attributes.UUID != nil {
 		plan.UUID = types.StringValue(*profile.Attributes.UUID)
+	} else {
+		plan.UUID = types.StringNull()
 	}
 	if profile.Attributes.ProfileState != nil {
 		plan.ProfileState = types.StringValue(string(*profile.Attributes.ProfileState))
+	} else {
+		plan.ProfileState = types.StringNull()
 	}
+	// profile_type is configured, so leave the planned value in place when Apple
+	// omits it: overwriting with null would contradict the config after apply.
 	if profile.Attributes.ProfileType != nil {
 		plan.ProfileType = types.StringValue(string(*profile.Attributes.ProfileType))
 	}
 	if profile.Attributes.CreatedDate != nil {
 		plan.CreatedDate = types.StringValue(profile.Attributes.CreatedDate.Format(time.RFC3339))
+	} else {
+		plan.CreatedDate = types.StringNull()
 	}
 	if profile.Attributes.ExpirationDate != nil {
 		plan.ExpirationDate = types.StringValue(profile.Attributes.ExpirationDate.Format(time.RFC3339))
+	} else {
+		plan.ExpirationDate = types.StringNull()
 	}
 
 	tflog.Info(ctx, "Profile updated successfully")
@@ -491,7 +553,7 @@ func (r *profileResource) ImportState(ctx context.Context, req resource.ImportSt
 	var state profileModel
 	state.ID = types.StringValue(profile.ID)
 	state.Name = types.StringValue(profile.Attributes.Name)
-	state.Platform = types.StringValue(string(profile.Attributes.Platform))
+	state.Platform = platformValue(profile.Attributes.Platform)
 
 	// For import, we need to set relationships to empty lists since we don't have them from the API response
 	state.Certificates, _ = types.ListValue(types.StringType, []attr.Value{})
@@ -500,21 +562,33 @@ func (r *profileResource) ImportState(ctx context.Context, req resource.ImportSt
 
 	if profile.Attributes.ProfileContent != nil {
 		state.ProfileContent = types.StringValue(*profile.Attributes.ProfileContent)
+	} else {
+		state.ProfileContent = types.StringNull()
 	}
 	if profile.Attributes.UUID != nil {
 		state.UUID = types.StringValue(*profile.Attributes.UUID)
+	} else {
+		state.UUID = types.StringNull()
 	}
 	if profile.Attributes.ProfileState != nil {
 		state.ProfileState = types.StringValue(string(*profile.Attributes.ProfileState))
+	} else {
+		state.ProfileState = types.StringNull()
 	}
 	if profile.Attributes.ProfileType != nil {
 		state.ProfileType = types.StringValue(string(*profile.Attributes.ProfileType))
+	} else {
+		state.ProfileType = types.StringNull()
 	}
 	if profile.Attributes.CreatedDate != nil {
 		state.CreatedDate = types.StringValue(profile.Attributes.CreatedDate.Format(time.RFC3339))
+	} else {
+		state.CreatedDate = types.StringNull()
 	}
 	if profile.Attributes.ExpirationDate != nil {
 		state.ExpirationDate = types.StringValue(profile.Attributes.ExpirationDate.Format(time.RFC3339))
+	} else {
+		state.ExpirationDate = types.StringNull()
 	}
 
 	tflog.Info(ctx, "Profile imported successfully", map[string]interface{}{

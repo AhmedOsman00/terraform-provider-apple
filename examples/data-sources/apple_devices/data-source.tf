@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     apple = {
-      source = "theaostudio.com/hashicorp/apple"
+      source = "aostudio.com/aostudio/apple"
     }
   }
 }
@@ -23,9 +23,10 @@ data "apple_devices" "ios_devices" {
   sort_order = "asc"
 }
 
-# Filter devices by multiple platforms
+# Filter devices by multiple platforms. Apple Watches are registered under the
+# IOS platform, distinguished by their APPLE_WATCH device class.
 data "apple_devices" "mobile_devices" {
-  platforms = ["IOS", "WATCH_OS"]
+  platforms = ["IOS", "VISION_OS"]
   sort_by   = "added_date"
 }
 
@@ -81,7 +82,7 @@ output "iphone_details" {
 output "enabled_devices_by_platform" {
   description = "Count of enabled devices by platform"
   value = {
-    for platform in ["IOS", "MAC_OS", "TV_OS", "WATCH_OS", "VISION_OS"] :
+    for platform in ["IOS", "MAC_OS", "TV_OS", "VISION_OS"] :
     platform => length([
       for device in data.apple_devices.all.devices :
       device if device.platform == platform && device.status == "ENABLED"

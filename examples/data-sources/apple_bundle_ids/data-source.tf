@@ -8,22 +8,27 @@ data "apple_bundle_ids" "ios_only" {
   platform = "IOS"
 }
 
-# Query Bundle IDs with identifier pattern matching
+# Query Bundle IDs whose identifier starts with a prefix
 data "apple_bundle_ids" "example_apps" {
-  identifier_contains = "com.example"
+  identifier_prefix = "com.example"
 }
 
-# Query Bundle IDs with name pattern matching
+# Query Bundle IDs with identifier pattern matching (regular expression)
+data "apple_bundle_ids" "beta_apps" {
+  identifier_pattern = "^com\\.example\\..*\\.beta$"
+}
+
+# Query Bundle IDs with name pattern matching (glob, matched against the whole name)
 data "apple_bundle_ids" "my_apps" {
-  name_contains = "My"
+  name_pattern = "My *"
 }
 
 # Query with multiple filters and sorting
 data "apple_bundle_ids" "filtered_sorted" {
-  platform            = "IOS"
-  identifier_contains = "com.example"
-  sort_by             = "identifier"
-  limit               = 10
+  platform          = "IOS"
+  identifier_prefix = "com.example"
+  sort_by           = "identifier"
+  limit             = 10
 }
 
 # Output the results

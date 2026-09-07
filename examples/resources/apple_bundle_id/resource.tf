@@ -14,12 +14,17 @@ resource "apple_bundle_id" "macos_app" {
   platform   = "MAC_OS"
 }
 
-# Create a Bundle ID with explicit seed ID (optional)
-resource "apple_bundle_id" "app_with_seed" {
+# The seed ID (team prefix) is assigned by Apple and exported as a computed
+# attribute; it cannot be set in configuration.
+resource "apple_bundle_id" "premium_app" {
   identifier = "com.example.myapp.premium"
   name       = "My Premium App"
   platform   = "IOS"
-  seed_id    = "ABCD123456"
+}
+
+output "premium_app_seed_id" {
+  description = "Team prefix Apple assigned to the premium Bundle ID"
+  value       = apple_bundle_id.premium_app.seed_id
 }
 
 # Bundle ID Capabilities - Add capabilities to enable app features
@@ -38,28 +43,31 @@ resource "apple_bundle_id_capability" "in_app_purchase" {
 resource "apple_bundle_id_capability" "icloud" {
   bundle_id       = apple_bundle_id.ios_app.id
   capability_type = "ICLOUD"
-  
+
   # iCloud requires settings configuration
-  settings {
-    key   = "ICLOUD_VERSION"
-    value = "XCODE_5"
-  }
-  
-  settings {
-    key   = "ICLOUD_SERVICES"
-    value = "CloudKit"
-  }
+  settings = [
+    {
+      key   = "ICLOUD_VERSION"
+      value = "XCODE_5"
+    },
+    {
+      key   = "ICLOUD_SERVICES"
+      value = "CloudKit"
+    },
+  ]
 }
 
 resource "apple_bundle_id_capability" "app_groups" {
   bundle_id       = apple_bundle_id.ios_app.id
   capability_type = "APP_GROUPS"
-  
+
   # App Groups allows data sharing between apps
-  settings {
-    key   = "APP_GROUPS"
-    value = "group.com.example.myapp.shared"
-  }
+  settings = [
+    {
+      key   = "APP_GROUPS"
+      value = "group.com.example.myapp.shared"
+    },
+  ]
 }
 
 # Create Merchant ID for Apple Pay
@@ -71,23 +79,27 @@ resource "apple_merchant_id" "ios_app_merchant" {
 resource "apple_bundle_id_capability" "apple_pay" {
   bundle_id       = apple_bundle_id.ios_app.id
   capability_type = "APPLE_PAY"
-  
+
   # Apple Pay configuration using the created Merchant ID
-  settings {
-    key   = "APPLE_PAY_IDENTIFIERS"
-    value = apple_merchant_id.ios_app_merchant.identifier
-  }
+  settings = [
+    {
+      key   = "APPLE_PAY_IDENTIFIERS"
+      value = apple_merchant_id.ios_app_merchant.identifier
+    },
+  ]
 }
 
 resource "apple_bundle_id_capability" "associated_domains" {
   bundle_id       = apple_bundle_id.ios_app.id
   capability_type = "ASSOCIATED_DOMAINS"
-  
+
   # Associated domains for universal links and app clips
-  settings {
-    key   = "ASSOCIATED_DOMAINS"
-    value = "applinks:example.com,appclips:clips.example.com"
-  }
+  settings = [
+    {
+      key   = "ASSOCIATED_DOMAINS"
+      value = "applinks:example.com,appclips:clips.example.com"
+    },
+  ]
 }
 
 # Capability for macOS app - HomeKit
@@ -111,7 +123,7 @@ resource "apple_merchant_id" "subscriptions" {
 # Query existing Merchant IDs using data source
 data "apple_merchant_ids" "example_merchants" {
   identifier_prefix = "merchant.com.example"
-  sort_by          = "display_name"
+  sort_by           = "display_name"
   depends_on = [
     apple_merchant_id.ios_app_merchant,
     apple_merchant_id.premium_features,
@@ -122,12 +134,14 @@ data "apple_merchant_ids" "example_merchants" {
 # Example of using multiple Merchant IDs in a single capability
 # Note: This is for demonstration - typically you'd use one merchant ID per capability
 resource "apple_bundle_id_capability" "apple_pay_premium" {
-  bundle_id       = apple_bundle_id.app_with_seed.id
+  bundle_id       = apple_bundle_id.premium_app.id
   capability_type = "APPLE_PAY"
-  
+
   # Using multiple merchant identifiers (comma-separated)
-  settings {
-    key   = "APPLE_PAY_IDENTIFIERS"
-    value = "${apple_merchant_id.premium_features.identifier},${apple_merchant_id.subscriptions.identifier}"
-  }
+  settings = [
+    {
+      key   = "APPLE_PAY_IDENTIFIERS"
+      value = "${apple_merchant_id.premium_features.identifier},${apple_merchant_id.subscriptions.identifier}"
+    },
+  ]
 }

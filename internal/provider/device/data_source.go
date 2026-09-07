@@ -157,10 +157,6 @@ func (d *DevicesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 				MarkdownDescription: "Number of devices after applying filters",
 				Computed:            true,
 			},
-			"last_updated": schema.StringAttribute{
-				MarkdownDescription: "Timestamp when this data source was last executed (ISO 8601 format)",
-				Computed:            true,
-			},
 		},
 	}
 }
@@ -206,7 +202,7 @@ func (d *DevicesDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	})
 
 	// Apply filters and sorting
-	filteredDevices, err := filterDevices(devices, data)
+	filteredDevices, err := filterDevices(ctx, devices, data)
 	if err != nil {
 		resp.Diagnostics.AddError("Filter Error", fmt.Sprintf("Unable to filter devices: %s", err))
 		return
@@ -248,7 +244,6 @@ func (d *DevicesDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	data.Devices = deviceModels
 	data.TotalCount = types.Int64Value(int64(totalCount))
 	data.FilteredCount = types.Int64Value(int64(filteredCount))
-	data.LastUpdated = types.StringValue(time.Now().UTC().Format(time.RFC3339))
 
 	tflog.Debug(ctx, "Successfully populated devices data source", map[string]interface{}{
 		"total_devices":    totalCount,

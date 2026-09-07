@@ -9,28 +9,12 @@ import (
 	"terraform-provider-apple/internal/apple/models"
 )
 
-// GetCertificates retrieves all Certificates for the team
+// GetCertificates retrieves all Certificates for the team.
 func (c *Client) GetCertificates() ([]models.Certificate, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/certificates", c.HostURL), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := c.doRequest(req, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	response := models.ListResponse[models.Certificate]{}
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
+	return getAllPages[models.Certificate](c, "/v1/certificates", defaultPageSize)
 }
 
-// GetCertificate retrieves a specific Certificate by its ID
+// GetCertificate retrieves a specific Certificate by its ID.
 func (c *Client) GetCertificate(certificateID string) (*models.Certificate, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/certificates/%s", c.HostURL, certificateID), nil)
 	if err != nil {
@@ -51,7 +35,7 @@ func (c *Client) GetCertificate(certificateID string) (*models.Certificate, erro
 	return &response.Data, nil
 }
 
-// CreateCertificate creates a new Certificate
+// CreateCertificate creates a new Certificate.
 func (c *Client) CreateCertificate(certificateType models.CertificateType, csrContent string, authToken *string) (*models.Certificate, error) {
 	certificateRequest := models.CertificateCreateRequest{
 		Type: "certificates",
@@ -89,7 +73,7 @@ func (c *Client) CreateCertificate(certificateType models.CertificateType, csrCo
 	return &response.Data, nil
 }
 
-// DeleteCertificate revokes a Certificate
+// DeleteCertificate revokes a Certificate.
 func (c *Client) DeleteCertificate(certificateID string, authToken *string) error {
 	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/v1/certificates/%s", c.HostURL, certificateID), nil)
 	if err != nil {
@@ -105,7 +89,7 @@ func (c *Client) DeleteCertificate(certificateID string, authToken *string) erro
 	return nil
 }
 
-// GetCertificateBySerialNumber finds a Certificate by its serial number
+// GetCertificateBySerialNumber finds a Certificate by its serial number.
 func (c *Client) GetCertificateBySerialNumber(serialNumber string) (*models.Certificate, error) {
 	certificates, err := c.GetCertificates()
 	if err != nil {
@@ -121,7 +105,7 @@ func (c *Client) GetCertificateBySerialNumber(serialNumber string) (*models.Cert
 	return nil, fmt.Errorf("certificate with serial number '%s' not found", serialNumber)
 }
 
-// GetCertificateByName finds a Certificate by its display name
+// GetCertificateByName finds a Certificate by its display name.
 func (c *Client) GetCertificateByName(name string) (*models.Certificate, error) {
 	certificates, err := c.GetCertificates()
 	if err != nil {

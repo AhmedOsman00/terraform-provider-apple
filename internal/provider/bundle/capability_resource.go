@@ -166,7 +166,7 @@ func (r *bundleIDCapabilityResource) Create(ctx context.Context, req resource.Cr
 	tflog.Debug(ctx, "Creating Bundle ID Capability with Apple API")
 
 	// Convert settings from Terraform to API format
-	settings, err := SettingsToAPI(plan.Settings)
+	settings, err := SettingsToAPI(ctx, plan.Settings)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Converting Settings",
@@ -326,7 +326,7 @@ func (r *bundleIDCapabilityResource) Update(ctx context.Context, req resource.Up
 	tflog.Debug(ctx, "Updating Bundle ID Capability with Apple API")
 
 	// Convert settings from Terraform to API format
-	settings, err := SettingsToAPI(plan.Settings)
+	settings, err := SettingsToAPI(ctx, plan.Settings)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Converting Settings",
@@ -429,19 +429,36 @@ func (r *bundleIDCapabilityResource) ImportState(ctx context.Context, req resour
 		"import_id": req.ID,
 	})
 
-	// Import supports Bundle ID Capability ID format
+	// Import accepts "<bundle_id>/<capability_id>" or a bare capability ID.
+	// Apple's capability response does not carry its parent Bundle ID, so the
+	// composite form is the only one that yields complete state.
 	importID := strings.TrimSpace(req.ID)
 
 	if importID == "" {
 		resp.Diagnostics.AddError(
 			"Empty Import Identifier",
-			"The import identifier cannot be empty. Provide the Bundle ID Capability ID (Apple's internal ID).",
+			"The import identifier cannot be empty. Provide \"<bundle_id>/<capability_id>\" (preferred) or the Bundle ID Capability ID on its own.",
 		)
 		return
 	}
 
+	var bundleID, capabilityID string
+	if parts := strings.SplitN(importID, "/", 2); len(parts) == 2 {
+		bundleID = strings.TrimSpace(parts[0])
+		capabilityID = strings.TrimSpace(parts[1])
+		if bundleID == "" || capabilityID == "" {
+			resp.Diagnostics.AddError(
+				"Invalid Import Identifier",
+				fmt.Sprintf("Could not parse import ID %q. Use \"<bundle_id>/<capability_id>\", for example \"ABC123DEF4/XYZ789GHI0\".", importID),
+			)
+			return
+		}
+	} else {
+		capabilityID = importID
+	}
+
 	// Get the capability from Apple API
-	capability, err := r.client.GetBundleIDCapability(importID)
+	capability, err := r.client.GetBundleIDCapability(capabilityID)
 	if err != nil {
 		tflog.Error(ctx, "Failed to import Bundle ID Capability", map[string]interface{}{
 			"import_id": importID,
@@ -449,9 +466,39 @@ func (r *bundleIDCapabilityResource) ImportState(ctx context.Context, req resour
 		})
 		resp.Diagnostics.AddError(
 			"Bundle ID Capability Not Found",
-			fmt.Sprintf("Could not find Bundle ID Capability with ID '%s'. Please verify the capability ID exists in your Apple Developer account. Error: %s", importID, err.Error()),
+			fmt.Sprintf("Could not find Bundle ID Capability with ID '%s'. Please verify the capability ID exists in your Apple Developer account. Error: %s", capabilityID, err.Error()),
 		)
 		return
+	}
+
+	// When a Bundle ID was supplied, confirm it actually owns this capability.
+	// Importing a mismatched pair would write state that a later apply resolves
+	// by destroying and recreating the capability.
+	if bundleID != "" {
+		capabilities, err := r.client.GetBundleIDCapabilities(bundleID)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to Verify Bundle ID",
+				fmt.Sprintf("Could not list capabilities for Bundle ID '%s' to confirm it owns capability '%s': %s", bundleID, capabilityID, err.Error()),
+			)
+			return
+		}
+
+		owned := false
+		for _, c := range capabilities {
+			if c.ID == capabilityID {
+				owned = true
+				break
+			}
+		}
+
+		if !owned {
+			resp.Diagnostics.AddError(
+				"Bundle ID Does Not Own This Capability",
+				fmt.Sprintf("Capability '%s' is not a capability of Bundle ID '%s'. Check the import ID, which must be \"<bundle_id>/<capability_id>\".", capabilityID, bundleID),
+			)
+			return
+		}
 	}
 
 	// Convert settings from API to Terraform format
@@ -464,13 +511,16 @@ func (r *bundleIDCapabilityResource) ImportState(ctx context.Context, req resour
 		return
 	}
 
-	// Note: We cannot determine the bundle_id from the capability response directly
-	// The user will need to provide this in their configuration
+	// State may never hold an unknown value, so an unresolved bundle_id is
+	// recorded as null and flagged below rather than left unknown.
 	state := bundleIDCapabilityModel{
 		ID:             types.StringValue(capability.ID),
-		BundleID:       types.StringUnknown(), // This will need to be provided in configuration
+		BundleID:       types.StringNull(),
 		CapabilityType: types.StringValue(string(capability.Attributes.CapabilityType)),
 		Settings:       tfSettings,
+	}
+	if bundleID != "" {
+		state.BundleID = types.StringValue(bundleID)
 	}
 
 	diags := resp.State.Set(ctx, &state)
@@ -484,10 +534,14 @@ func (r *bundleIDCapabilityResource) ImportState(ctx context.Context, req resour
 		"capability_type": string(capability.Attributes.CapabilityType),
 	})
 
-	resp.Diagnostics.AddWarning(
-		"Bundle ID Capability Imported Successfully",
-		fmt.Sprintf("Bundle ID Capability '%s' (type: %s) has been imported. Please provide the bundle_id attribute in your configuration and run 'terraform plan' to see any differences.", capability.ID, capability.Attributes.CapabilityType),
-	)
+	if bundleID == "" {
+		resp.Diagnostics.AddWarning(
+			"Bundle ID Not Recorded During Import",
+			fmt.Sprintf("Bundle ID Capability '%s' (type: %s) was imported without a bundle_id, because Apple's capability response does not include its parent Bundle ID. "+
+				"The next plan will show bundle_id changing from null, which forces replacement. "+
+				"Re-run the import as \"terraform import <address> <bundle_id>/%s\" to record it directly.", capability.ID, capability.Attributes.CapabilityType, capability.ID),
+		)
+	}
 }
 
 // Configure adds the provider configured client to the resource.

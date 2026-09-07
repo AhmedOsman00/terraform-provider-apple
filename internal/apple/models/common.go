@@ -1,6 +1,6 @@
 package models
 
-// Generic API response wrappers for App Store Connect API
+// Generic API response wrappers for App Store Connect API.
 type ListResponse[T any] struct {
 	Data  []T                 `json:"data"`
 	Links *PagedDocumentLinks `json:"links,omitempty"`
@@ -15,7 +15,7 @@ type Request[T any] struct {
 	Data T `json:"data"`
 }
 
-// Error handling models
+// Error handling models.
 type ErrorResponse struct {
 	Errors []APIError `json:"errors"`
 }
@@ -29,7 +29,7 @@ type APIError struct {
 	Source map[string]interface{} `json:"source,omitempty"`
 }
 
-// Pagination models
+// Pagination models.
 type PagedDocumentLinks struct {
 	Self  string `json:"self,omitempty"`
 	First string `json:"first,omitempty"`
@@ -40,7 +40,7 @@ type PagingInformation struct {
 	Total int `json:"total,omitempty"`
 }
 
-// Common resource models
+// Common resource models.
 type ResourceLinks struct {
 	Self string `json:"self,omitempty"`
 }

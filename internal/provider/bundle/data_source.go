@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"terraform-provider-apple/internal/apple"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -147,10 +146,6 @@ func (d *bundleIDsDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 				MarkdownDescription: "Number of Bundle IDs after applying filters and before applying limit.",
 				Computed:            true,
 			},
-			"last_updated": schema.StringAttribute{
-				MarkdownDescription: "Timestamp when the data was last retrieved from Apple App Store Connect.",
-				Computed:            true,
-			},
 		},
 	}
 }
@@ -224,7 +219,6 @@ func (d *bundleIDsDataSource) Read(ctx context.Context, req datasource.ReadReque
 		BundleIDs:     make([]bundleIDModel, 0, len(filteredBundleIDs)),
 		TotalCount:    types.Int64Value(int64(totalCount)),
 		FilteredCount: types.Int64Value(int64(filteredCount)),
-		LastUpdated:   types.StringValue(time.Now().UTC().Format(time.RFC3339)),
 	}
 
 	// Copy filter configuration to state for reference

@@ -1,0 +1,32 @@
+bundle_identifier   = "com.example.myapp"
+app_name            = "My App"
+profile_name_prefix = "My App"
+organization_name   = "Example Ltd"
+
+capabilities = [
+  "PUSH_NOTIFICATIONS",
+  "IN_APP_PURCHASE",
+]
+
+# Device name => UDID. Leave empty for a CI-only App Store pipeline.
+devices = {
+  "Alex iPhone 15 Pro" = "00008130-000A1B2C3D4E5F60"
+  "Build iPad"         = "00008027-001122334455667E"
+}
+
+# Rotate signing certificates 30 days before they expire.
+early_renewal_hours = 720
+
+# --- Migrating off fastlane match ------------------------------------------
+#
+# Adopt the certificate match already issued instead of letting Terraform issue
+# a new one, which would revoke it. Both maps are keyed by role; supply the key
+# for every role you adopt.
+#
+# private_keys = {
+#   distribution = file("${path.module}/match-distribution.key")
+# }
+#
+# adopt_certificate_serials = {
+#   distribution = "6F1B2C3D4E5A7B8C"
+# }

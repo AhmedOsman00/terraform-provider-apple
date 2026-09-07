@@ -1,6 +1,8 @@
 package device
 
 import (
+	"context"
+	"fmt"
 	"regexp"
 	"slices"
 	"sort"
@@ -8,22 +10,55 @@ import (
 	"time"
 
 	"terraform-provider-apple/internal/apple/models"
+
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// filterDevices applies all specified filters to the devices list
-func filterDevices(devices []models.Device, config devicesDataSourceModel) ([]models.Device, error) {
+// filterDevices applies all specified filters to the devices list.
+func filterDevices(ctx context.Context, devices []models.Device, config devicesDataSourceModel) ([]models.Device, error) {
+	// Reject malformed patterns up front rather than silently matching nothing.
+	for _, p := range []struct {
+		name  string
+		value types.String
+	}{
+		{"name_pattern", config.NamePattern},
+		{"udid_pattern", config.UDIDPattern},
+	} {
+		if p.value.IsNull() || p.value.IsUnknown() {
+			continue
+		}
+		if _, err := regexp.Compile(p.value.ValueString()); err != nil {
+			return nil, fmt.Errorf("invalid %s %q: %w", p.name, p.value.ValueString(), err)
+		}
+	}
+
+	// Decode the list-valued filters once. Doing this per device repeated the
+	// same conversion for every record and, lacking a Context, could only
+	// report a failure by silently excluding the device.
+	var platforms []string
+	if !config.Platforms.IsNull() && !config.Platforms.IsUnknown() {
+		if diags := config.Platforms.ElementsAs(ctx, &platforms, false); diags.HasError() {
+			return nil, fmt.Errorf("could not read the platforms filter: %s", firstError(diags))
+		}
+	}
+
+	var deviceClasses []string
+	if !config.DeviceClasses.IsNull() && !config.DeviceClasses.IsUnknown() {
+		if diags := config.DeviceClasses.ElementsAs(ctx, &deviceClasses, false); diags.HasError() {
+			return nil, fmt.Errorf("could not read the device_classes filter: %s", firstError(diags))
+		}
+	}
+
 	var filtered []models.Device
 
 	for _, device := range devices {
-		if shouldIncludeDevice(device, config) {
+		if shouldIncludeDevice(device, config, platforms, deviceClasses) {
 			filtered = append(filtered, device)
 		}
 	}
 
-	// Apply sorting
-	if err := sortDevices(filtered, config); err != nil {
-		return nil, err
-	}
+	sortDevices(filtered, config)
 
 	// Apply limit
 	if !config.Limit.IsNull() && config.Limit.ValueInt64() > 0 {
@@ -36,8 +71,8 @@ func filterDevices(devices []models.Device, config devicesDataSourceModel) ([]mo
 	return filtered, nil
 }
 
-// shouldIncludeDevice determines if a device matches all filter criteria
-func shouldIncludeDevice(device models.Device, config devicesDataSourceModel) bool {
+// shouldIncludeDevice determines if a device matches all filter criteria.
+func shouldIncludeDevice(device models.Device, config devicesDataSourceModel, platforms, deviceClasses []string) bool {
 	// Platform filter (single)
 	if !config.Platform.IsNull() && !config.Platform.IsUnknown() {
 		if string(device.Attributes.Platform) != config.Platform.ValueString() {
@@ -46,15 +81,8 @@ func shouldIncludeDevice(device models.Device, config devicesDataSourceModel) bo
 	}
 
 	// Platforms filter (multiple)
-	if !config.Platforms.IsNull() && !config.Platforms.IsUnknown() {
-		var platforms []string
-		diags := config.Platforms.ElementsAs(nil, &platforms, false)
-		if diags.HasError() {
-			return false
-		}
-		if !slices.Contains(platforms, string(device.Attributes.Platform)) {
-			return false
-		}
+	if len(platforms) > 0 && !slices.Contains(platforms, string(device.Attributes.Platform)) {
+		return false
 	}
 
 	// Device class filter (single)
@@ -65,15 +93,8 @@ func shouldIncludeDevice(device models.Device, config devicesDataSourceModel) bo
 	}
 
 	// Device classes filter (multiple)
-	if !config.DeviceClasses.IsNull() && !config.DeviceClasses.IsUnknown() {
-		var deviceClasses []string
-		diags := config.DeviceClasses.ElementsAs(nil, &deviceClasses, false)
-		if diags.HasError() {
-			return false
-		}
-		if !slices.Contains(deviceClasses, string(device.Attributes.DeviceClass)) {
-			return false
-		}
+	if len(deviceClasses) > 0 && !slices.Contains(deviceClasses, string(device.Attributes.DeviceClass)) {
+		return false
 	}
 
 	// Status filter
@@ -104,10 +125,10 @@ func shouldIncludeDevice(device models.Device, config devicesDataSourceModel) bo
 	return true
 }
 
-// sortDevices sorts the devices list based on the specified criteria
-func sortDevices(devices []models.Device, config devicesDataSourceModel) error {
+// sortDevices sorts the devices list based on the specified criteria.
+func sortDevices(devices []models.Device, config devicesDataSourceModel) {
 	if config.SortBy.IsNull() || config.SortBy.IsUnknown() {
-		return nil
+		return
 	}
 
 	sortBy := config.SortBy.ValueString()
@@ -140,16 +161,14 @@ func sortDevices(devices []models.Device, config devicesDataSourceModel) error {
 		}
 		return !result
 	})
-
-	return nil
 }
 
-// compareStrings compares two strings case-insensitively
+// compareStrings compares two strings case-insensitively.
 func compareStrings(a, b string) bool {
 	return strings.ToLower(a) < strings.ToLower(b)
 }
 
-// compareDates compares two time pointers, treating nil as oldest
+// compareDates compares two time pointers, treating nil as oldest.
 func compareDates(a, b *time.Time) bool {
 	if a == nil && b == nil {
 		return false
@@ -161,4 +180,13 @@ func compareDates(a, b *time.Time) bool {
 		return false
 	}
 	return a.Before(*b)
+}
+
+// firstError renders the first error diagnostic as a string.
+func firstError(diags diag.Diagnostics) string {
+	errs := diags.Errors()
+	if len(errs) == 0 {
+		return "unknown error"
+	}
+	return fmt.Sprintf("%s: %s", errs[0].Summary(), errs[0].Detail())
 }

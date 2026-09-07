@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-// Certificate type enumeration
+// Certificate type enumeration.
 type CertificateType string
 
 const (
@@ -23,7 +23,7 @@ const (
 	DeveloperIDKextG2        CertificateType = "DEVELOPER_ID_KEXT_G2"
 )
 
-// Certificate resource model
+// Certificate resource model.
 type Certificate struct {
 	Type       string                `json:"type"`
 	ID         string                `json:"id"`
@@ -31,13 +31,13 @@ type Certificate struct {
 	Links      *ResourceLinks        `json:"links,omitempty"`
 }
 
-// Request models for Certificate operations
+// Request models for Certificate operations.
 type CertificateCreateRequest struct {
 	Type       string                      `json:"type"`
 	Attributes CertificateCreateAttributes `json:"attributes"`
 }
 
-// Certificate attributes for API responses
+// Certificate attributes for API responses.
 type CertificateAttributes struct {
 	SerialNumber       string            `json:"serialNumber"`
 	CertificateContent string            `json:"certificateContent"`
@@ -52,7 +52,7 @@ type CertificateAttributes struct {
 	RequesterEmail     string            `json:"requesterEmail,omitempty"`
 }
 
-// Certificate attributes for create requests
+// Certificate attributes for create requests.
 type CertificateCreateAttributes struct {
 	CertificateType CertificateType `json:"certificateType"`
 	CsrContent      string          `json:"csrContent"`

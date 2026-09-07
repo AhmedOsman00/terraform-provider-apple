@@ -34,12 +34,11 @@ type passTypeIDsDataSourceModel struct {
 	PassTypeIDs []passTypeIDModel `tfsdk:"pass_type_ids"`
 
 	// Computed metadata
-	TotalCount    types.Int64  `tfsdk:"total_count"`
-	FilteredCount types.Int64  `tfsdk:"filtered_count"`
-	LastUpdated   types.String `tfsdk:"last_updated"`
+	TotalCount    types.Int64 `tfsdk:"total_count"`
+	FilteredCount types.Int64 `tfsdk:"filtered_count"`
 }
 
-// GetIdentifierValidator returns validators for Pass Type ID identifiers
+// GetIdentifierValidator returns validators for Pass Type ID identifiers.
 func GetIdentifierValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.LengthAtLeast(1),
@@ -51,7 +50,7 @@ func GetIdentifierValidator() []validator.String {
 	}
 }
 
-// GetNameValidator returns validators for Pass Type ID names
+// GetNameValidator returns validators for Pass Type ID names.
 func GetNameValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.LengthAtLeast(1),

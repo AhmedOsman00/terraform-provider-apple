@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     apple = {
-      source = "theaostudio.com/hashicorp/apple"
+      source = "aostudio.com/aostudio/apple"
     }
   }
 }
@@ -24,14 +24,14 @@ data "apple_bundle_ids" "ios" {
 data "apple_certificates" "development" {
   certificate_type = "IOS_DEVELOPMENT"
   platform         = "IOS"
-  limit           = 1
+  limit            = 1
 }
 
 # Get existing distribution certificates
 data "apple_certificates" "distribution" {
   certificate_type = "IOS_DISTRIBUTION"
   platform         = "IOS"
-  limit           = 1
+  limit            = 1
 }
 
 # Get existing iOS devices
@@ -41,10 +41,12 @@ data "apple_devices" "ios" {
   limit    = 10
 }
 
-# Create a development profile
+# Create a development profile.
+# profile_type selects both the platform and the distribution method; the
+# computed `platform` attribute is derived from it by Apple.
 resource "apple_profile" "development" {
   name         = "iOS Development Profile Example"
-  platform     = "IOS"
+  profile_type = "IOS_APP_DEVELOPMENT"
   bundle_id    = data.apple_bundle_ids.ios.bundle_ids[0].id
   certificates = [data.apple_certificates.development.certificates[0].id]
   devices      = data.apple_devices.ios.devices[*].id
@@ -53,7 +55,7 @@ resource "apple_profile" "development" {
 # Create an App Store distribution profile (no devices needed)
 resource "apple_profile" "app_store" {
   name         = "iOS App Store Distribution Profile"
-  platform     = "IOS"
+  profile_type = "IOS_APP_STORE"
   bundle_id    = data.apple_bundle_ids.ios.bundle_ids[0].id
   certificates = [data.apple_certificates.distribution.certificates[0].id]
   # Note: devices are not specified for App Store distribution
@@ -68,7 +70,7 @@ data "apple_bundle_ids" "macos" {
 data "apple_certificates" "macos_development" {
   certificate_type = "MAC_APP_DEVELOPMENT"
   platform         = "MAC_OS"
-  limit           = 1
+  limit            = 1
 }
 
 data "apple_devices" "macos" {
@@ -82,7 +84,7 @@ resource "apple_profile" "macos_development" {
   count = length(data.apple_bundle_ids.macos.bundle_ids) > 0 && length(data.apple_certificates.macos_development.certificates) > 0 ? 1 : 0
 
   name         = "macOS Development Profile Example"
-  platform     = "MAC_OS"
+  profile_type = "MAC_APP_DEVELOPMENT"
   bundle_id    = data.apple_bundle_ids.macos.bundle_ids[0].id
   certificates = [data.apple_certificates.macos_development.certificates[0].id]
   devices      = data.apple_devices.macos.devices[*].id
@@ -92,14 +94,14 @@ resource "apple_profile" "macos_development" {
 data "apple_certificates" "adhoc" {
   certificate_type = "IOS_DISTRIBUTION"
   platform         = "IOS"
-  limit           = 2
+  limit            = 2
 }
 
 resource "apple_profile" "adhoc_distribution" {
   count = length(data.apple_certificates.adhoc.certificates) >= 1 ? 1 : 0
 
   name         = "iOS Ad Hoc Distribution Profile"
-  platform     = "IOS"
+  profile_type = "IOS_APP_ADHOC"
   bundle_id    = data.apple_bundle_ids.ios.bundle_ids[0].id
   certificates = data.apple_certificates.adhoc.certificates[*].id
   devices      = data.apple_devices.ios.devices[*].id
@@ -165,26 +167,29 @@ output "profiles_summary" {
     app_store_profile_created   = true
     macos_profile_created       = length(apple_profile.macos_development) > 0
     adhoc_profile_created       = length(apple_profile.adhoc_distribution) > 0
-    
+
     total_profiles_created = 2 + length(apple_profile.macos_development) + length(apple_profile.adhoc_distribution)
-    
+
     bundle_id_used = data.apple_bundle_ids.ios.bundle_ids[0].identifier
     devices_count  = length(data.apple_devices.ios.devices)
   }
 }
 
-# Profile content information (Base64 data excluded for security)
+# Profile content information (Base64 data excluded for security).
+# profile_content is a sensitive attribute, so values derived from it must be
+# declared sensitive too.
 output "profile_metadata" {
+  sensitive = true
   value = {
     development = {
       has_profile_content = apple_profile.development.profile_content != ""
       certificate_count   = length(apple_profile.development.certificates)
-      device_count       = length(apple_profile.development.devices)
+      device_count        = length(apple_profile.development.devices)
     }
     app_store = {
       has_profile_content = apple_profile.app_store.profile_content != ""
       certificate_count   = length(apple_profile.app_store.certificates)
-      device_count       = length(apple_profile.app_store.devices)
+      device_count        = length(apple_profile.app_store.devices)
     }
   }
 }

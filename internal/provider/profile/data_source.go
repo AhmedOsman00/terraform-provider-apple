@@ -192,10 +192,6 @@ func (d *profilesDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 				MarkdownDescription: "Number of Profiles after applying filters.",
 				Computed:            true,
 			},
-			"last_updated": schema.StringAttribute{
-				MarkdownDescription: "Timestamp when this data was last updated from Apple's API.",
-				Computed:            true,
-			},
 		},
 	}
 }
@@ -297,7 +293,6 @@ func (d *profilesDataSource) Read(ctx context.Context, req datasource.ReadReques
 	config.Profiles = profileModels
 	config.TotalCount = types.Int64Value(int64(totalCount))
 	config.FilteredCount = types.Int64Value(int64(finalCount))
-	config.LastUpdated = types.StringValue(time.Now().Format(time.RFC3339))
 
 	tflog.Info(ctx, "Profiles data source read completed successfully", map[string]interface{}{
 		"total_profiles":    totalCount,

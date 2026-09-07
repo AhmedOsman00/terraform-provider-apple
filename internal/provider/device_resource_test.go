@@ -11,7 +11,7 @@ import (
 func TestAccDeviceResource(t *testing.T) {
 	// Note: This test requires a real iOS device UDID to test with
 	// In a real testing environment, you would provide test device UDIDs
-	testUDID := "12345678-90123456789012345678901234567890" // 40-char hex format for iOS
+	testUDID := "00008030-000A4D8E0AB8802E" // 8-16 hex format, iPhone XS and later
 	testName := "Test Device"
 
 	resource.Test(t, resource.TestCase{
@@ -74,7 +74,7 @@ func TestAccDeviceResourceMacOS(t *testing.T) {
 	})
 }
 
-// testAccDeviceImportStateIdFunc returns a function that retrieves the device ID for import testing
+// testAccDeviceImportStateIdFunc returns a function that retrieves the device ID for import testing.
 func testAccDeviceImportStateIdFunc() resource.ImportStateIdFunc {
 	return func(s *terraform.State) (string, error) {
 		rs, ok := s.RootModule().Resources["apple_device.test"]

@@ -16,7 +16,6 @@ func TestAccPassTypeIDsDataSource_basic(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("data.apple_pass_type_ids.test", "total_count"),
 					resource.TestCheckResourceAttrSet("data.apple_pass_type_ids.test", "filtered_count"),
-					resource.TestCheckResourceAttrSet("data.apple_pass_type_ids.test", "last_updated"),
 				),
 			},
 		},
@@ -33,7 +32,6 @@ func TestAccPassTypeIDsDataSource_withFilters(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("data.apple_pass_type_ids.test", "total_count"),
 					resource.TestCheckResourceAttrSet("data.apple_pass_type_ids.test", "filtered_count"),
-					resource.TestCheckResourceAttrSet("data.apple_pass_type_ids.test", "last_updated"),
 				),
 			},
 		},
@@ -50,7 +48,6 @@ func TestAccPassTypeIDsDataSource_withSorting(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("data.apple_pass_type_ids.test", "total_count"),
 					resource.TestCheckResourceAttrSet("data.apple_pass_type_ids.test", "filtered_count"),
-					resource.TestCheckResourceAttrSet("data.apple_pass_type_ids.test", "last_updated"),
 				),
 			},
 		},
@@ -67,7 +64,6 @@ func TestAccPassTypeIDsDataSource_withLimit(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("data.apple_pass_type_ids.test", "total_count"),
 					resource.TestCheckResourceAttrSet("data.apple_pass_type_ids.test", "filtered_count"),
-					resource.TestCheckResourceAttrSet("data.apple_pass_type_ids.test", "last_updated"),
 				),
 			},
 		},

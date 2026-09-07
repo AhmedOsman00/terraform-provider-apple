@@ -30,12 +30,22 @@ resource "apple_pass_type_id" "coupon_pass" {
   name       = "Promotional Coupons"
 }
 
-# Example of creating certificates for Pass Type IDs
-# Note: This would require CSR generation outside of Terraform
+# Example of creating certificates for Pass Type IDs.
+# The CSRs are generated outside Terraform, so their paths come in as variables.
+variable "loyalty_pass_csr_path" {
+  description = "Path to the PEM-encoded certificate signing request for the loyalty pass certificate."
+  type        = string
+}
+
+variable "nfc_pass_csr_path" {
+  description = "Path to the PEM-encoded certificate signing request for the NFC pass certificate."
+  type        = string
+}
+
 resource "apple_certificate" "loyalty_pass_cert" {
   certificate_type = "PASS_TYPE_ID"
-  csr_content     = file("${path.module}/loyalty_pass.csr")
-  
+  csr_content      = file(var.loyalty_pass_csr_path)
+
   # This certificate will be associated with the Pass Type ID
   depends_on = [apple_pass_type_id.loyalty_card]
 }
@@ -43,8 +53,8 @@ resource "apple_certificate" "loyalty_pass_cert" {
 # Create a certificate with NFC capability for contactless passes
 resource "apple_certificate" "nfc_pass_cert" {
   certificate_type = "PASS_TYPE_ID_WITH_NFC"
-  csr_content     = file("${path.module}/nfc_pass.csr")
-  
+  csr_content      = file(var.nfc_pass_csr_path)
+
   # This certificate supports NFC for contactless interactions
   depends_on = [apple_pass_type_id.store_card]
 }
@@ -52,7 +62,7 @@ resource "apple_certificate" "nfc_pass_cert" {
 # Query existing Pass Type IDs using data source
 data "apple_pass_type_ids" "company_passes" {
   identifier_prefix = "pass.com.example"
-  sort_by          = "name"
+  sort_by           = "name"
   depends_on = [
     apple_pass_type_id.loyalty_card,
     apple_pass_type_id.event_tickets,
@@ -85,22 +95,22 @@ output "event_pass_type_id" {
 locals {
   pass_type_configs = {
     loyalty = {
-      pass_type_id = apple_pass_type_id.loyalty_card.identifier
-      description  = "Used for customer loyalty programs"
+      pass_type_id   = apple_pass_type_id.loyalty_card.identifier
+      description    = "Used for customer loyalty programs"
       format_version = 1
-      pass_type     = "storeCard"
+      pass_type      = "storeCard"
     }
     events = {
-      pass_type_id = apple_pass_type_id.event_tickets.identifier
-      description  = "Used for event admission tickets"
+      pass_type_id   = apple_pass_type_id.event_tickets.identifier
+      description    = "Used for event admission tickets"
       format_version = 1
-      pass_type     = "eventTicket"
+      pass_type      = "eventTicket"
     }
     boarding = {
-      pass_type_id = apple_pass_type_id.boarding_pass.identifier
-      description  = "Used for airline boarding passes"
+      pass_type_id   = apple_pass_type_id.boarding_pass.identifier
+      description    = "Used for airline boarding passes"
       format_version = 1
-      pass_type     = "boardingPass"
+      pass_type      = "boardingPass"
     }
   }
 }

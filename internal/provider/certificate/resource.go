@@ -8,6 +8,8 @@ import (
 	"terraform-provider-apple/internal/apple/models"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -21,6 +23,7 @@ var (
 	_ resource.Resource                = &certificateResource{}
 	_ resource.ResourceWithConfigure   = &certificateResource{}
 	_ resource.ResourceWithImportState = &certificateResource{}
+	_ resource.ResourceWithModifyPlan  = &certificateResource{}
 )
 
 func NewCertificateResource() resource.Resource {
@@ -140,6 +143,26 @@ func (r *certificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"early_renewal_hours": schema.Int64Attribute{
+				MarkdownDescription: "Replace the certificate this many hours before it expires.\n\n" +
+					"Apple certificates are typically valid for one year, and builds break the moment one lapses. " +
+					"Setting this to `720` (30 days) replaces the certificate a month early during a routine `terraform apply`, " +
+					"rather than at the moment of expiry.\n\n" +
+					"The window is evaluated at plan time against `expiration_date`, so renewal only happens when Terraform runs — " +
+					"schedule a periodic plan/apply if you rely on it. Leave unset (or `0`) to disable early renewal.\n\n" +
+					"~> **Note:** This must be smaller than the certificate's total validity period. A larger value puts the " +
+					"certificate permanently inside its renewal window and replaces it on every apply.",
+				Optional: true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(0),
+				},
+			},
+			"ready_for_renewal": schema.BoolAttribute{
+				MarkdownDescription: "Whether the certificate has entered the window defined by `early_renewal_hours`. " +
+					"This is a plan-time signal: it is recorded as `false` between runs, and flipping to `true` during a plan " +
+					"is what forces the certificate to be replaced.",
+				Computed: true,
+			},
 		},
 	}
 }
@@ -149,7 +172,7 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 	tflog.Info(ctx, "Creating Certificate resource")
 
 	// Retrieve values from plan
-	var plan certificateModel
+	var plan certificateResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -216,6 +239,9 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 		plan.ExpirationDate = types.StringNull()
 	}
 
+	// A freshly issued certificate is never awaiting renewal.
+	plan.ReadyForRenewal = types.BoolValue(false)
+
 	tflog.Info(ctx, "Certificate created successfully", map[string]interface{}{
 		"certificate_id":   certificate.ID,
 		"serial_number":    certificate.Attributes.SerialNumber,
@@ -235,7 +261,7 @@ func (r *certificateResource) Read(ctx context.Context, req resource.ReadRequest
 	tflog.Debug(ctx, "Reading Certificate resource")
 
 	// Get current state
-	var state certificateModel
+	var state certificateResourceModel
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -294,6 +320,11 @@ func (r *certificateResource) Read(ctx context.Context, req resource.ReadRequest
 		state.ExpirationDate = types.StringNull()
 	}
 
+	// ready_for_renewal is a plan-time signal owned by ModifyPlan, which
+	// compares the refreshed expiry against the configured window. Recording
+	// false here is what lets the flip to true register as a change.
+	state.ReadyForRenewal = types.BoolValue(false)
+
 	tflog.Debug(ctx, "Certificate read successfully")
 
 	// Set refreshed state
@@ -305,13 +336,44 @@ func (r *certificateResource) Read(ctx context.Context, req resource.ReadRequest
 }
 
 // Update updates the resource and sets the updated Terraform state on success.
+//
+// The certificate itself is immutable and every attribute describing one
+// requires replacement, so the only change that reaches this method is to
+// early_renewal_hours: local bookkeeping that Apple does not store.
 func (r *certificateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Certificates cannot be updated - they are immutable after creation
-	// This should never be called due to RequiresReplace plan modifiers on all configurable attributes
-	resp.Diagnostics.AddError(
-		"Certificate Update Not Supported",
-		"Certificates cannot be updated after creation. All certificate attributes require replacement when changed.",
-	)
+	var plan certificateResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var state certificateResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Carry the issued certificate forward untouched; only the window moves.
+	plan.ID = state.ID
+	plan.SerialNumber = state.SerialNumber
+	plan.CertificateContent = state.CertificateContent
+	plan.DisplayName = state.DisplayName
+	plan.Name = state.Name
+	plan.CsrContent = state.CsrContent
+	plan.Platform = state.Platform
+	plan.ExpirationDate = state.ExpirationDate
+	plan.CertificateType = state.CertificateType
+	plan.RequesterFirstName = state.RequesterFirstName
+	plan.RequesterLastName = state.RequesterLastName
+	plan.RequesterEmail = state.RequesterEmail
+	plan.ReadyForRenewal = types.BoolValue(false)
+
+	tflog.Info(ctx, "Updating Certificate early renewal window", map[string]interface{}{
+		"certificate_id":      state.ID.ValueString(),
+		"early_renewal_hours": plan.EarlyRenewalHours.ValueInt64(),
+	})
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
@@ -319,7 +381,7 @@ func (r *certificateResource) Delete(ctx context.Context, req resource.DeleteReq
 	tflog.Info(ctx, "Deleting Certificate resource")
 
 	// Retrieve values from state
-	var state certificateModel
+	var state certificateResourceModel
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -407,7 +469,7 @@ func (r *certificateResource) ImportState(ctx context.Context, req resource.Impo
 	}
 
 	// Populate the state with the found Certificate
-	state := certificateModel{
+	state := certificateResourceModel{
 		ID:                 types.StringValue(certificate.ID),
 		SerialNumber:       types.StringValue(certificate.Attributes.SerialNumber),
 		CertificateContent: types.StringValue(certificate.Attributes.CertificateContent),
@@ -434,6 +496,11 @@ func (r *certificateResource) ImportState(ctx context.Context, req resource.Impo
 		state.ExpirationDate = types.StringNull()
 	}
 
+	// Early renewal is configuration, which import cannot recover; it takes
+	// effect on the next plan once the user declares it.
+	state.EarlyRenewalHours = types.Int64Null()
+	state.ReadyForRenewal = types.BoolValue(false)
+
 	diags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -451,6 +518,72 @@ func (r *certificateResource) ImportState(ctx context.Context, req resource.Impo
 		fmt.Sprintf("Certificate '%s' (serial: %s, type: %s) has been imported. Please review the configuration and run 'terraform plan' to see any differences.",
 			certificate.ID, certificate.Attributes.SerialNumber, string(certificate.Attributes.CertificateType)),
 	)
+}
+
+// ModifyPlan replaces the certificate once it enters its early renewal window.
+//
+// Certificates are immutable, so renewal is a replacement: the plan marks every
+// Apple-computed attribute unknown and reports ready_for_renewal as the
+// attribute forcing it, which is what surfaces in `terraform plan` output.
+func (r *certificateResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// No prior state on create, and no plan on destroy.
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var state certificateResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var plan certificateResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// The renewal window is evaluated against the expiry Apple recorded, which
+	// only exists in prior state.
+	renew, err := readyForRenewal(state.ExpirationDate, plan.EarlyRenewalHours, time.Now())
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to Evaluate Certificate Renewal Window", err.Error())
+		return
+	}
+
+	if !renew {
+		plan.ReadyForRenewal = types.BoolValue(false)
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+		return
+	}
+
+	// Inside the window: everything Apple issues is recomputed from the
+	// replacement certificate.
+	plan.ReadyForRenewal = types.BoolValue(true)
+	plan.ID = types.StringUnknown()
+	plan.SerialNumber = types.StringUnknown()
+	plan.CertificateContent = types.StringUnknown()
+	plan.DisplayName = types.StringUnknown()
+	plan.Name = types.StringUnknown()
+	plan.Platform = types.StringUnknown()
+	plan.ExpirationDate = types.StringUnknown()
+	plan.RequesterFirstName = types.StringUnknown()
+	plan.RequesterLastName = types.StringUnknown()
+	plan.RequesterEmail = types.StringUnknown()
+
+	resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.RequiresReplace = append(resp.RequiresReplace, path.Root("ready_for_renewal"))
+
+	tflog.Info(ctx, "Certificate is within its early renewal window and will be replaced", map[string]interface{}{
+		"certificate_id":      state.ID.ValueString(),
+		"serial_number":       state.SerialNumber.ValueString(),
+		"expiration_date":     state.ExpirationDate.ValueString(),
+		"early_renewal_hours": plan.EarlyRenewalHours.ValueInt64(),
+	})
 }
 
 // Configure adds the provider configured client to the resource.

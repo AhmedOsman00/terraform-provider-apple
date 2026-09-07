@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-// Device platform enumeration
+// Device platform enumeration.
 type DevicePlatform string
 
 const (
@@ -12,7 +12,7 @@ const (
 	DeviceVision DevicePlatform = "VISION_OS"
 )
 
-// Device class enumeration
+// Device class enumeration.
 type DeviceClass string
 
 const (
@@ -25,16 +25,17 @@ const (
 	DeviceClassAPPLE_VISION_PRO DeviceClass = "APPLE_VISION_PRO"
 )
 
-// Device status enumeration
+// Device status enumeration.
 type DeviceStatus string
 
 const (
 	DeviceStatusENABLED    DeviceStatus = "ENABLED"
+	DeviceStatusDISABLED   DeviceStatus = "DISABLED"
 	DeviceStatusPROCESSING DeviceStatus = "PROCESSING"
 	DeviceStatusINELIGIBLE DeviceStatus = "INELIGIBLE"
 )
 
-// Device resource model
+// Device resource model.
 type Device struct {
 	Type       string           `json:"type"`
 	ID         string           `json:"id"`
@@ -42,7 +43,7 @@ type Device struct {
 	Links      *ResourceLinks   `json:"links,omitempty"`
 }
 
-// Request models for Device operations
+// Request models for Device operations.
 type DeviceCreateRequest struct {
 	Type       string                 `json:"type"`
 	Attributes DeviceCreateAttributes `json:"attributes"`
@@ -54,7 +55,7 @@ type DeviceUpdateRequest struct {
 	Attributes DeviceUpdateAttributes `json:"attributes"`
 }
 
-// Device attributes
+// Device attributes.
 type DeviceAttributes struct {
 	AddedDate   *time.Time     `json:"addedDate,omitempty"`
 	Name        string         `json:"name"`
@@ -65,14 +66,14 @@ type DeviceAttributes struct {
 	Status      DeviceStatus   `json:"status"`
 }
 
-// Create attributes for Device creation
+// Create attributes for Device creation.
 type DeviceCreateAttributes struct {
 	Name     string         `json:"name"`
 	UDID     string         `json:"udid"`
 	Platform DevicePlatform `json:"platform"`
 }
 
-// Update attributes (only name can be updated for Devices)
+// Update attributes (only name can be updated for Devices).
 type DeviceUpdateAttributes struct {
 	Name   string        `json:"name"`
 	Status *DeviceStatus `json:"status,omitempty"`

@@ -2,6 +2,7 @@ package certificate
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -10,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// FilterOptions represents the filtering configuration for Certificates
+// FilterOptions represents the filtering configuration for Certificates.
 type FilterOptions struct {
 	CertificateType  string
 	CertificateTypes []string
@@ -23,7 +24,7 @@ type FilterOptions struct {
 	SortOrder        string
 }
 
-// FilterCertificates applies filters and sorting to a list of Certificates
+// FilterCertificates applies filters and sorting to a list of Certificates.
 func FilterCertificates(ctx context.Context, certificates []models.Certificate, options FilterOptions) ([]models.Certificate, error) {
 	tflog.Debug(ctx, "Filtering Certificates", map[string]interface{}{
 		"total_count":             len(certificates),
@@ -37,6 +38,13 @@ func FilterCertificates(ctx context.Context, certificates []models.Certificate, 
 		"sort_by":                 options.SortBy,
 		"sort_order":              options.SortOrder,
 	})
+
+	// Reject a malformed glob up front rather than silently matching nothing.
+	if options.NamePattern != "" {
+		if _, err := filepath.Match(options.NamePattern, ""); err != nil {
+			return nil, fmt.Errorf("invalid name_pattern %q: %w", options.NamePattern, err)
+		}
+	}
 
 	filtered := make([]models.Certificate, 0, len(certificates))
 
@@ -72,7 +80,7 @@ func FilterCertificates(ctx context.Context, certificates []models.Certificate, 
 	return filtered, nil
 }
 
-// shouldIncludeCertificate determines if a Certificate should be included based on filters
+// shouldIncludeCertificate determines if a Certificate should be included based on filters.
 func shouldIncludeCertificate(ctx context.Context, certificate models.Certificate, options FilterOptions) bool {
 	// Certificate type filter (single)
 	if options.CertificateType != "" && string(certificate.Attributes.CertificateType) != options.CertificateType {
@@ -140,7 +148,7 @@ func shouldIncludeCertificate(ctx context.Context, certificate models.Certificat
 	return true
 }
 
-// sortCertificates sorts Certificates by the specified field and order
+// sortCertificates sorts Certificates by the specified field and order.
 func sortCertificates(certificates []models.Certificate, sortBy, sortOrder string) {
 	ascending := sortOrder != "desc"
 
@@ -182,7 +190,7 @@ func sortCertificates(certificates []models.Certificate, sortBy, sortOrder strin
 	})
 }
 
-// ParseFilterOptions extracts filter options from the data source model
+// ParseFilterOptions extracts filter options from the data source model.
 func ParseFilterOptions(ctx context.Context, config certificatesDataSourceModel) (FilterOptions, error) {
 	options := FilterOptions{}
 

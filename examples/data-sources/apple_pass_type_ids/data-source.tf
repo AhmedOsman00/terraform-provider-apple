@@ -28,17 +28,17 @@ data "apple_pass_type_ids" "event_passes" {
 # Query with multiple filters and sorting
 data "apple_pass_type_ids" "filtered_sorted" {
   identifier_prefix = "pass.com.example"
-  name_pattern     = ".*Card.*"
-  sort_by          = "identifier"
-  sort_order       = "desc"
-  limit            = 5
+  name_pattern      = ".*Card.*"
+  sort_by           = "identifier"
+  sort_order        = "desc"
+  limit             = 5
 }
 
 # Query store-related Pass Type IDs
 data "apple_pass_type_ids" "store_passes" {
   identifier_pattern = ".*\\.(store|retail|shop)\\."
-  sort_by           = "name"
-  limit             = 10
+  sort_by            = "name"
+  limit              = 10
 }
 
 # Query passes with specific naming convention
@@ -85,11 +85,10 @@ output "loyalty_pass_details" {
 output "pass_counts" {
   description = "Pass Type ID counts and metadata"
   value = {
-    total_passes    = data.apple_pass_type_ids.all.total_count
-    company_passes  = data.apple_pass_type_ids.company_passes.filtered_count
-    loyalty_passes  = data.apple_pass_type_ids.loyalty_passes.filtered_count
-    event_passes    = data.apple_pass_type_ids.event_passes.filtered_count
-    last_updated    = data.apple_pass_type_ids.all.last_updated
+    total_passes   = data.apple_pass_type_ids.all.total_count
+    company_passes = data.apple_pass_type_ids.company_passes.filtered_count
+    loyalty_passes = data.apple_pass_type_ids.loyalty_passes.filtered_count
+    event_passes   = data.apple_pass_type_ids.event_passes.filtered_count
   }
 }
 
@@ -97,7 +96,7 @@ output "pass_counts" {
 locals {
   has_loyalty_passes = length(data.apple_pass_type_ids.loyalty_passes.pass_type_ids) > 0
   has_event_passes   = length(data.apple_pass_type_ids.event_passes.pass_type_ids) > 0
-  
+
   pass_categories = {
     loyalty = [for pass in data.apple_pass_type_ids.loyalty_passes.pass_type_ids : pass.identifier]
     events  = [for pass in data.apple_pass_type_ids.event_passes.pass_type_ids : pass.identifier]
@@ -122,12 +121,12 @@ output "pass_categories" {
 # This would typically be in a separate configuration file
 resource "local_file" "pass_config" {
   count = length(data.apple_pass_type_ids.company_passes.pass_type_ids)
-  
+
   filename = "${path.module}/pass_configs/${data.apple_pass_type_ids.company_passes.pass_type_ids[count.index].identifier}.json"
   content = jsonencode({
     passTypeIdentifier = data.apple_pass_type_ids.company_passes.pass_type_ids[count.index].identifier
-    name              = data.apple_pass_type_ids.company_passes.pass_type_ids[count.index].name
-    appleId           = data.apple_pass_type_ids.company_passes.pass_type_ids[count.index].id
-    formatVersion     = 1
+    name               = data.apple_pass_type_ids.company_passes.pass_type_ids[count.index].name
+    appleId            = data.apple_pass_type_ids.company_passes.pass_type_ids[count.index].id
+    formatVersion      = 1
   })
 }

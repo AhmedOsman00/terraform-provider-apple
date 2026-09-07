@@ -35,7 +35,7 @@ These can be provided via provider configuration or environment variables.
 terraform {
   required_providers {
     apple = {
-      source = "theaostudio.com/hashicorp/apple"
+      source = "aostudio.com/aostudio/apple"
     }
   }
 }

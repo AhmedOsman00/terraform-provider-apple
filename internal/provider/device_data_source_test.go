@@ -19,7 +19,6 @@ func TestAccDevicesDataSource(t *testing.T) {
 					resource.TestCheckResourceAttrSet("data.apple_devices.test", "devices.#"),
 					resource.TestCheckResourceAttrSet("data.apple_devices.test", "total_count"),
 					resource.TestCheckResourceAttrSet("data.apple_devices.test", "filtered_count"),
-					resource.TestCheckResourceAttrSet("data.apple_devices.test", "last_updated"),
 				),
 			},
 		},

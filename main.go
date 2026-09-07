@@ -50,7 +50,7 @@ func main() {
 		// such as registry.terraform.io/hashicorp/hashicups. This specific
 		// provider address is used for manual development testing of this provider.
 		// For production use, this would typically be registry.terraform.io/organization/apple
-		Address: "theaostudio.com/hashicorp/apple",
+		Address: "aostudio.com/aostudio/apple",
 		Debug:   debug,
 	}
 

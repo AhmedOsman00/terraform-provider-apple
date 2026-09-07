@@ -2,6 +2,7 @@ package profile
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -12,8 +13,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// applyFilters applies filters to a list of Profiles
+// applyFilters applies filters to a list of Profiles.
 func (d *profilesDataSource) applyFilters(ctx context.Context, profiles []models.Profile, config profilesDataSourceModel) ([]models.Profile, error) {
+	// Reject a malformed pattern up front rather than silently matching nothing.
+	if !config.NamePattern.IsNull() && !config.NamePattern.IsUnknown() {
+		if _, err := regexp.Compile(config.NamePattern.ValueString()); err != nil {
+			return nil, fmt.Errorf("invalid name_pattern %q: %w", config.NamePattern.ValueString(), err)
+		}
+	}
+
 	tflog.Debug(ctx, "Filtering Profiles", map[string]interface{}{
 		"total_count": len(profiles),
 	})
@@ -34,7 +42,7 @@ func (d *profilesDataSource) applyFilters(ctx context.Context, profiles []models
 	return filtered, nil
 }
 
-// shouldIncludeProfile checks if a profile should be included based on filter criteria
+// shouldIncludeProfile checks if a profile should be included based on filter criteria.
 func (d *profilesDataSource) shouldIncludeProfile(ctx context.Context, profile models.Profile, config profilesDataSourceModel) bool {
 	// Platform filter (single)
 	if !config.Platform.IsNull() && !config.Platform.IsUnknown() {
@@ -100,7 +108,7 @@ func (d *profilesDataSource) shouldIncludeProfile(ctx context.Context, profile m
 	return true
 }
 
-// applySorting sorts profiles based on the sort configuration
+// applySorting sorts profiles based on the sort configuration.
 func (d *profilesDataSource) applySorting(ctx context.Context, profiles []models.Profile, config profilesDataSourceModel) []models.Profile {
 	if len(profiles) == 0 {
 		return profiles
@@ -188,7 +196,7 @@ func (d *profilesDataSource) applySorting(ctx context.Context, profiles []models
 	return sorted
 }
 
-// applyLimit applies the limit to the profile results
+// applyLimit applies the limit to the profile results.
 func (d *profilesDataSource) applyLimit(ctx context.Context, profiles []models.Profile, config profilesDataSourceModel) []models.Profile {
 	if config.Limit.IsNull() || config.Limit.IsUnknown() {
 		return profiles

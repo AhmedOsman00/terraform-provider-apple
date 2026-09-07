@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     apple = {
-      source = "theaostudio.com/hashicorp/apple"
+      source = "aostudio.com/aostudio/apple"
     }
   }
 }
@@ -53,25 +53,28 @@ resource "apple_bundle_id_capability" "apple_pay" {
   capability_type = "APPLE_PAY"
 
   # Reference the created Merchant ID
-  settings {
-    key   = "APPLE_PAY_IDENTIFIERS"
-    value = apple_merchant_id.example_store.identifier
-  }
+  settings = [
+    {
+      key   = "APPLE_PAY_IDENTIFIERS"
+      value = apple_merchant_id.example_store.identifier
+    },
+  ]
 }
 
 resource "apple_bundle_id_capability" "icloud" {
   bundle_id       = apple_bundle_id.example_app.id
   capability_type = "ICLOUD"
 
-  settings {
-    key   = "ICLOUD_VERSION"
-    value = "XCODE_5"
-  }
-
-  settings {
-    key   = "ICLOUD_SERVICES"
-    value = "CloudKit"
-  }
+  settings = [
+    {
+      key   = "ICLOUD_VERSION"
+      value = "XCODE_5"
+    },
+    {
+      key   = "ICLOUD_SERVICES"
+      value = "CloudKit"
+    },
+  ]
 }
 
 # Query existing Bundle IDs
@@ -218,13 +221,13 @@ data "apple_certificates" "nfc_pass_certificates" {
 # Register development devices
 resource "apple_device" "dev_iphone" {
   name     = "Development iPhone"
-  udid     = "12345678-90123456789012345678901234567890" # Replace with actual UDID
+  udid     = "00008030000a4d8e0ab8802e1234567890abcdef" # Replace with actual UDID
   platform = "IOS"
 }
 
 resource "apple_device" "dev_ipad" {
   name     = "Development iPad"
-  udid     = "abcdef12-34567890123456789012345678901234" # Replace with actual UDID
+  udid     = "00008027000c1d2e3f4a5b6c7d8e9f0a1b2c3d4e" # Replace with actual UDID
   platform = "IOS"
 }
 
@@ -257,7 +260,7 @@ data "apple_devices" "iphones" {
 # Create a development profile for the Bundle ID
 resource "apple_profile" "example_development" {
   name         = "Development Profile for ${apple_bundle_id.example_app.name}"
-  platform     = "IOS"
+  profile_type = "IOS_APP_DEVELOPMENT"
   bundle_id    = apple_bundle_id.example_app.id
   certificates = [apple_certificate.ios_development.id]
   devices      = [apple_device.dev_iphone.id, apple_device.dev_ipad.id]
@@ -266,7 +269,7 @@ resource "apple_profile" "example_development" {
 # Create an App Store distribution profile
 resource "apple_profile" "example_app_store" {
   name         = "App Store Profile for ${apple_bundle_id.example_app.name}"
-  platform     = "IOS"
+  profile_type = "IOS_APP_STORE"
   bundle_id    = apple_bundle_id.example_app.id
   certificates = [apple_certificate.ios_distribution.id]
   # Note: No devices for App Store distribution profiles
@@ -275,7 +278,7 @@ resource "apple_profile" "example_app_store" {
 # Create an Ad Hoc distribution profile
 resource "apple_profile" "example_adhoc" {
   name         = "Ad Hoc Profile for ${apple_bundle_id.example_app.name}"
-  platform     = "IOS"
+  profile_type = "IOS_APP_ADHOC"
   bundle_id    = apple_bundle_id.example_app.id
   certificates = [apple_certificate.ios_distribution.id]
   devices      = [apple_device.dev_iphone.id, apple_device.dev_ipad.id]
@@ -340,7 +343,6 @@ output "merchant_id_statistics" {
     total_merchants   = data.apple_merchant_ids.all_merchants.total_count
     example_merchants = data.apple_merchant_ids.example_merchants.filtered_count
     store_merchants   = data.apple_merchant_ids.store_merchants.filtered_count
-    last_updated      = data.apple_merchant_ids.all_merchants.last_updated
   }
 }
 
@@ -528,7 +530,6 @@ output "profile_statistics" {
     total_profiles       = data.apple_profiles.all_profiles.total_count
     active_ios_profiles  = data.apple_profiles.active_ios_profiles.filtered_count
     development_profiles = data.apple_profiles.development_profiles.filtered_count
-    last_updated         = data.apple_profiles.all_profiles.last_updated
   }
 }
 
@@ -589,7 +590,6 @@ output "pass_type_id_statistics" {
     total_pass_types   = data.apple_pass_type_ids.all_pass_types.total_count
     example_pass_types = data.apple_pass_type_ids.example_passes.filtered_count
     card_pass_types    = data.apple_pass_type_ids.card_passes.filtered_count
-    last_updated       = data.apple_pass_type_ids.all_pass_types.last_updated
   }
 }
 
