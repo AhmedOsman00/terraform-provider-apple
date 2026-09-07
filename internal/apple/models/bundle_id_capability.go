@@ -1,3 +1,6 @@
+// Copyright (c) AO Studio
+// SPDX-License-Identifier: MPL-2.0
+
 package models
 
 // Bundle ID Capability resource model.

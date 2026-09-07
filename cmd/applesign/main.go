@@ -1,3 +1,6 @@
+// Copyright (c) AO Studio
+// SPDX-License-Identifier: MPL-2.0
+
 // Command applesign installs Apple code-signing assets onto a machine, so that
 // xcodebuild can sign.
 //

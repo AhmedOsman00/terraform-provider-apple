@@ -1,3 +1,6 @@
+// Copyright (c) AO Studio
+// SPDX-License-Identifier: MPL-2.0
+
 package models
 
 // Pass Type ID resource model.

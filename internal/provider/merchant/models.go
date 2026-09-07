@@ -1,3 +1,6 @@
+// Copyright (c) AO Studio
+// SPDX-License-Identifier: MPL-2.0
+
 // Package merchant contains all Merchant ID related resources, data sources, and shared functionality
 // for the Apple Terraform provider.
 package merchant

@@ -1,3 +1,6 @@
+// Copyright (c) AO Studio
+// SPDX-License-Identifier: MPL-2.0
+
 // Package main serves the Apple Terraform provider using the Terraform Plugin Framework.
 // This provider enables management of Apple App Store Connect resources through Terraform.
 package main

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) AO Studio
+# SPDX-License-Identifier: MPL-2.0
+
 # Run `terraform validate` over every directory under examples/.
 #
 # `make generate` only runs `terraform fmt`, which catches syntax but not a

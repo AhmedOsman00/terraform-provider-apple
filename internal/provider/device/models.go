@@ -1,3 +1,6 @@
+// Copyright (c) AO Studio
+// SPDX-License-Identifier: MPL-2.0
+
 // Package device contains all Device related resources, data sources, and shared functionality
 // for the Apple Terraform provider.
 package device
