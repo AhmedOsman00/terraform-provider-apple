@@ -1,5 +1,3 @@
-# Copyright (c) HashiCorp, Inc.
-
 # Query all Merchant IDs
 data "apple_merchant_ids" "all" {}
 

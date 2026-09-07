@@ -1,5 +1,3 @@
-# Copyright (c) HashiCorp, Inc.
-
 # Create a Merchant ID for Apple Pay
 resource "apple_merchant_id" "example_merchant" {
   identifier   = "merchant.com.example.myapp"

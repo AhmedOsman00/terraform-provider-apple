@@ -4,8 +4,31 @@ FEATURES:
 
 * examples/signing: a runnable module replacing `fastlane match`, covering the App
   ID, capabilities, devices, signing certificates, and development/Ad Hoc/App Store
-  profiles, plus `scripts/install-signing.sh` for the local keychain and
-  provisioning profile installation Terraform does not do.
+  profiles. It emits a signing bundle holding everything a machine needs to sign.
+* cmd/applesign: a CLI that installs a signing bundle on macOS — private key and
+  certificate into a keychain (the login keychain, or a throwaway one under
+  `--ci`), and provisioning profiles into the directories Xcode reads. It reads
+  the bundle as JSON on stdin, so `terraform output -json signing_bundle`,
+  `sops -d`, and `op read` all compose as pipes and a consumer needs no state
+  access.
+* examples/signing: `var.private_keys` and `var.adopt_certificate_serials` adopt a
+  certificate `fastlane match` already issued, reading it through the
+  `apple_certificates` data source rather than reissuing — which would revoke the
+  original and break every build already signed with it.
+
+DOCUMENTATION:
+
+* Per-resource and per-data-source reference pages are now generated for all seven
+  resources and seven data sources; previously only `docs/index.md` was checked in,
+  so `make generate` produced a diff and the `generate` CI job failed.
+* New guides: `docs/guides/getting-started.md` (creating App Store Connect
+  credentials, installing a provider that is not on the Registry, a first
+  configuration, and importing existing portal resources) and
+  `docs/guides/code-signing.md` (the `fastlane match` replacement, the distinction
+  between the Terraform state and the signing bundle, and migrating off match).
+  Hand-written guides live in `templates/guides/` and render into `docs/guides/`.
+* Examples no longer carry a `# Copyright (c) HashiCorp, Inc.` header, which was
+  incorrect attribution and was being embedded into the generated documentation.
 
 BREAKING CHANGES:
 

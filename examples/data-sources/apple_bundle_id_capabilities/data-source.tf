@@ -1,5 +1,3 @@
-# Copyright (c) HashiCorp, Inc.
-
 # Data source to fetch all Bundle ID Capabilities
 data "apple_bundle_id_capabilities" "all" {
   # No filters - returns all capabilities in the account

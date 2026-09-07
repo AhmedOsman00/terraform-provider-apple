@@ -31,7 +31,7 @@ Note that `terraform-plugin-testing` drives a real `terraform` binary even for `
 
 `tools/tools.go` drives generation via `go:generate` and requires the `terraform` binary on PATH (`terraform fmt -recursive ../examples/`).
 
-The copywrite step stamps `// Copyright (c) 2025 AO Studio` + `// SPDX-License-Identifier: MPL-2.0` headers into source files, configured by `.copywrite.hcl` (MPL-2.0, holder "AO Studio", matching `LICENSE`). `examples/`, `docs/`, and the tooling configs are excluded via `header_ignore`. No source file carries a header yet, so the first `make generate` will touch every `.go` file.
+The copywrite step stamps `// Copyright (c) AO Studio` + `// SPDX-License-Identifier: MPL-2.0` headers into source files, configured by `.copywrite.hcl` (MPL-2.0, holder "AO Studio", matching `LICENSE`). `examples/`, `docs/`, and the tooling configs are excluded via `header_ignore`. Every `.go` file now carries the header, so the step is a no-op unless a file is added.
 
 Generation runs `terraform fmt` but never `terraform validate`, which is why
 `make validate-examples` (`scripts/validate-examples.sh`) exists separately: it
@@ -43,7 +43,11 @@ catches an example written against a schema the provider does not have — a
 attribute that does not exist, or a value a validator rejects. `dev_overrides`
 cannot be used for this: it makes `terraform init` refuse to run.
 
-`tfplugindocs` builds `docs/` from provider/resource/data-source `MarkdownDescription` strings plus the matching files under `examples/`. CI (`.github/workflows/test.yml`) fails the `generate` job if `make generate` produces a diff, so regenerate and commit whenever a schema or example changes. Note that only `docs/index.md` is currently checked in — per-resource docs pages are absent.
+`tfplugindocs` builds `docs/` from provider/resource/data-source `MarkdownDescription` strings plus the matching files under `examples/`. CI (`.github/workflows/test.yml`) fails the `generate` job if `make generate` produces a diff, so regenerate and commit whenever a schema, example, or guide changes.
+
+`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All fifteen pages are checked in: `index.md`, seven under `resources/`, and seven under `data-sources/`.
+
+Hand-written prose lives in `templates/`, which is the only part of the docs pipeline a human edits directly. `templates/guides/<name>.md.tmpl` renders to `docs/guides/<name>.md`; a `templates/` directory does not suppress the auto-generated resource and data-source pages, which are still built from the schemas into a temporary directory. Two guides exist: `getting-started` (credentials, installing a non-Registry provider, first configuration, import IDs per resource) and `code-signing` (the `fastlane match` replacement, the state-vs-bundle distribution model, adopting a match certificate).
 
 ## Architecture
 

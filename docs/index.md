@@ -30,8 +30,6 @@ These can be provided via provider configuration or environment variables.
 ## Example Usage
 
 ```terraform
-# Copyright (c) HashiCorp, Inc.
-
 terraform {
   required_providers {
     apple = {

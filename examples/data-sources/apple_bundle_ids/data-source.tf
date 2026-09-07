@@ -1,5 +1,3 @@
-# Copyright (c) HashiCorp, Inc.
-
 # Query all Bundle IDs
 data "apple_bundle_ids" "all" {}
 
