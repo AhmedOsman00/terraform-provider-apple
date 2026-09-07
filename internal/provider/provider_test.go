@@ -4,14 +4,18 @@
 package provider
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
+
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 // testAccProtoV6ProviderFactories are used to instantiate a provider during
@@ -122,3 +126,48 @@ provider "apple" {
   # APPLE_APP_STORE_CONNECT_PRIVATE_KEY
 }
 `
+
+// testAccAPIClient builds an App Store Connect client from the same environment
+// variables the provider reads.
+//
+// Destroy and existence checks have to observe Apple rather than Terraform
+// state: after a destroy the resource is gone from state either way, so a check
+// that only reads state passes even when the resource is still live in the
+// portal. Every check below therefore goes through this client.
+func testAccAPIClient() (*apple.Client, error) {
+	return apple.NewClient(
+		os.Getenv("APPLE_APP_STORE_CONNECT_ISSUER_ID"),
+		os.Getenv("APPLE_APP_STORE_CONNECT_API_KEY"),
+		os.Getenv("APPLE_APP_STORE_CONNECT_PRIVATE_KEY"),
+		nil,
+	)
+}
+
+// testAccStateResource returns the state for a resource address, failing with a
+// useful message rather than a nil dereference when the address is absent.
+func testAccStateResource(s *terraform.State, resourceName string) (*terraform.InstanceState, error) {
+	rs, ok := s.RootModule().Resources[resourceName]
+	if !ok {
+		return nil, fmt.Errorf("resource not found in state: %s", resourceName)
+	}
+
+	if rs.Primary == nil || rs.Primary.ID == "" {
+		return nil, fmt.Errorf("resource %s has no ID in state", resourceName)
+	}
+
+	return rs.Primary, nil
+}
+
+// testAccCheckDestroyAll runs several destroy checks against the same final
+// state, for configurations that create more than one kind of resource.
+func testAccCheckDestroyAll(checks ...func(*terraform.State) error) func(*terraform.State) error {
+	return func(s *terraform.State) error {
+		for _, check := range checks {
+			if err := check(s); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+}
