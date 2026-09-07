@@ -8,8 +8,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"terraform-provider-apple/internal/apple"
-	"terraform-provider-apple/internal/apple/models"
+
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"

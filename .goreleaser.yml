@@ -1,12 +1,22 @@
 # Visit https://goreleaser.com for documentation on how to customize this
 # behavior.
 version: 2
+
+# The Terraform Registry requires the release artifacts to be named
+# terraform-provider-apple_<version>_<os>_<arch>.zip. GoReleaser would otherwise
+# infer the project name from the checkout directory, so pin it.
+project_name: terraform-provider-apple
+
 before:
   hooks:
-    # this is just an example and not a requirement for provider building/publishing
     - go mod tidy
 builds:
-- env:
+  # Only the provider binary is released. The Registry ingests a release by
+  # matching every entry in SHA256SUMS against the expected artifact names, so
+  # cmd/applesign is deliberately not built here -- it is installed with
+  # `go install ./cmd/applesign`.
+- main: .
+  env:
     # goreleaser does not work with CGO, it could also complicate
     # usage by users in CI/CD systems like HCP Terraform where
     # they are unable to install libraries.

@@ -24,24 +24,36 @@ Together with the `applesign` CLI in this repository, it is a replacement for
 ## Requirements
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.25 — the provider is not published to
-  the Terraform Registry yet, so you build it locally
 - An Apple Developer Program team, and an App Store Connect API key with the
   **App Manager** role
+- [Go](https://golang.org/doc/install) >= 1.25 — only to build the provider or
+  `applesign` from source
 
 ## Installation
 
-The provider serves the address `aostudio.com/aostudio/apple`, which is not a
-Registry address, so `terraform init` cannot download it. Build it and point
-Terraform at the binary:
+The provider is published on the Terraform Registry as
+[`ahmedosman00/apple`](https://registry.terraform.io/providers/ahmedosman00/apple/latest),
+so declaring it is enough — `terraform init` downloads it:
 
-```shell
-make install   # builds terraform-provider-apple and applesign into $GOPATH/bin
+```terraform
+terraform {
+  required_providers {
+    apple = {
+      source  = "ahmedosman00/apple"
+      version = "~> 0.1"
+    }
+  }
+}
 ```
 
-Then configure either a filesystem mirror (`terraform init` keeps working) or a
-`dev_overrides` block (convenient for provider development, but `init` refuses to
-run). [The getting started guide](docs/guides/getting-started.md#installing-the-provider)
+The `applesign` CLI is a separate binary and does not come through the Registry:
+
+```shell
+go install github.com/AhmedOsman00/terraform-provider-apple/cmd/applesign@latest
+```
+
+To run against an unreleased build of the provider, use a filesystem mirror or a
+`dev_overrides` block; [the getting started guide](docs/guides/getting-started.md#installing-the-provider)
 covers both, with the trade-off between them.
 
 ## Authentication
@@ -75,7 +87,8 @@ secret store, not in version control.
 terraform {
   required_providers {
     apple = {
-      source = "aostudio.com/aostudio/apple"
+      source  = "ahmedosman00/apple"
+      version = "~> 0.1"
     }
   }
 }

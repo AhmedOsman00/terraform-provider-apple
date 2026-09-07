@@ -6,8 +6,9 @@ package certificate
 import (
 	"context"
 	"fmt"
-	"terraform-provider-apple/internal/apple"
 	"time"
+
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"

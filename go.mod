@@ -1,4 +1,4 @@
-module terraform-provider-apple
+module github.com/AhmedOsman00/terraform-provider-apple
 
 go 1.25.8
 

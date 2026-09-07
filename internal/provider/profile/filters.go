@@ -9,8 +9,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"terraform-provider-apple/internal/apple/models"
 	"time"
+
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"

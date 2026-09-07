@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"terraform-provider-apple/internal/apple/models"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
 
 // GetCertificates retrieves all Certificates for the team.

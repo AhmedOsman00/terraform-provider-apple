@@ -21,8 +21,8 @@ ready-made module rather than hand-written resources.
 - Terraform >= 1.0.
 - Membership in an Apple Developer Program team, with a role that can create API
   keys: **Account Holder** or **Admin**.
-- Go >= 1.25, for now. The provider is not published to the Terraform Registry
-  yet, so you build it yourself — see [Installing the provider](#installing-the-provider).
+- Go >= 1.25, only if you want to build the `applesign` CLI or an unreleased
+  provider from source — see [Installing the provider](#installing-the-provider).
 
 ## Creating App Store Connect API credentials
 
@@ -77,17 +77,35 @@ is easy to commit by accident.
 
 ## Installing the provider
 
-The provider serves the address `aostudio.com/aostudio/apple`, which is not a
-Terraform Registry address, so `terraform init` cannot download it. Build it and
-point Terraform at your build.
+The provider is published on the Terraform Registry as
+[`ahmedosman00/apple`](https://registry.terraform.io/providers/ahmedosman00/apple/latest).
+Declare it and `terraform init` downloads it — there is nothing to build:
 
-```bash
-# from a clone of this repository
-make install     # builds terraform-provider-apple and applesign into $GOPATH/bin
+```terraform
+terraform {
+  required_providers {
+    apple = {
+      source  = "ahmedosman00/apple"
+      version = "~> 0.1"
+    }
+  }
+}
 ```
 
-There are two ways to make Terraform use that binary, and the difference matters
-more than it looks.
+The `applesign` CLI that installs a signing bundle into a keychain is a separate
+binary and does not come through the Registry:
+
+```bash
+go install github.com/AhmedOsman00/terraform-provider-apple/cmd/applesign@latest
+```
+
+From a clone, `make install` builds both binaries into `$GOPATH/bin`.
+
+## Running an unreleased build
+
+Only needed when you are changing the provider itself, or want a fix that is
+merged but not tagged. There are two ways to make Terraform use a local binary,
+and the difference matters more than it looks.
 
 ### Filesystem mirror — `init` works
 
@@ -96,9 +114,9 @@ to be. It is the option to choose for anything beyond a scratch experiment,
 because `terraform init` behaves normally and module installation works.
 
 ```bash
-MIRROR=~/.terraform-mirror/aostudio.com/aostudio/apple/0.0.1/$(go env GOOS)_$(go env GOARCH)
+MIRROR=~/.terraform-mirror/registry.terraform.io/ahmedosman00/apple/0.1.0/$(go env GOOS)_$(go env GOARCH)
 mkdir -p "$MIRROR"
-go build -o "$MIRROR/terraform-provider-apple_v0.0.1" .
+go build -o "$MIRROR/terraform-provider-apple_v0.1.0" .
 ```
 
 Then in `~/.terraformrc`:
@@ -107,13 +125,17 @@ Then in `~/.terraformrc`:
 provider_installation {
   filesystem_mirror {
     path    = "/Users/you/.terraform-mirror"
-    include = ["aostudio.com/*/*"]
+    include = ["registry.terraform.io/ahmedosman00/*"]
   }
   direct {
-    exclude = ["aostudio.com/*/*"]
+    exclude = ["registry.terraform.io/ahmedosman00/*"]
   }
 }
 ```
+
+The version in the mirror path has to satisfy whatever your configuration pins,
+and the mirror shadows the Registry for that address — remove the block when you
+want released versions back.
 
 `scripts/validate-examples.sh` in the repository does exactly this against a
 throwaway mirror, if you want a worked example.
@@ -123,7 +145,7 @@ throwaway mirror, if you want a worked example.
 ```hcl
 provider_installation {
   dev_overrides {
-    "aostudio.com/aostudio/apple" = "/Users/you/go/bin"
+    "ahmedosman00/apple" = "/Users/you/go/bin"
   }
   direct {}
 }
@@ -141,7 +163,8 @@ modules and no backend, and painful for anything else.
 terraform {
   required_providers {
     apple = {
-      source = "aostudio.com/aostudio/apple"
+      source  = "ahmedosman00/apple"
+      version = "~> 0.1"
     }
   }
 }

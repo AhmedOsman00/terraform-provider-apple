@@ -7,9 +7,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"terraform-provider-apple/internal/apple"
-	"terraform-provider-apple/internal/apple/models"
 	"time"
+
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"

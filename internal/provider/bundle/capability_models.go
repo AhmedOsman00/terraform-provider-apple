@@ -13,7 +13,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"terraform-provider-apple/internal/apple/models"
+
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"

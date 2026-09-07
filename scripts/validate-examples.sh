@@ -9,14 +9,16 @@
 # the schema does not have, or a value a validator rejects. Those only surface
 # under `validate`, which needs the provider installed.
 #
-# The provider serves a non-registry address, so it is built here and installed
-# into a throwaway filesystem mirror. dev_overrides is deliberately not used:
+# The working tree is built here and installed into a throwaway filesystem
+# mirror, so the examples validate against the schema in this checkout rather
+# than the last release on the Registry. dev_overrides is deliberately not used:
 # it makes `terraform init` refuse to run, and these directories need init.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROVIDER_ADDR="aostudio.com/aostudio/apple"
-PROVIDER_VERSION="0.0.1"
+PROVIDER_ADDR="registry.terraform.io/ahmedosman00/apple"
+# Must satisfy the version constraint the examples pin.
+PROVIDER_VERSION="0.1.0"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -31,10 +33,10 @@ cat > "$WORK/terraformrc" <<EOF
 provider_installation {
   filesystem_mirror {
     path    = "$WORK/mirror"
-    include = ["aostudio.com/*/*"]
+    include = ["registry.terraform.io/ahmedosman00/*"]
   }
   direct {
-    exclude = ["aostudio.com/*/*"]
+    exclude = ["registry.terraform.io/ahmedosman00/*"]
   }
 }
 EOF

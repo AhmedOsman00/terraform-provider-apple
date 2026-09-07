@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"terraform-provider-apple/internal/apple/models"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
 
 // newTestClient points a client at a test server, bypassing JWT creation.

@@ -6,7 +6,7 @@ package passtypeid
 import (
 	"testing"
 
-	"terraform-provider-apple/internal/apple/models"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
 
 func passTypeIDs() []models.PassTypeIDResource {

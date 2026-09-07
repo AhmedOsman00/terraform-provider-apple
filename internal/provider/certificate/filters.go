@@ -9,7 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"terraform-provider-apple/internal/apple/models"
+
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )

@@ -7,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	"terraform-provider-apple/internal/apple/models"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"

@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"strings"
 
-	"terraform-provider-apple/internal/apple/models"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
 
 // GetPassTypeIDs retrieves all Pass Type IDs for the team.

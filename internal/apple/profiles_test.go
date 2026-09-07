@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"terraform-provider-apple/internal/apple/models"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
 
 // TestCreateProfileRequestBody pins the shape of POST /v1/profiles.

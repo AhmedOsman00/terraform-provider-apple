@@ -13,7 +13,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"terraform-provider-apple/internal/provider"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -49,11 +49,10 @@ func main() {
 	}()
 
 	opts := providerserver.ServeOpts{
-		// NOTE: This is not a typical Terraform Registry provider address,
-		// such as registry.terraform.io/hashicorp/hashicups. This specific
-		// provider address is used for manual development testing of this provider.
-		// For production use, this would typically be registry.terraform.io/organization/apple
-		Address: "aostudio.com/aostudio/apple",
+		// The Terraform Registry address this provider is published under.
+		// Terraform normalizes source addresses to lower case, so the registry
+		// namespace "AhmedOsman00" is written here as "ahmedosman00".
+		Address: "registry.terraform.io/ahmedosman00/apple",
 		Debug:   debug,
 	}
 

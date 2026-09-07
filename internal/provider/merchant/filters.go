@@ -8,7 +8,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"terraform-provider-apple/internal/apple/models"
+
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
 
 // MerchantIDFilters represents the filtering configuration for Merchant IDs.

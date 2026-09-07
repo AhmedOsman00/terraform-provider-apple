@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"time"
 
-	"terraform-provider-apple/internal/apple/models"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 
 	"github.com/golang-jwt/jwt/v5"
 )

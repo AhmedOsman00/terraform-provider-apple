@@ -19,7 +19,8 @@ This data source allows you to query and filter Provisioning Profiles based on v
 terraform {
   required_providers {
     apple = {
-      source = "aostudio.com/aostudio/apple"
+      source  = "ahmedosman00/apple"
+      version = "~> 0.1"
     }
   }
 }

@@ -61,15 +61,17 @@ source address:
 terraform {
   required_providers {
     apple = {
-      source = "aostudio.com/aostudio/apple"
+      source  = "ahmedosman00/apple"
+      version = "~> 0.1"
     }
   }
 }
 ```
 
-Then `terraform init && terraform plan`. The provider is not on the Registry, so
-`init` needs a filesystem mirror — `make validate-examples` sets one up
-automatically if you only want to check that the configuration is valid.
+Then `terraform init && terraform plan`. `init` downloads the provider from the
+Terraform Registry; `make validate-examples` instead builds the working tree into
+a throwaway filesystem mirror, which is what you want when checking an example
+against unreleased schema changes.
 
 ~> These examples create real resources in your Apple Developer account, against
 real quotas. Review the plan before applying.

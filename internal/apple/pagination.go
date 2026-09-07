@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"terraform-provider-apple/internal/apple/models"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
 
 const (

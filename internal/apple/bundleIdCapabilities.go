@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"terraform-provider-apple/internal/apple/models"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
 
 // GetBundleIDCapabilities retrieves all capabilities for a specific Bundle ID.

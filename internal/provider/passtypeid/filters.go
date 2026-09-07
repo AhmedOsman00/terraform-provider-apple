@@ -8,7 +8,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"terraform-provider-apple/internal/apple/models"
+
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
 
 // FilterPassTypeIDs applies filtering to a list of Pass Type IDs based on the provided criteria.

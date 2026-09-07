@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"terraform-provider-apple/internal/apple/models"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
 
 func platformPtr(p models.BundleIDPlatform) *models.BundleIDPlatform { return &p }

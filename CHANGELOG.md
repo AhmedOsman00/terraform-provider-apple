@@ -1,5 +1,13 @@
 ## 0.1.0 (Unreleased)
 
+NOTES:
+
+* The provider is published on the Terraform Registry as `ahmedosman00/apple`;
+  `terraform init` installs it, and the Go module path is
+  `github.com/AhmedOsman00/terraform-provider-apple`. Earlier working copies
+  served the development address `aostudio.com/aostudio/apple` and had to be
+  built locally.
+
 FEATURES:
 
 * examples/signing: a runnable module replacing `fastlane match`, covering the App
@@ -22,8 +30,8 @@ DOCUMENTATION:
   resources and seven data sources; previously only `docs/index.md` was checked in,
   so `make generate` produced a diff and the `generate` CI job failed.
 * New guides: `docs/guides/getting-started.md` (creating App Store Connect
-  credentials, installing a provider that is not on the Registry, a first
-  configuration, and importing existing portal resources) and
+  credentials, installing the provider, a first configuration, and importing
+  existing portal resources) and
   `docs/guides/code-signing.md` (the `fastlane match` replacement, the distinction
   between the Terraform state and the signing bundle, and migrating off match).
   Hand-written guides live in `templates/guides/` and render into `docs/guides/`.

@@ -19,7 +19,8 @@ Certificates are used for code signing, app distribution, and other Apple develo
 terraform {
   required_providers {
     apple = {
-      source = "aostudio.com/aostudio/apple"
+      source  = "ahmedosman00/apple"
+      version = "~> 0.1"
     }
   }
 }
