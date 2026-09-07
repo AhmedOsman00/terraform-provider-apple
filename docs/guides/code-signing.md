@@ -289,5 +289,13 @@ profiles or they will carry stale entitlements.
   See the `apple_bundle_id_capability` resource page.
 - Non-iOS platforms. The module hardcodes `IOS`; macOS and tvOS need their own
   certificate and profile types.
+- More than one app. The module manages a single bundle ID; a second app needs a
+  second instance of it, with its own `profile_name_prefix`.
+- Enterprise (`IOS_APP_INHOUSE`) and Developer ID (`MAC_APP_DIRECT`) profile
+  types. The provider supports both — declare `apple_profile` directly.
+- Profile-level early renewal. `var.early_renewal_hours` applies to certificates
+  only. It does not need a profile equivalent: replacing a certificate changes
+  its ID, and `apple_profile.certificates` forces replacement, so rotation
+  already cascades to every profile that uses it.
 - App Store Connect app records, TestFlight, and uploads. The module stops at
   code signing — `xcrun altool` or `fastlane deliver` still handle delivery.
