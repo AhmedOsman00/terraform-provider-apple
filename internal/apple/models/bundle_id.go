@@ -6,11 +6,15 @@ package models
 // Bundle ID platform enumeration.
 type BundleIDPlatform string
 
+// Apple accepts only these three on POST /v1/bundleIds; TV_OS and WATCH_OS are
+// rejected with "'TV_OS' is not a valid value for the attribute 'platform'.
+// Expected one of: 'IOS', 'MAC_OS', 'UNIVERSAL'". tvOS and watchOS App IDs are
+// created as UNIVERSAL, which is also what Apple stores for every value it does
+// accept.
 const (
-	IOS     BundleIDPlatform = "IOS"
-	MACOS   BundleIDPlatform = "MAC_OS"
-	TVOS    BundleIDPlatform = "TV_OS"
-	WATCHOS BundleIDPlatform = "WATCH_OS"
+	IOS       BundleIDPlatform = "IOS"
+	MACOS     BundleIDPlatform = "MAC_OS"
+	UNIVERSAL BundleIDPlatform = "UNIVERSAL"
 )
 
 // Bundle ID resource model.

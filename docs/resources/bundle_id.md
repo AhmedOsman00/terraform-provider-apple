@@ -173,8 +173,9 @@ resource "apple_bundle_id_capability" "apple_pay_premium" {
 - `platform` (String) The platform for the Bundle ID. Valid values are:
 - `IOS` - iOS platform
 - `MAC_OS` - macOS platform
-- `TV_OS` - tvOS platform
-- `WATCH_OS` - watchOS platform
+- `UNIVERSAL` - all platforms
+
+Apple accepts no other value: tvOS and watchOS App IDs are created as `UNIVERSAL`. Note that Apple stores every Bundle ID as `UNIVERSAL` regardless of what is sent, so this attribute records what was configured rather than what Apple reports back.
 
 This cannot be changed after creation.
 

@@ -47,8 +47,11 @@ type bundleIDsDataSourceModel struct {
 
 // Bundle ID platform constants and validators.
 var (
-	// ValidPlatforms contains all supported Bundle ID platforms.
-	ValidPlatforms = []string{"IOS", "MAC_OS", "TV_OS", "WATCH_OS"}
+	// ValidPlatforms contains the platforms Apple accepts when creating a
+	// Bundle ID. TV_OS and WATCH_OS are not among them -- Apple rejects both
+	// with a 409 naming IOS, MAC_OS and UNIVERSAL as the only options -- and
+	// tvOS and watchOS App IDs are created as UNIVERSAL instead.
+	ValidPlatforms = []string{"IOS", "MAC_OS", "UNIVERSAL"}
 
 	// PlatformValidator validates platform values.
 	PlatformValidator = stringvalidator.OneOf(ValidPlatforms...)
@@ -91,4 +94,19 @@ func GetPatternValidator() []validator.String {
 			"Pattern must be a valid regular expression",
 		),
 	}
+}
+
+// isCreatablePlatform reports whether a platform is one Apple accepts as input.
+//
+// Read uses it to tell a value that could have come from configuration apart
+// from one only Apple could have produced, so refreshing an imported Bundle ID
+// still records what Apple reports while a configured platform is preserved.
+func isCreatablePlatform(platform string) bool {
+	for _, valid := range ValidPlatforms {
+		if platform == valid {
+			return true
+		}
+	}
+
+	return false
 }

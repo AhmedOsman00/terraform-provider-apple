@@ -31,12 +31,15 @@ func TestAccBundleIDResource_basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("apple_bundle_id.test", "seed_id"),
 				),
 			},
-			// ImportState testing
+			// ImportState testing. platform is ignored because Apple stores
+			// every Bundle ID as UNIVERSAL whatever was sent, so an import can
+			// only ever recover UNIVERSAL while the configuration says IOS.
 			{
-				ResourceName:      "apple_bundle_id.test",
-				ImportState:       true,
-				ImportStateVerify: true,
-				ImportStateIdFunc: testAccBundleIDImportStateIDFunc("apple_bundle_id.test"),
+				ResourceName:            "apple_bundle_id.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"platform"},
+				ImportStateIdFunc:       testAccBundleIDImportStateIDFunc("apple_bundle_id.test"),
 			},
 			// Update and Read testing (only name can be updated)
 			{
@@ -52,8 +55,12 @@ func TestAccBundleIDResource_basic(t *testing.T) {
 	})
 }
 
+// TestAccBundleIDResource_platforms covers every platform Apple accepts on
+// create. TV_OS and WATCH_OS are not among them: Apple rejects both with a 409
+// naming IOS, MAC_OS and UNIVERSAL, and tvOS and watchOS App IDs are created as
+// UNIVERSAL.
 func TestAccBundleIDResource_platforms(t *testing.T) {
-	platforms := []string{"IOS", "MAC_OS", "TV_OS", "WATCH_OS"}
+	platforms := []string{"IOS", "MAC_OS", "UNIVERSAL"}
 
 	for _, platform := range platforms {
 		t.Run(platform, func(t *testing.T) {

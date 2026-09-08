@@ -49,8 +49,9 @@ func (d *bundleIDsDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 				MarkdownDescription: "Filter Bundle IDs by platform. Valid values are:\n" +
 					"- `IOS` - iOS platform\n" +
 					"- `MAC_OS` - macOS platform\n" +
-					"- `TV_OS` - tvOS platform\n" +
-					"- `WATCH_OS` - watchOS platform\n\n" +
+					"- `UNIVERSAL` - all platforms\n\n" +
+					"Apple stores every Bundle ID as `UNIVERSAL`, so filtering on `IOS` or `MAC_OS` matches " +
+					"nothing for Bundle IDs created through the API.\n\n" +
 					"Cannot be used together with `platforms`.",
 				Optional:   true,
 				Validators: []validator.String{PlatformValidator},
@@ -129,7 +130,7 @@ func (d *bundleIDsDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 							Computed:            true,
 						},
 						"platform": schema.StringAttribute{
-							MarkdownDescription: "The platform for the Bundle ID (IOS, MAC_OS, TV_OS, WATCH_OS).",
+							MarkdownDescription: "The platform for the Bundle ID, as reported by Apple. In practice this is always `UNIVERSAL`.",
 							Computed:            true,
 						},
 						"seed_id": schema.StringAttribute{

@@ -72,8 +72,10 @@ func (r *bundleIDResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				MarkdownDescription: "The platform for the Bundle ID. Valid values are:\n" +
 					"- `IOS` - iOS platform\n" +
 					"- `MAC_OS` - macOS platform\n" +
-					"- `TV_OS` - tvOS platform\n" +
-					"- `WATCH_OS` - watchOS platform\n\n" +
+					"- `UNIVERSAL` - all platforms\n\n" +
+					"Apple accepts no other value: tvOS and watchOS App IDs are created as `UNIVERSAL`. " +
+					"Note that Apple stores every Bundle ID as `UNIVERSAL` regardless of what is sent, so this " +
+					"attribute records what was configured rather than what Apple reports back.\n\n" +
 					"This cannot be changed after creation.",
 				Required:   true,
 				Validators: []validator.String{PlatformValidator},
@@ -144,7 +146,9 @@ func (r *bundleIDResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	// Map response body to schema and populate computed attribute values
+	// Map response body to schema and populate computed attribute values.
+	// platform is left as configured for the reason Read documents: Apple
+	// answers UNIVERSAL whatever was sent.
 	plan.ID = types.StringValue(bundleID.ID)
 	plan.SeedID = types.StringValue(bundleID.Attributes.SeedID)
 
@@ -203,8 +207,19 @@ func (r *bundleIDResource) Read(ctx context.Context, req resource.ReadRequest, r
 	state.ID = types.StringValue(bundleID.ID)
 	state.Identifier = types.StringValue(bundleID.Attributes.Identifier)
 	state.Name = types.StringValue(bundleID.Attributes.Name)
-	state.Platform = types.StringValue(string(bundleID.Attributes.Platform))
 	state.SeedID = types.StringValue(bundleID.Attributes.SeedID)
+
+	// platform is deliberately not refreshed. Apple accepts IOS, MAC_OS and
+	// UNIVERSAL on create and then stores every one of them as UNIVERSAL, so
+	// the value it reports back is not the value that was sent. Refreshing from
+	// the response would rewrite a configured "IOS" to "UNIVERSAL", and
+	// platform is RequiresReplace -- so the next plan would destroy and
+	// recreate the Bundle ID, taking its capabilities with it. Prior state is
+	// kept unless Apple reports a platform that was never a valid input, which
+	// only happens for a Bundle ID this provider did not create.
+	if p := string(bundleID.Attributes.Platform); state.Platform.IsNull() || !isCreatablePlatform(p) {
+		state.Platform = types.StringValue(p)
+	}
 
 	tflog.Debug(ctx, "Bundle ID read successfully")
 

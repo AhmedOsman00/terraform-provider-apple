@@ -69,8 +69,9 @@ output "ios_bundle_identifiers" {
 - `platform` (String) Filter Bundle IDs by platform. Valid values are:
 - `IOS` - iOS platform
 - `MAC_OS` - macOS platform
-- `TV_OS` - tvOS platform
-- `WATCH_OS` - watchOS platform
+- `UNIVERSAL` - all platforms
+
+Apple stores every Bundle ID as `UNIVERSAL`, so filtering on `IOS` or `MAC_OS` matches nothing for Bundle IDs created through the API.
 
 Cannot be used together with `platforms`.
 - `platforms` (List of String) Filter Bundle IDs by multiple platforms. Accepts a list of platform values.
@@ -99,5 +100,5 @@ Read-Only:
 - `id` (String) The unique Apple-generated identifier for the Bundle ID.
 - `identifier` (String) The Bundle ID identifier string in reverse domain format.
 - `name` (String) The human-readable name for the Bundle ID.
-- `platform` (String) The platform for the Bundle ID (IOS, MAC_OS, TV_OS, WATCH_OS).
+- `platform` (String) The platform for the Bundle ID, as reported by Apple. In practice this is always `UNIVERSAL`.
 - `seed_id` (String) The seed ID for the Bundle ID, assigned by Apple.

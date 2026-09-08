@@ -13,7 +13,7 @@ import (
 func bundleIDs() []models.BundleID {
 	return []models.BundleID{
 		{ID: "1", Attributes: models.BundleIDAttributes{Identifier: "com.example.app", Name: "Example App", Platform: models.IOS}},
-		{ID: "2", Attributes: models.BundleIDAttributes{Identifier: "com.example.watch", Name: "Example Watch", Platform: models.WATCHOS}},
+		{ID: "2", Attributes: models.BundleIDAttributes{Identifier: "com.example.watch", Name: "Example Watch", Platform: models.UNIVERSAL}},
 		{ID: "3", Attributes: models.BundleIDAttributes{Identifier: "com.other.tool", Name: "Other Tool", Platform: models.MACOS}},
 	}
 }
