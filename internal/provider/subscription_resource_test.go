@@ -386,7 +386,8 @@ resource "apple_subscription_localization" "test" {
 data "apple_subscription_price_points" "test" {
   subscription_id = apple_subscription.test.id
   territories     = ["USA"]
-  limit           = 5
+  customer_price  = "0.99"
+  limit           = 1
 }
 
 resource "apple_subscription_price" "test" {
