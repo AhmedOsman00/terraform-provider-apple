@@ -14,6 +14,7 @@ import (
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/bundle"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/certificate"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/device"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/inapppurchase"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/merchant"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/passtypeid"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/profile"
@@ -293,6 +294,8 @@ func (p *appleProvider) DataSources(_ context.Context) []func() datasource.DataS
 		subscription.NewSubscriptionGroupsDataSource,
 		subscription.NewSubscriptionsDataSource,
 		subscription.NewSubscriptionPricePointsDataSource,
+		inapppurchase.NewInAppPurchasesDataSource,
+		inapppurchase.NewInAppPurchasePricePointsDataSource,
 	}
 }
 
@@ -310,5 +313,9 @@ func (p *appleProvider) Resources(_ context.Context) []func() resource.Resource 
 		subscription.NewSubscriptionResource,
 		subscription.NewSubscriptionLocalizationResource,
 		subscription.NewSubscriptionPriceResource,
+		inapppurchase.NewInAppPurchaseResource,
+		inapppurchase.NewInAppPurchaseLocalizationResource,
+		inapppurchase.NewInAppPurchasePriceScheduleResource,
+		inapppurchase.NewInAppPurchaseAvailabilityResource,
 	}
 }

@@ -57,6 +57,10 @@ type BundleIDCapabilityUpdateAttributes struct {
 // WALLET_PASSES -- so do not "correct" them. Types the App Store Connect API
 // does not model at all (APP_ATTEST, WEATHER_KIT, GROUP_ACTIVITIES and the
 // rest) are deliberately absent: they are configured in Xcode, not here.
+//
+// InAppPurchaseCapability carries the suffix because the bare name belongs to
+// the App Store Connect product in in_app_purchase.go -- the Bundle ID
+// capability and the purchase itself are unrelated resources.
 type CapabilityType string
 
 const (
@@ -74,7 +78,7 @@ const (
 	HomeKit                        CapabilityType = "HOMEKIT"
 	HotSpot                        CapabilityType = "HOT_SPOT"
 	ICloud                         CapabilityType = "ICLOUD"
-	InAppPurchase                  CapabilityType = "IN_APP_PURCHASE"
+	InAppPurchaseCapability        CapabilityType = "IN_APP_PURCHASE"
 	InterAppAudio                  CapabilityType = "INTER_APP_AUDIO"
 	Maps                           CapabilityType = "MAPS"
 	Multipath                      CapabilityType = "MULTIPATH"
@@ -153,7 +157,7 @@ var ValidCapabilityTypes = []string{
 	string(HomeKit),
 	string(HotSpot),
 	string(ICloud),
-	string(InAppPurchase),
+	string(InAppPurchaseCapability),
 	string(InterAppAudio),
 	string(Maps),
 	string(Multipath),

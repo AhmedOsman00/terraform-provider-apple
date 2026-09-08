@@ -141,6 +141,22 @@ in-memory filtering, `sort_by`, `sort_order`, and `limit`.
 | `apple_pass_type_id` | `apple_pass_type_ids` | Apple Wallet Pass Type IDs |
 | `apple_profile` | `apple_profiles` | Provisioning profiles |
 
+Those are Developer Portal resources. The App Store Connect side hangs off an
+app record instead, which Apple's API cannot create — `apple_apps` reads one,
+and there is deliberately no `apple_app` resource.
+
+| Resource | Data source | Manages |
+|---|---|---|
+| — | `apple_apps` | App records (read-only) |
+| `apple_subscription_group` | `apple_subscription_groups` | Auto-renewable subscription groups |
+| `apple_subscription` | `apple_subscriptions` | Auto-renewable subscriptions |
+| `apple_subscription_localization` | — | Customer-facing subscription name and description |
+| `apple_subscription_price` | `apple_subscription_price_points` | Subscription prices, per territory |
+| `apple_in_app_purchase` | `apple_in_app_purchases` | One-time purchases: consumables, non-consumables, non-renewing subscriptions |
+| `apple_in_app_purchase_localization` | — | Customer-facing purchase name and description |
+| `apple_in_app_purchase_price_schedule` | `apple_in_app_purchase_price_points` | The price of a one-time purchase |
+| `apple_in_app_purchase_availability` | — | The territories a one-time purchase sells in |
+
 Behaviour worth knowing before you plan against a real team:
 
 - **Destroying an `apple_certificate` revokes it at Apple**, and every build
@@ -154,6 +170,17 @@ Behaviour worth knowing before you plan against a real team:
   forces replacement and Apple does not reliably return the original CSR, so the
   next apply reissues — and revokes the original. Read it through the
   `apple_certificates` data source instead.
+- **App Store Connect resources are incomplete until their metadata exists.** A
+  new `apple_subscription` or `apple_in_app_purchase` reports `MISSING_METADATA`
+  until its localization, price and — for a one-time purchase — availability are
+  applied. Submitting for review stays a manual step.
+- **A price schedule and an availability cannot be destroyed.** Apple publishes
+  no `DELETE` for either, so `terraform destroy` drops them from state and warns;
+  the values stay as last set. Narrow `available_territories` rather than
+  destroying.
+- **Apple never releases a product identifier.** Replacing an
+  `apple_in_app_purchase.product_id`, or destroying the purchase, reserves that
+  identifier forever — including for purchases deleted before review.
 
 ## Replacing fastlane match
 

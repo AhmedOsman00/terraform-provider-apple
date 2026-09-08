@@ -10,6 +10,20 @@ NOTES:
 
 FEATURES:
 
+* **New:** one-time in-app purchase support, covering `apple_in_app_purchase`,
+  `apple_in_app_purchase_localization`, `apple_in_app_purchase_price_schedule`
+  and `apple_in_app_purchase_availability`, with `apple_in_app_purchases` and
+  `apple_in_app_purchase_price_points` data sources. These are the consumables,
+  non-consumables and non-renewing subscriptions of the App Store — a different
+  Apple resource from auto-renewable subscriptions, sharing nothing with them,
+  price points included. Three shapes are worth knowing before you plan:
+  `app_id` is write-once and unreadable, because Apple's in-app purchase
+  resource has no app relationship at all, so import takes
+  `<app_id>/<in_app_purchase_id>`; localizations sit behind an in-app purchase
+  version, which the provider resolves and reports as `version_id`; and the
+  price schedule and availability are singular records Apple replaces with a
+  `POST` and publishes no `DELETE` for, so they update in place and cannot be
+  destroyed.
 * **New:** auto-renewable subscription support, covering `apple_subscription_group`,
   `apple_subscription`, `apple_subscription_localization` and
   `apple_subscription_price`, with `apple_subscription_groups`,

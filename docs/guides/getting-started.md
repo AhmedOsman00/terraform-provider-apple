@@ -298,6 +298,20 @@ from the string's shape:
 | `apple_pass_type_id` | Apple ID, or identifier (`pass.com.example.loyalty`) |
 | `apple_profile` | Apple ID, or profile name |
 
+The App Store Connect resources are stricter, because Apple reports less about
+them. Anything whose parent cannot be read back takes a composite ID:
+
+| Resource | Accepted import IDs |
+|---|---|
+| `apple_subscription_group` | `<app_id>/<group_id>` |
+| `apple_subscription` | Apple ID |
+| `apple_subscription_localization` | Apple ID, or `<subscription_id>/<localization_id>` |
+| `apple_subscription_price` | `<subscription_id>/<price_id>` |
+| `apple_in_app_purchase` | `<app_id>/<in_app_purchase_id>` |
+| `apple_in_app_purchase_localization` | Apple ID, or `<in_app_purchase_id>/<localization_id>` |
+| `apple_in_app_purchase_price_schedule` | `<in_app_purchase_id>` |
+| `apple_in_app_purchase_availability` | `<in_app_purchase_id>` |
+
 ```bash
 terraform import apple_bundle_id.app com.example.myapp
 terraform import apple_device.tester 00008030-000A4D8E0AB8802E
@@ -312,6 +326,20 @@ response does not name its parent Bundle ID, so a bare capability ID imports wit
 terraform import apple_bundle_id_capability.push "ABCD123456/XYZW987654"
 ```
 
+`apple_subscription_group` and `apple_in_app_purchase` need the app ID for the
+same reason: Apple never reports which app they belong to, so a bare ID imports
+with `app_id` null — and `app_id` forces replacement, which for an in-app
+purchase would destroy it and reserve its product identifier forever.
+
+The last two are the odd ones. A purchase has exactly one price schedule and one
+availability record, and Apple publishes no collection of either, so the import
+ID is the purchase itself:
+
+```bash
+terraform import apple_in_app_purchase.pro_unlock "6478123456/6739472901"
+terraform import apple_in_app_purchase_price_schedule.pro_unlock 6739472901
+```
+
 !> **Do not import `apple_certificate` if you are still using the certificate.**
 `csr_content` forces replacement and Apple does not reliably return the CSR a
 certificate was issued from, so an imported certificate is reissued on the next
@@ -323,8 +351,14 @@ source instead, or see the adoption approach in
 
 Every resource has a matching plural data source (`apple_bundle_ids`,
 `apple_certificates`, `apple_devices`, `apple_merchant_ids`,
-`apple_pass_type_ids`, `apple_profiles`, `apple_bundle_id_capabilities`) for
-referring to things another state owns.
+`apple_pass_type_ids`, `apple_profiles`, `apple_bundle_id_capabilities`,
+`apple_apps`, `apple_subscription_groups`, `apple_subscriptions`,
+`apple_in_app_purchases`) for referring to things another state owns.
+
+Two of them are catalogues rather than listings: `apple_subscription_price_points`
+and `apple_in_app_purchase_price_points` read Apple's permitted prices, which is
+where the `price_point_id` a price references comes from. Always pass
+`territories` — the unfiltered catalogue covers every storefront Apple sells in.
 
 ```terraform
 data "apple_certificates" "distribution" {

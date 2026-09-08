@@ -37,9 +37,9 @@ Assuming every test passes and every destroy completes:
 |---|---|---|
 | **Permanent** | 2 | Device registrations that can never be removed — one iOS, one Mac. Terraform disables them; they still occupy slots until the membership year renews. |
 | **Transient peak** | 2 | Certificates alive at once, at most. Tests run sequentially and each revokes what it issued. |
-| **Net zero** | 9 | Resource kinds fully cleaned up: Bundle IDs, capabilities, Merchant IDs, Pass Type IDs, profiles, subscription groups, subscriptions, localizations, prices. |
-| **Reserved forever** | ~7 | Subscription product identifiers, randomised per run. Invisible once deleted, drawn from an unlimited namespace — see [Subscriptions](#subscriptions). |
-| **Touch nothing** | 22 | Tests rejected at plan time or read-only. |
+| **Net zero** | 13 | Resource kinds fully cleaned up: Bundle IDs, capabilities, Merchant IDs, Pass Type IDs, profiles, subscription groups, subscriptions, localizations, prices, in-app purchases, their localizations, price schedules and availability. |
+| **Reserved forever** | ~13 | Subscription and in-app purchase product identifiers, randomised per run. Invisible once deleted, drawn from an unlimited namespace — see [Subscriptions](#subscriptions) and [In-app purchases](#in-app-purchases). |
+| **Touch nothing** | 23 | Tests rejected at plan time or read-only. |
 
 ### Certificates come back; devices do not
 
@@ -69,9 +69,9 @@ not a soft delete.
 ## Where each thing appears in the portal
 
 Most of it lands under **Certificates, Identifiers & Profiles** on
-developer.apple.com. The subscription tests are the exception: they work in App
-Store Connect proper, under the app named by `APPLE_TEST_APP_ID`. Neither tier
-creates apps, builds or submissions.
+developer.apple.com. The subscription and in-app purchase tests are the
+exception: they work in App Store Connect proper, under the app named by
+`APPLE_TEST_APP_ID`. Neither tier creates apps, builds or submissions.
 
 | Resource | Portal location |
 |---|---|
@@ -85,6 +85,8 @@ creates apps, builds or submissions.
 | Subscription groups | App Store Connect → the app → Monetization → Subscriptions |
 | Subscriptions | App Store Connect → the app → Monetization → Subscriptions → open the group |
 | Localizations and prices | App Store Connect → open the subscription |
+| In-app purchases | App Store Connect → the app → Monetization → In-App Purchases |
+| Purchase metadata, price and availability | App Store Connect → open the in-app purchase |
 
 ## Devices — the only irreversible tests
 
@@ -238,6 +240,50 @@ different subscription is rejected. That is why
 `TestAccSubscriptionResource_completesMetadata` reads the catalogue through a
 data source in the same configuration rather than hardcoding an ID.
 
+## In-app purchases
+
+**These tests need the same app the subscription tests do**, and skip without
+`APPLE_TEST_APP_ID` for the same reason — `testAccPreCheckInAppPurchase` is a
+thin wrapper over `testAccPreCheckSubscription`.
+
+These are one-time purchases: consumables, non-consumables and non-renewing
+subscriptions. They are a *different* Apple resource from auto-renewable
+subscriptions and appear in a different part of App Store Connect, so a leftover
+from one never blocks the other.
+
+**Apple never releases an in-app purchase product identifier either**, so these
+tests randomise theirs the way the subscription tests do — each run permanently
+consumes a few identifiers of the form `com.test.terraform.iap<random>`.
+
+Everything is deletable while it has never been approved. Two of the resources
+have no `DELETE` of their own — a price schedule and an availability record —
+but deleting the purchase takes them with it, so a completed run is still net
+zero. An *interrupted* run is the case to watch: a purchase left behind carries
+its price and availability with it, and both are visible in the portal.
+
+| Test | Residue | Creates at Apple | What you see in the portal |
+|---|---|---|---|
+| `TestAccInAppPurchaseResource_basic` | Net zero | One non-consumable; renames it, turns on Family Sharing and adds a review note; imports as `<app>/<purchase>`. | A purchase appears showing *Missing Metadata*, its name changes, then it is deleted. |
+| `TestAccInAppPurchaseResource_importRejectsBareID` | Net zero | One non-consumable; then attempts a bare-ID import and expects it to be refused. | A purchase appears and is deleted. The failed import changes nothing. |
+| `TestAccInAppPurchaseResource_completesMetadata` | Net zero | A purchase, an `en-US` localization, a USA price read from the price point catalogue, and availability in USA only. Imports all three children. | A purchase with a name, a price and one territory, all of it then deleted. |
+| `TestAccInAppPurchaseResource_validation` | Plan-only | Nothing. | No change. |
+| `TestAccInAppPurchasesDataSource_basic` | Net zero | Two purchases — one non-consumable, one consumable — read back through three data sources. | Two purchases appear and are deleted. |
+| `TestAccInAppPurchasePricePointsDataSource_basic` | Net zero | One purchase; reads Apple's price catalogue for USA and for USA+GBR. | A purchase appears and is deleted. The catalogue is read-only. |
+
+Three API shapes explain most failures here, and they are not the subscription
+ones. The purchase record has **no app relationship at all**, so nothing can be
+imported without the app ID and `app_id` is never refreshed. Localizations hang
+off an **in-app purchase version** rather than the purchase, so the provider
+resolves one and may create it — versions cannot be deleted, and one created this
+way survives the test that caused it. And the price schedule and availability are
+**singular records replaced by a `POST`** with no `PATCH` and no `DELETE`, so a
+`terraform destroy` of either alone only drops state and warns.
+
+A price point ID encodes the purchase it belongs to — and a subscription's price
+points are meaningless here — which is why
+`TestAccInAppPurchaseResource_completesMetadata` reads the catalogue through a
+data source in the same configuration rather than hardcoding an ID.
+
 ## Merchant IDs
 
 Deletable. Apple rejects duplicates, so leftovers block re-runs.
@@ -329,13 +375,20 @@ App Store Connect → the APPLE_TEST_APP_ID app → Monetization → Subscriptio
   Any group named "Terraform Test / Renamed / Import / Sub / Full /
   Replace / DS / SubDS / PP <random>"     → delete it, and the
                                              subscriptions inside it first
+
+App Store Connect → the APPLE_TEST_APP_ID app → Monetization → In-App Purchases
+  Any purchase whose product ID starts with
+  "com.test.terraform.iap"                → delete it. Its price and
+                                             availability go with it; neither
+                                             can be deleted on its own.
 ```
 
-Subscription leftovers do not block the next run the way the others do: both the
-group reference name and the product identifiers are randomised, so a second run
-collides with nothing. Clean them up anyway — an abandoned subscription still
-shows in the portal, and a group cannot be deleted once anything inside it has
-been approved.
+App Store Connect leftovers do not block the next run the way the others do:
+group reference names and every product identifier are randomised, so a second
+run collides with nothing. Clean them up anyway — an abandoned subscription or
+purchase still shows in the portal, and neither can be deleted once it has been
+approved. An interrupted in-app purchase run may also leave an extra *in-app
+purchase version* behind; versions have no delete endpoint and are harmless.
 
 ## How to run it
 
@@ -350,8 +403,9 @@ export APPLE_APP_STORE_CONNECT_ISSUER_ID=...
 export APPLE_APP_STORE_CONNECT_API_KEY=...
 export APPLE_APP_STORE_CONNECT_PRIVATE_KEY="$(cat AuthKey_XXXXXXXXXX.p8)"
 
-# Optional. Without it every TestAccSubscription* and TestAccApps* test skips
-# itself, because Apple's API cannot create the app record they hang off.
+# Optional. Without it every TestAccSubscription*, TestAccInAppPurchase* and
+# TestAccApps* test skips itself, because Apple's API cannot create the app
+# record they hang off.
 export APPLE_TEST_APP_ID=6448459855
 
 # 1. Read-only first — proves the credentials work, creates nothing.
