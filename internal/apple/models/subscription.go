@@ -320,3 +320,50 @@ type SubscriptionPricePointAttributes struct {
 type SubscriptionPricePointRelationships struct {
 	Territory *ResourceIdentifier `json:"territory,omitempty"`
 }
+
+// --- Subscription availability ---
+
+// SubscriptionAvailability is the set of territories a subscription sells in.
+//
+// The same shape as InAppPurchaseAvailability, and separate for the same reason
+// the two price catalogues are: Apple models auto-renewable subscriptions and
+// one-time purchases as different resources, with different endpoints, and an
+// availability record for one is not addressable as the other.
+//
+// Apple publishes no PATCH and no DELETE for it: changing availability means
+// POSTing a new one for the same subscription, which replaces the old.
+type SubscriptionAvailability struct {
+	Type          string                                 `json:"type"`
+	ID            string                                 `json:"id"`
+	Attributes    SubscriptionAvailabilityAttributes     `json:"attributes"`
+	Relationships *SubscriptionAvailabilityRelationships `json:"relationships,omitempty"`
+	Links         *ResourceLinks                         `json:"links,omitempty"`
+}
+
+// SubscriptionAvailabilityAttributes holds the one attribute Apple keeps
+// outside the territory list: whether territories the App Store adds in future
+// are opted into automatically.
+type SubscriptionAvailabilityAttributes struct {
+	AvailableInNewTerritories *bool `json:"availableInNewTerritories,omitempty"`
+}
+
+type SubscriptionAvailabilityRelationships struct {
+	AvailableTerritories *ResourceIdentifiers `json:"availableTerritories,omitempty"`
+}
+
+type SubscriptionAvailabilityCreateRequest struct {
+	Type          string                                      `json:"type"`
+	Attributes    SubscriptionAvailabilityCreateAttributes    `json:"attributes"`
+	Relationships SubscriptionAvailabilityCreateRelationships `json:"relationships"`
+}
+
+// SubscriptionAvailabilityCreateAttributes takes availableInNewTerritories as a
+// plain bool: Apple documents it as required, so it is always sent.
+type SubscriptionAvailabilityCreateAttributes struct {
+	AvailableInNewTerritories bool `json:"availableInNewTerritories"`
+}
+
+type SubscriptionAvailabilityCreateRelationships struct {
+	Subscription         ResourceIdentifier  `json:"subscription"`
+	AvailableTerritories ResourceIdentifiers `json:"availableTerritories"`
+}

@@ -124,7 +124,6 @@ func (r *subscriptionPriceResource) Schema(_ context.Context, _ resource.SchemaR
 	}
 }
 
-// Create a new resource.
 // territorySuffix names the territory in an error when one was configured.
 // A price usually derives its territory from the price point, so the attribute
 // is absent more often than not and an empty clause reads better than "<null>".
@@ -135,6 +134,7 @@ func territorySuffix(territoryID types.String) string {
 	return fmt.Sprintf(" in territory '%s'", territoryID.ValueString())
 }
 
+// Create a new resource.
 func (r *subscriptionPriceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	tflog.Info(ctx, "Creating subscription price resource")
 
@@ -176,12 +176,33 @@ func (r *subscriptionPriceResource) Create(ctx context.Context, req resource.Cre
 					"apple_subscription_price_points data source scoped to subscription '%s'.",
 					err.Error(), plan.SubscriptionID.ValueString()),
 			)
-		default:
+		case strings.Contains(errMsg, "processing the pricing information"):
 			// Apple answers a rejected price with "An error occurred while
 			// processing the pricing information" and nothing else -- no
-			// mention of which part of the request it objected to. Name the
-			// price point and territory here, because they are the only inputs
-			// and the message cannot be diagnosed without them.
+			// mention of which part of the request it objected to. The usual
+			// cause is the one that message is least likely to suggest: the
+			// subscription has no availability record, so there is no territory
+			// it can be priced in. Apple requires availability before pricing
+			// and reports its absence only here.
+			resp.Diagnostics.AddError(
+				"Error Creating Subscription Price",
+				fmt.Sprintf("Could not create price for subscription '%s' from price point '%s'%s: %s\n\n"+
+					"Apple rejects a price with this message when the subscription has no availability "+
+					"record, which it requires before any pricing. Add an apple_subscription_availability "+
+					"for subscription '%s' listing the territory this price point belongs to, and make "+
+					"this resource depend on it.\n\n"+
+					"The same message also covers a price point that is not valid for this subscription, "+
+					"and a second price for a territory that already has one at the same start date.",
+					plan.SubscriptionID.ValueString(),
+					plan.PricePointID.ValueString(),
+					territorySuffix(plan.TerritoryID),
+					err.Error(),
+					plan.SubscriptionID.ValueString()),
+			)
+		default:
+			// Name the price point and territory even when the message is
+			// unfamiliar: they are the only inputs, and Apple's pricing errors
+			// are rarely diagnosable without them.
 			resp.Diagnostics.AddError(
 				"Error Creating Subscription Price",
 				fmt.Sprintf("Could not create price for subscription '%s' from price point '%s'%s: %s",

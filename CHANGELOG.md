@@ -32,12 +32,20 @@ FEATURES:
   it must be declared `sensitive = true`.
 * **App Store Connect — auto-renewable subscriptions:**
   `apple_subscription_group`, `apple_subscription`,
-  `apple_subscription_localization` and `apple_subscription_price`, with
-  `apple_subscription_groups`, `apple_subscriptions` and
-  `apple_subscription_price_points` data sources. These behave differently from
-  Developer Portal resources: they hang off an app record, and Apple publishes
-  no top-level collection for any of them, so every listing takes a required
-  scope argument and several import forms are composite.
+  `apple_subscription_localization`, `apple_subscription_price` and
+  `apple_subscription_availability`, with `apple_subscription_groups`,
+  `apple_subscriptions` and `apple_subscription_price_points` data sources.
+  These behave differently from Developer Portal resources: they hang off an
+  app record, and Apple publishes no top-level collection for any of them, so
+  every listing takes a required scope argument and several import forms are
+  composite. Two ordering rules are worth knowing before the first apply. A
+  subscription needs an `apple_subscription_availability` before it can be
+  priced — Apple rejects a price without one and says only that "an error
+  occurred while processing the pricing information", so declare `depends_on`
+  from the price to the availability, since nothing else connects them. And
+  like the in-app purchase availability, the record is a singular one Apple
+  replaces with a `POST` and publishes no `DELETE` for: it updates in place and
+  cannot be destroyed.
 * **App Store Connect — one-time in-app purchases:** `apple_in_app_purchase`,
   `apple_in_app_purchase_localization`, `apple_in_app_purchase_price_schedule`
   and `apple_in_app_purchase_availability`, with `apple_in_app_purchases` and
@@ -74,7 +82,7 @@ FEATURES:
 
 DOCUMENTATION:
 
-* Generated reference pages for all fifteen resources and thirteen data
+* Generated reference pages for all sixteen resources and thirteen data
   sources, built by `tfplugindocs` from the schemas and the matching
   directories under `examples/`.
 * Two hand-written guides: `docs/guides/getting-started.md` (creating App Store

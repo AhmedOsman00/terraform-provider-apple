@@ -217,7 +217,7 @@ convention differs here.
 | `TestAccSubscriptionGroupResource_basic` | Net zero | A subscription group under the test app, renamed once, then imported as `<app>/<group>`. | A group appears under *Subscriptions*, its reference name changes, then it is deleted. |
 | `TestAccSubscriptionGroupResource_importRejectsBareID` | Net zero | One group; then attempts a bare-ID import and expects it to be refused. | A group appears and is deleted. The failed import changes nothing. |
 | `TestAccSubscriptionResource_basic` | Net zero | A group plus one subscription; renames it and changes its period from `ONE_MONTH` to `ONE_YEAR`; imports by bare ID. | A subscription appears inside the group showing *Missing Metadata*, its name and duration change, then both are deleted. |
-| `TestAccSubscriptionResource_completesMetadata` | Net zero | A group, a subscription, an `en-US` localization, and a USA price read from the price point catalogue. | A subscription that leaves *Missing Metadata* once its name and price are set. All of it is then deleted. |
+| `TestAccSubscriptionResource_completesMetadata` | Net zero | A group, a subscription, an `en-US` localization, a USA availability, and a USA price read from the price point catalogue. Imports all three children. | A subscription that leaves *Missing Metadata* once its name and price are set. All of it is then deleted. |
 | `TestAccSubscriptionResource_requiresReplace` | Net zero | A group plus a subscription, replaced by one with a different product ID. **Consumes two identifiers rather than one.** | One subscription appears, then is destroyed and replaced by another. |
 | `TestAccSubscriptionResource_validation` | Plan-only | Nothing. | No change. |
 | `TestAccAppsDataSource_basic` | Read-only | Nothing — apps cannot be created by the API. | No change. |
@@ -239,6 +239,17 @@ A price point ID encodes the subscription it belongs to, so one read from a
 different subscription is rejected. That is why
 `TestAccSubscriptionResource_completesMetadata` reads the catalogue through a
 data source in the same configuration rather than hardcoding an ID.
+
+**A subscription cannot be priced before it is available.** Apple rejects
+`POST /v1/subscriptionPrices` with a 409 reading only "an error occurred while
+processing the pricing information" until the subscription has a
+`subscriptionAvailabilities` record, and names neither the availability nor the
+territory. Nothing in a price references an availability, so
+`testAccSubscriptionCompleteConfig` declares `depends_on` to order them; without
+it Terraform is free to create the price first and the test fails
+intermittently. The availability is one of the two resources in the suite that
+cannot be deleted in its own right — destroying the subscription takes it along,
+which is why the test is still net zero.
 
 ## In-app purchases
 

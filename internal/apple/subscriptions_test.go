@@ -252,3 +252,87 @@ func TestCreateSubscriptionPriceOmitsEmptyAttributes(t *testing.T) {
 		t.Errorf("startDate = %v, want %q", attrs["startDate"], startDate)
 	}
 }
+
+// TestCreateSubscriptionAvailabilityRequest pins the request shape.
+//
+// A subscription availability is a prerequisite for pricing, and Apple reports
+// a malformed one the same opaque way it reports a missing one -- so the
+// relationship names and territory type are worth asserting rather than
+// discovering through a 409 that says nothing.
+func TestCreateSubscriptionAvailabilityRequest(t *testing.T) {
+	var (
+		body   map[string]any
+		method string
+		path   string
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path = r.Method, r.URL.Path
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding request body: %s", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":{"type":"subscriptionAvailabilities","id":"avail-1",
+			"attributes":{"availableInNewTerritories":true}}}`)
+	}))
+	defer srv.Close()
+
+	client := &Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}
+
+	availability, err := client.CreateSubscriptionAvailability("sub-1", true, []string{"USA", "GBR"}, nil)
+	if err != nil {
+		t.Fatalf("CreateSubscriptionAvailability: %s", err)
+	}
+	if availability.ID != "avail-1" {
+		t.Errorf("ID = %q, want %q", availability.ID, "avail-1")
+	}
+
+	if method != "POST" || path != "/v1/subscriptionAvailabilities" {
+		t.Errorf("request = %s %s, want POST /v1/subscriptionAvailabilities", method, path)
+	}
+
+	data, ok := body["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("request has no data member: %v", body)
+	}
+	if data["type"] != "subscriptionAvailabilities" {
+		t.Errorf("type = %v, want subscriptionAvailabilities", data["type"])
+	}
+
+	attrs, ok := data["attributes"].(map[string]any)
+	if !ok {
+		t.Fatalf("request has no attributes member: %v", data)
+	}
+	if attrs["availableInNewTerritories"] != true {
+		t.Errorf("availableInNewTerritories = %v, want true", attrs["availableInNewTerritories"])
+	}
+
+	rels, ok := data["relationships"].(map[string]any)
+	if !ok {
+		t.Fatalf("request has no relationships member: %v", data)
+	}
+
+	sub, ok := rels["subscription"].(map[string]any)
+	if !ok {
+		t.Fatalf("no subscription relationship: %v", rels)
+	}
+	subData, _ := sub["data"].(map[string]any)
+	if subData["type"] != "subscriptions" || subData["id"] != "sub-1" {
+		t.Errorf("subscription relationship = %v, want type subscriptions id sub-1", subData)
+	}
+
+	territories, ok := rels["availableTerritories"].(map[string]any)
+	if !ok {
+		t.Fatalf("no availableTerritories relationship: %v", rels)
+	}
+	list, _ := territories["data"].([]any)
+	if len(list) != 2 {
+		t.Fatalf("availableTerritories has %d entries, want 2: %v", len(list), list)
+	}
+	for i, want := range []string{"USA", "GBR"} {
+		entry, _ := list[i].(map[string]any)
+		if entry["type"] != "territories" || entry["id"] != want {
+			t.Errorf("territory %d = %v, want type territories id %q", i, entry, want)
+		}
+	}
+}

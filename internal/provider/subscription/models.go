@@ -78,6 +78,14 @@ type subscriptionPricePointModel struct {
 	TerritoryID   types.String `tfsdk:"territory_id"`
 }
 
+// subscriptionAvailabilityModel maps the subscription availability schema.
+type subscriptionAvailabilityModel struct {
+	ID                        types.String   `tfsdk:"id"`
+	SubscriptionID            types.String   `tfsdk:"subscription_id"`
+	AvailableInNewTerritories types.Bool     `tfsdk:"available_in_new_territories"`
+	AvailableTerritories      []types.String `tfsdk:"available_territories"`
+}
+
 // subscriptionGroupsDataSourceModel maps the listing data source for groups.
 type subscriptionGroupsDataSourceModel struct {
 	// Scope

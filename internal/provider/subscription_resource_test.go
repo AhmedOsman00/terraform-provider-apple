@@ -205,6 +205,11 @@ func TestAccSubscriptionResource_completesMetadata(t *testing.T) {
 					// the price could not have been created at all.
 					resource.TestCheckResourceAttrSet(
 						"data.apple_subscription_price_points.test", "price_points.0.customer_price"),
+					resource.TestCheckResourceAttr("apple_subscription_availability.test", "available_territories.#", "1"),
+					resource.TestCheckResourceAttr("apple_subscription_availability.test", "available_territories.0", "USA"),
+					// Defaulted rather than configured, matching App Store
+					// Connect's own default.
+					resource.TestCheckResourceAttr("apple_subscription_availability.test", "available_in_new_territories", "true"),
 				),
 			},
 			{
@@ -221,6 +226,14 @@ func TestAccSubscriptionResource_completesMetadata(t *testing.T) {
 				// property: Apple reports only the outcome, through
 				// "preserved", so import cannot recover it.
 				ImportStateVerifyIgnore: []string{"preserve_current_price"},
+			},
+			// The availability imports by the subscription ID: a subscription
+			// has exactly one, and Apple publishes no collection of them.
+			{
+				ResourceName:      "apple_subscription_availability.test",
+				ImportState:       true,
+				ImportStateIdFunc: testAccSubscriptionParentID("apple_subscription_availability.test"),
+				ImportStateVerify: true,
 			},
 		},
 	})
@@ -390,9 +403,20 @@ data "apple_subscription_price_points" "test" {
   limit           = 1
 }
 
+resource "apple_subscription_availability" "test" {
+  subscription_id       = apple_subscription.test.id
+  available_territories = ["USA"]
+}
+
 resource "apple_subscription_price" "test" {
   subscription_id = apple_subscription.test.id
   price_point_id  = data.apple_subscription_price_points.test.price_points[0].id
+
+  # A subscription cannot be priced in a territory it is not available in:
+  # Apple answers POST /v1/subscriptionPrices with a 409 that names neither
+  # availability nor the territory. Nothing in the price references the
+  # availability, so the ordering has to be declared.
+  depends_on = [apple_subscription_availability.test]
 }
 `, name)
 }
@@ -416,6 +440,18 @@ func testAccSubscriptionPriceImportID(resourceName string) resource.ImportStateI
 			return "", err
 		}
 		return fmt.Sprintf("%s/%s", rs.Attributes["subscription_id"], rs.ID), nil
+	}
+}
+
+// testAccSubscriptionParentID imports by the parent subscription rather than
+// the resource's own ID, which is what the availability needs.
+func testAccSubscriptionParentID(resourceName string) resource.ImportStateIdFunc {
+	return func(s *terraform.State) (string, error) {
+		rs, err := testAccStateResource(s, resourceName)
+		if err != nil {
+			return "", err
+		}
+		return rs.Attributes["subscription_id"], nil
 	}
 }
 
