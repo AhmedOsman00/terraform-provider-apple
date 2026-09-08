@@ -1,4 +1,4 @@
-## 0.1.0 (Unreleased)
+## 0.1.0 (September 8, 2026)
 
 NOTES:
 
@@ -52,9 +52,10 @@ FEATURES:
 
 DOCUMENTATION:
 
-* Per-resource and per-data-source reference pages are now generated for all seven
-  resources and seven data sources; previously only `docs/index.md` was checked in,
-  so `make generate` produced a diff and the `generate` CI job failed.
+* Per-resource and per-data-source reference pages are now generated for all
+  fifteen resources and thirteen data sources; previously only `docs/index.md`
+  was checked in, so `make generate` produced a diff and the `generate` CI job
+  failed.
 * New guides: `docs/guides/getting-started.md` (creating App Store Connect
   credentials, installing the provider, a first configuration, and importing
   existing portal resources) and
