@@ -70,11 +70,20 @@ func createToken(keyID, issuerID, privateKeyPEM string, scope []string) (string,
 
 	// Create the JWT claims
 	claims := jwt.MapClaims{
-		"iss":   issuerID,
-		"iat":   issuedAt,
-		"exp":   expiresAt,
-		"aud":   audience,
-		"scope": scope,
+		"iss": issuerID,
+		"iat": issuedAt,
+		"exp": expiresAt,
+		"aud": audience,
+	}
+
+	// The scope claim is omitted unless it actually restricts something. App
+	// Store Connect rejects a token carrying an empty or null scope with a 400
+	// ENTITY_INVALID titled "JSON processing failed" — an error about the token
+	// payload that reads like a complaint about the request body. Since the
+	// provider defaults to no scope, sending the claim unconditionally broke
+	// every API call.
+	if len(scope) > 0 {
+		claims["scope"] = scope
 	}
 
 	// Create the token

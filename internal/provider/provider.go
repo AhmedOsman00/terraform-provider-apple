@@ -110,8 +110,11 @@ func (p *appleProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp
 				},
 			},
 			"scope": schema.ListAttribute{
-				MarkdownDescription: "The scope of access for the API key. This is typically an empty array for most use cases. " +
-					"Refer to Apple's documentation for specific scope requirements.",
+				MarkdownDescription: "Restricts the generated JWT to specific App Store Connect operations, each written as " +
+					"`<METHOD> <path>` (for example `GET /v1/apps`). **Leave this unset for most use cases** — an " +
+					"unscoped token can perform every operation the API key itself is permitted. Do not configure it as " +
+					"an empty list: Apple rejects a token carrying an empty scope claim with a `400` error titled " +
+					"\"JSON processing failed\". Refer to Apple's documentation for specific scope requirements.",
 				Optional:    true,
 				ElementType: types.StringType,
 				Validators: []validator.List{
