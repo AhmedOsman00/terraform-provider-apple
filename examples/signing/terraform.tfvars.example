@@ -1,7 +1,6 @@
 bundle_identifier   = "com.example.myapp"
 app_name            = "My App"
 profile_name_prefix = "My App"
-organization_name   = "Example Ltd"
 
 capabilities = [
   "PUSH_NOTIFICATIONS",
@@ -17,15 +16,27 @@ devices = {
 # Rotate signing certificates 30 days before they expire.
 early_renewal_hours = 720
 
+# --- Signing requests -------------------------------------------------------
+#
+# Generate the key and CSR yourself, once per role. The key stays with you; only
+# the CSR is configured here, and a CSR is not secret.
+#
+#   openssl genrsa -out distribution.key 2048
+#   openssl req -new -key distribution.key -out distribution.csr \
+#       -subj "/CN=My App distribution"
+#
+# The distribution role is required. Add development too if you register devices
+# and want a development profile.
+csr_contents = {
+  distribution = file("${path.module}/distribution.csr")
+  # development = file("${path.module}/development.csr")
+}
+
 # --- Migrating off fastlane match ------------------------------------------
 #
 # Adopt the certificate match already issued instead of letting Terraform issue
-# a new one, which would revoke it. Both maps are keyed by role; supply the key
-# for every role you adopt.
-#
-# private_keys = {
-#   distribution = file("${path.module}/match-distribution.key")
-# }
+# a new one, which would revoke it. A role listed here needs no CSR above; keep
+# using the private key match holds for it.
 #
 # adopt_certificate_serials = {
 #   distribution = "6F1B2C3D4E5A7B8C"

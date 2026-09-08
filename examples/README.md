@@ -34,8 +34,9 @@ plus their plural data source counterparts.
 
 [`signing/`](signing/) is not a documentation snippet. It is a complete, runnable
 module that manages a full signing setup — App ID, capabilities, devices,
-certificates, and one provisioning profile per distribution method — and emits a
-signing bundle for the `applesign` CLI to install.
+certificates, and one provisioning profile per distribution method. You generate
+the signing key and give it a CSR; it exports the issued certificate and the
+profiles, none of which are secret.
 
 It has [its own README](signing/README.md), and
 [`docs/guides/code-signing.md`](../docs/guides/code-signing.md) explains the

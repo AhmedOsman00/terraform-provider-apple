@@ -21,8 +21,8 @@ ready-made module rather than hand-written resources.
 - Terraform >= 1.0.
 - Membership in an Apple Developer Program team, with a role that can create API
   keys: **Account Holder** or **Admin**.
-- Go >= 1.25, only if you want to build the `applesign` CLI or an unreleased
-  provider from source — see [Installing the provider](#installing-the-provider).
+- Go >= 1.25, only if you want to build an unreleased provider from source —
+  see [Installing the provider](#installing-the-provider).
 
 ## Creating App Store Connect API credentials
 
@@ -92,14 +92,7 @@ terraform {
 }
 ```
 
-The `applesign` CLI that installs a signing bundle into a keychain is a separate
-binary and does not come through the Registry:
-
-```bash
-go install github.com/AhmedOsman00/terraform-provider-apple/cmd/applesign@latest
-```
-
-From a clone, `make install` builds both binaries into `$GOPATH/bin`.
+From a clone, `make install` builds the provider into `$GOPATH/bin`.
 
 ## Running an unreleased build
 

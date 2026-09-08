@@ -38,17 +38,17 @@ FEATURES:
   subscription group needs the app's ID, so it has to be readable.
 * examples/signing: a runnable module replacing `fastlane match`, covering the App
   ID, capabilities, devices, signing certificates, and development/Ad Hoc/App Store
-  profiles. It emits a signing bundle holding everything a machine needs to sign.
-* cmd/applesign: a CLI that installs a signing bundle on macOS — private key and
-  certificate into a keychain (the login keychain, or a throwaway one under
-  `--ci`), and provisioning profiles into the directories Xcode reads. It reads
-  the bundle as JSON on stdin, so `terraform output -json signing_bundle`,
-  `sops -d`, and `op read` all compose as pipes and a consumer needs no state
-  access.
-* examples/signing: `var.private_keys` and `var.adopt_certificate_serials` adopt a
-  certificate `fastlane match` already issued, reading it through the
-  `apple_certificates` data source rather than reissuing — which would revoke the
-  original and break every build already signed with it.
+  profiles. The signing key is generated on your machine and never reaches
+  Terraform: the module takes certificate signing requests through
+  `var.csr_contents` and exports the issued certificates and generated profiles
+  as plain values. A CSR, a certificate and a provisioning profile are all public
+  documents, so nothing in the state or the outputs is secret, and installing the
+  result is a `.p12` built locally from the certificate and the key you kept.
+* examples/signing: `var.adopt_certificate_serials` adopts a certificate
+  `fastlane match` already issued, reading it through the `apple_certificates`
+  data source rather than reissuing — which would revoke the original and break
+  every build already signed with it. An adopted role needs no CSR; keep using
+  the key match holds for it.
 
 DOCUMENTATION:
 
@@ -58,8 +58,9 @@ DOCUMENTATION:
 * New guides: `docs/guides/getting-started.md` (creating App Store Connect
   credentials, installing the provider, a first configuration, and importing
   existing portal resources) and
-  `docs/guides/code-signing.md` (the `fastlane match` replacement, the distinction
-  between the Terraform state and the signing bundle, and migrating off match).
+  `docs/guides/code-signing.md` (the `fastlane match` replacement, generating a
+  CSR and installing the issued certificate by hand, what actually needs
+  protecting once the key never enters Terraform, and migrating off match).
   Hand-written guides live in `templates/guides/` and render into `docs/guides/`.
 * Examples no longer carry a `# Copyright (c) HashiCorp, Inc.` header, which was
   incorrect attribution and was being embedded into the generated documentation.

@@ -17,7 +17,6 @@ make lint       # golangci-lint run  (config in .golangci.yml)
 make test       # go test -v -cover -race -timeout=120s -parallel=10 ./...
 make testacc    # TF_ACC=1 go test -v -cover -timeout 120m ./...
 make generate   # regenerates docs/ from schemas + examples/ (see caveats below)
-make consume    # pipes examples/signing's signing_bundle output into applesign
 make validate-examples  # terraform validate over every directory under examples/
 ```
 
@@ -113,57 +112,51 @@ the purchase.
 
 **Adding a resource or data source requires registering the constructor in both `DataSources()` and `Resources()` in `internal/provider/provider.go`** — nothing is discovered automatically.
 
-### `cmd/applesign` — the signing install CLI
+### `examples/signing` — the fastlane match replacement
 
-A second binary in this module (`go install ./...` builds both). It installs the
-signing material the `examples/signing` module produces onto a machine: private
-key plus certificate into a keychain, provisioning profiles into the two
-directories Xcode reads. This is the last mile `fastlane match` does locally,
-and it replaces the deleted `examples/signing/scripts/install-signing.sh`.
+A runnable module, not a documentation snippet. It manages the App ID, its
+capabilities, the devices, the certificates and one profile per distribution
+method.
 
-The `examples/signing` module assembles that bundle in `bundle.tf` as
-`local.signing_bundle`. Certificates reach it through `local.certificates`,
-which merges the ones the module issues with ones adopted from an existing
-serial via `data.apple_certificates` — adoption exists because importing an
+**The signing key never enters Terraform.** The user generates the key and the
+CSR locally and supplies only `var.csr_contents`; a CSR is a public key plus a
+signature over it. That single decision is what makes the state ordinary: a
+CSR, an issued certificate and a provisioning profile are all public documents,
+so nothing in the state or the outputs is secret, and the module needs no
+secret-store dependency, no encrypted bundle, and no companion CLI. The last
+mile — a `.p12` assembled from the certificate and the user's key, plus
+profiles copied where Xcode reads them — is documented in
+`examples/signing/README.md` and `templates/guides/code-signing.md.tmpl` rather
+than automated.
+
+There was previously a `cmd/applesign` CLI and a `local.signing_bundle` JSON
+document carrying private keys between them. Both are gone; do not reintroduce
+either without also reintroducing the reason they existed.
+
+Certificates reach the outputs through `local.certificates`, which merges the
+ones the module issues with ones adopted from an existing serial via
+`data.apple_certificates` — adoption exists because importing an
 `apple_certificate` reissues it (`csr_content` forces replacement and Apple does
-not reliably return the CSR), and issuing a replacement revokes the original.
-Note that `var.private_keys` is sensitive, and `for_each` rejects values derived
-from sensitive ones, so role names are unwrapped once through
-`nonsensitive(keys(var.private_keys))` in `local.supplied_key_roles`.
+not reliably return the CSR), and issuing a replacement revokes the original. An
+adopted role needs no CSR.
 
-The bundle is a local and deliberately not inside the `output` block: outputs
-cannot be referenced by resources in the same configuration, and a user needs to
-be able to add their own `aws_secretsmanager_secret_version` or
-`vault_kv_secret_v2` alongside the module without editing it. The module
-declares no secret resource itself, so it forces no cloud provider dependency.
+Two things there are easy to get wrong:
 
-`applesign install -` reads the bundle as JSON on **stdin**. That is the design
-constraint, not an implementation detail: the CLI must know about no secret
-store and no backend, so `terraform output -json signing_bundle`, `sops -d`, and
-`op read` all compose as pipes and a consumer needs no state access. A path is
-accepted too, mainly so process substitution works.
+- `local.certificates` and the `profiles` output call `nonsensitive()` on
+  `certificate_content` and `profile_content`. The provider marks both
+  `Sensitive`, but they are public documents, and leaving them wrapped would
+  force every output to be sensitive and redact values that are safe to print.
+  `nonsensitive()` **errors on a value that is not sensitive**, so un-marking
+  either attribute in the provider schema breaks this module.
+- `required_version` is `>= 1.9` because `var.csr_contents` uses a `validation`
+  block that references `var.adopt_certificate_serials` — cross-variable
+  validation landed in 1.9. That check is what enforces "the distribution role
+  needs either a CSR or a serial", which nothing else can express: a missing
+  role would otherwise surface as an invalid map index deep in a profile.
 
-| File | Contents |
-|---|---|
-| `bundle.go` | Bundle/Certificate/Profile JSON types, decoding, validation |
-| `identity.go` | Certificate and key decoding, key-matches-certificate check, PKCS#12 |
-| `keychain.go` | Every `/usr/bin/security` call |
-| `profile.go` | Profile directories and installation |
-| `install.go` | Command line and orchestration |
-
-Everything but the `security` calls is unit-tested and credential-free.
-
-Two things are load-bearing and easy to break:
-
-- PKCS#12 must use `pkcs12.LegacyRC2` (`software.sslmate.com/src/go-pkcs12`).
-  `pkcs12.Modern` is what OpenSSL 3 emits by default and `security import`
-  rejects it — this is why the Go rewrite dropped the `openssl`/LibreSSL
-  divergence the shell version had to detect.
-- `security import` gets `-T /usr/bin/codesign -T /usr/bin/security` rather than
-  a blanket `-A`, and `--ci` additionally sets the key partition list so
-  codesign does not block on an interactive prompt. That call needs the keychain
-  password, so it only works on a keychain applesign created; on the login
-  keychain the prompt is approved by hand, once.
+Note that `terraform validate` does not evaluate variable validation for a
+variable left at its default, so `make validate-examples` passes without any
+CSR configured. The rules only fire at plan time.
 
 ## Conventions to follow
 
@@ -205,7 +198,7 @@ The examples pin `version = "~> 0.1"`, and `scripts/validate-examples.sh` builds
 
 ## Releasing
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`: GoReleaser cross-compiles the provider (only `main.go` — `cmd/applesign` is installed with `go install`, since the Registry matches every entry in `SHA256SUMS` against expected artifact names), signs the checksums with the GPG key in the `GPG_PRIVATE_KEY` / `PASSPHRASE` secrets, and attaches `terraform-registry-manifest.json`. `project_name` is pinned in `.goreleaser.yml` because the Registry requires `terraform-provider-apple_<version>_<os>_<arch>.zip`, and GoReleaser would otherwise take the name from the checkout directory. The Registry ingests new tags automatically once the repository is connected and the public GPG key is uploaded; update `CHANGELOG.md` before tagging.
+Pushing a `v*` tag runs `.github/workflows/release.yml`: GoReleaser cross-compiles the provider (only `main.go`; the Registry matches every entry in `SHA256SUMS` against expected artifact names, so any extra binary built here would fail ingestion), signs the checksums with the GPG key in the `GPG_PRIVATE_KEY` / `PASSPHRASE` secrets, and attaches `terraform-registry-manifest.json`. `project_name` is pinned in `.goreleaser.yml` because the Registry requires `terraform-provider-apple_<version>_<os>_<arch>.zip`, and GoReleaser would otherwise take the name from the checkout directory. The Registry ingests new tags automatically once the repository is connected and the public GPG key is uploaded; update `CHANGELOG.md` before tagging.
 
 ## Tests and CI
 

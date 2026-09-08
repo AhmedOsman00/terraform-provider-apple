@@ -8,8 +8,8 @@ on — App IDs and their capabilities, signing certificates, registered devices,
 Merchant IDs, Pass Type IDs, and provisioning profiles — as configuration rather
 than as clicks in a web UI.
 
-Together with the `applesign` CLI in this repository, it is a replacement for
-`fastlane match`: Terraform owns the portal, `applesign` owns the local keychain.
+It is a replacement for `fastlane match`: Terraform owns the portal, you keep the
+signing key, and nothing Terraform stores is secret.
 
 ## Contents
 
@@ -19,15 +19,14 @@ Together with the `applesign` CLI in this repository, it is a replacement for
 | [`docs/guides/getting-started.md`](docs/guides/getting-started.md) | Credentials, installation, first configuration, importing |
 | [`docs/guides/code-signing.md`](docs/guides/code-signing.md) | The `fastlane match` replacement, end to end |
 | [`examples/signing/`](examples/signing/) | A runnable module that manages a full signing setup |
-| [`cmd/applesign/`](cmd/applesign/) | CLI that installs a signing bundle into a keychain |
 
 ## Requirements
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
 - An Apple Developer Program team, and an App Store Connect API key with the
   **App Manager** role
-- [Go](https://golang.org/doc/install) >= 1.25 — only to build the provider or
-  `applesign` from source
+- [Go](https://golang.org/doc/install) >= 1.25 — only to build the provider from
+  source
 
 ## Installation
 
@@ -44,12 +43,6 @@ terraform {
     }
   }
 }
-```
-
-The `applesign` CLI is a separate binary and does not come through the Registry:
-
-```shell
-go install github.com/AhmedOsman00/terraform-provider-apple/cmd/applesign@latest
 ```
 
 To run against an unreleased build of the provider, use a filesystem mirror or a
@@ -187,30 +180,30 @@ Behaviour worth knowing before you plan against a real team:
 [`examples/signing/`](examples/signing/) is a complete, runnable module that
 manages everything `fastlane match` manages in the developer portal — App ID,
 capabilities, devices, signing certificates, and one provisioning profile per
-distribution method. It emits a **signing bundle**: a JSON document holding the
-keys, certificates, and profiles a machine needs.
+distribution method.
 
-`applesign` consumes that bundle on stdin and does the part match does locally —
-assembling a `.p12`, importing it into a keychain, and installing profiles where
-Xcode reads them:
-
-```bash
-terraform -chdir=examples/signing output -json signing_bundle | applesign install -       # login keychain
-terraform -chdir=examples/signing output -json signing_bundle | applesign install --ci -  # throwaway keychain
-```
-
-`make consume` is the same pipe. Because the CLI knows about no secret store and
-no backend, any source composes:
+**You generate the private key; Terraform never sees it.** The module takes a
+certificate signing request, which is public, and exports the issued certificate
+and the generated profiles, which are also public. Nothing in the state or the
+outputs is secret:
 
 ```bash
-sops -d signing/bundle.enc.json | applesign install -
-op read "op://Eng/ios-signing/bundle" | applesign install -
+openssl genrsa -out distribution.key 2048
+openssl req -new -key distribution.key -out distribution.csr -subj "/CN=My App distribution"
+
+export TF_VAR_csr_contents='{"distribution":"'"$(cat distribution.csr)"'"}'
+terraform -chdir=examples/signing apply
+
+terraform -chdir=examples/signing output -json certificates
+terraform -chdir=examples/signing output -json profiles
 ```
 
-Read [the code signing guide](docs/guides/code-signing.md) before pointing this at
-a real team. It covers why the Terraform state and the signing bundle are two
-different artifacts with different homes, and how to migrate off match by
-adopting its existing certificate instead of reissuing — which would revoke it.
+Installing the result is a `.p12` built from that certificate and your key, plus
+some files dropped where Xcode reads them. Read [the code signing
+guide](docs/guides/code-signing.md) for the exact commands — including the
+PKCS#12 encoding trap that makes `/usr/bin/openssl` the only safe choice — and
+for how to migrate off match by adopting its existing certificate instead of
+reissuing, which would revoke it.
 
 ## Development
 

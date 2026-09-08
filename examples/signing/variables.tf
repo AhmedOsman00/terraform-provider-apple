@@ -8,17 +8,6 @@ variable "app_name" {
   type        = string
 }
 
-variable "organization_name" {
-  description = <<-EOT
-    Organization name placed in the certificate signing request subject.
-
-    Cosmetic: Apple ignores the CSR subject and issues certificates under your
-    team's own name. It only affects the local CSR.
-  EOT
-  type        = string
-  default     = "Terraform"
-}
-
 variable "profile_name_prefix" {
   description = <<-EOT
     Prefix for generated provisioning profile names.
@@ -63,29 +52,59 @@ variable "early_renewal_hours" {
     default of 720 hours (30 days) rotates them during a routine apply instead.
     The window is only evaluated when Terraform runs, so schedule a periodic
     plan/apply if you depend on it.
+
+    Replacement reuses the CSR in `var.csr_contents`, so the renewed certificate
+    covers the same key and the identity already installed on a machine keeps
+    working. It does not apply to adopted certificates: renewing one means
+    issuing a replacement, and issuing revokes the original.
   EOT
   type        = number
   default     = 720
 }
 
-variable "private_keys" {
+variable "csr_contents" {
   description = <<-EOT
-    Existing signing private keys in PEM format, keyed by role: "development",
-    "distribution", or both. A role left out gets a freshly generated key.
+    Certificate signing requests in PEM format, keyed by role: "development",
+    "distribution", or both.
 
-    Supply the key fastlane match already holds when adopting its certificate.
-    A certificate is only usable together with the key it was issued against, so
-    an adopted certificate without its key is something you cannot sign with.
+    Generate these yourself; the matching private key never reaches Terraform:
+
+      openssl genrsa -out distribution.key 2048
+      openssl req -new -key distribution.key -out distribution.csr \
+          -subj "/CN=My App distribution"
+
+    A CSR carries a public key and a signature over it, so nothing here is
+    secret and neither is anything Terraform stores or outputs as a result.
+    Keep the private key -- it is the half that signs, and the certificate Apple
+    returns is inert without it.
+
+    A role listed in `adopt_certificate_serials` is read rather than issued, so
+    it needs no CSR here.
   EOT
   type        = map(string)
   default     = {}
-  sensitive   = true
 
   validation {
     condition = alltrue([
-      for role in keys(var.private_keys) : contains(["development", "distribution"], role)
+      for role in keys(var.csr_contents) : contains(["development", "distribution"], role)
     ])
-    error_message = "private_keys may only be keyed by \"development\" or \"distribution\"."
+    error_message = "csr_contents may only be keyed by \"development\" or \"distribution\"."
+  }
+
+  validation {
+    condition = alltrue([
+      for csr in values(var.csr_contents) :
+      can(regex("-----BEGIN CERTIFICATE REQUEST-----[\\s\\S]*-----END CERTIFICATE REQUEST-----", csr))
+    ])
+    error_message = "Every value in csr_contents must be a PEM-encoded certificate signing request. A key or a certificate is not a CSR."
+  }
+
+  validation {
+    condition = (
+      contains(keys(var.csr_contents), "distribution") ||
+      contains(keys(var.adopt_certificate_serials), "distribution")
+    )
+    error_message = "The distribution role is required: every profile this module creates signs with it. Give it a CSR in csr_contents, or a serial number in adopt_certificate_serials."
   }
 }
 
@@ -97,8 +116,11 @@ variable "adopt_certificate_serials" {
     A role listed here is read through the `apple_certificates` data source
     rather than issued, so applying this module cannot revoke the certificate
     your team is still shipping with. This is the migration path off match:
-    adopt what match issued, supply its key in `private_keys`, and cut over to a
+    adopt what match issued, keep using the key match holds, and cut over to a
     Terraform-issued certificate later, on your own schedule.
+
+    Adoption takes precedence: a role given both a serial here and a CSR in
+    `csr_contents` is adopted, and the CSR is unused until you remove the serial.
 
     An adopted certificate is read-only. `early_renewal_hours` does not apply to
     it, because renewing means issuing a replacement and issuing revokes the

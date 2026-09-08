@@ -13,8 +13,7 @@ before:
 builds:
   # Only the provider binary is released. The Registry ingests a release by
   # matching every entry in SHA256SUMS against the expected artifact names, so
-  # cmd/applesign is deliberately not built here -- it is installed with
-  # `go install ./cmd/applesign`.
+  # anything else built here would fail ingestion.
 - main: .
   env:
     # goreleaser does not work with CGO, it could also complicate

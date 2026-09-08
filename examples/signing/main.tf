@@ -1,14 +1,13 @@
 terraform {
-  required_version = ">= 1.5"
+  # 1.9 is the floor for referencing another variable from a `validation`
+  # block, which is how "every role needs either a CSR or a serial" is
+  # enforced before anything reaches Apple.
+  required_version = ">= 1.9"
 
   required_providers {
     apple = {
       source  = "ahmedosman00/apple"
       version = "~> 0.1"
-    }
-    tls = {
-      source  = "hashicorp/tls"
-      version = "~> 4.0"
     }
   }
 }
@@ -33,40 +32,40 @@ locals {
   # device is registered, so they are skipped on a devices-free configuration.
   has_devices = length(var.devices) > 0
 
+  # Every role this configuration knows about, however it was obtained. Both
+  # maps are keyed by role, and a role may legitimately appear in neither: a
+  # CI-only release pipeline usually declares distribution and nothing else.
+  certificate_roles = distinct(concat(
+    keys(var.csr_contents),
+    keys(var.adopt_certificate_serials),
+  ))
+
+  has_development = contains(local.certificate_roles, "development")
+
   # A role is adopted when an existing serial number is given for it, and issued
-  # otherwise. Adopted certificates are read, never created, so an apply cannot
-  # revoke the certificate a team is still shipping with.
+  # from the supplied CSR otherwise. Adopted certificates are read, never
+  # created, so an apply cannot revoke the certificate a team is still shipping
+  # with.
   issued_certificate_types = {
     for role, type in local.certificate_types :
-    role => type if !contains(keys(var.adopt_certificate_serials), role)
+    role => type
+    if contains(keys(var.csr_contents), role) && !contains(keys(var.adopt_certificate_serials), role)
   }
 
-  # Keys are generated only for the roles whose key was not supplied.
+  # Issued and adopted certificates in one shape, so that profiles and outputs
+  # do not have to care which is which.
   #
-  # nonsensitive() is needed because for_each rejects anything derived from a
-  # sensitive value, and var.private_keys is sensitive. Only the role names are
-  # unwrapped here -- "development" and "distribution" are not secrets, and the
-  # keys themselves stay sensitive throughout.
-  supplied_key_roles = nonsensitive(keys(var.private_keys))
-
-  generated_key_roles = {
-    for role, type in local.certificate_types :
-    role => type if !contains(local.supplied_key_roles, role)
-  }
-
-  private_keys = {
-    for role, type in local.certificate_types :
-    role => try(var.private_keys[role], tls_private_key.signing[role].private_key_pem)
-  }
-
-  # Issued and adopted certificates in one shape, so that profiles and the
-  # signing bundle do not have to care which is which.
+  # nonsensitive() unwraps certificate_content deliberately. The provider marks
+  # that attribute sensitive, but an X.509 certificate is a public document:
+  # Apple hands it to every member of the team, and it is inert without the
+  # private key, which this module never holds. Leaving it wrapped would force
+  # the outputs to be sensitive and redact values that are safe to print.
   certificates = merge(
     {
       for role, certificate in apple_certificate.signing : role => {
         id                  = certificate.id
         certificate_type    = certificate.certificate_type
-        certificate_content = certificate.certificate_content
+        certificate_content = nonsensitive(certificate.certificate_content)
         expiration_date     = certificate.expiration_date
       }
     },
@@ -74,10 +73,19 @@ locals {
       for role, adopted in data.apple_certificates.adopted : role => {
         id                  = one(adopted.certificates).id
         certificate_type    = one(adopted.certificates).certificate_type
-        certificate_content = one(adopted.certificates).certificate_content
+        certificate_content = nonsensitive(one(adopted.certificates).certificate_content)
         expiration_date     = one(adopted.certificates).expiration_date
       }
     },
+  )
+
+  # count-based profiles come back as lists; the App Store profile is always
+  # present. Flattening them here keeps the profiles output the same shape
+  # whether or not devices are configured.
+  all_profiles = concat(
+    apple_profile.development,
+    apple_profile.ad_hoc,
+    [apple_profile.app_store],
   )
 }
 
@@ -116,36 +124,22 @@ resource "apple_device" "team" {
 
 # --- Signing identities -----------------------------------------------------
 
-# The private key is generated locally and never sent to Apple: apple_certificate
-# submits only the CSR. This is the material fastlane match keeps in an encrypted
-# git repo. Here it lives in Terraform state, so the state backend is what
-# protects it -- see README.md before running this against a real team.
+# The private key is generated on your machine and never reaches Terraform.
+# Only the CSR is configured here, and a CSR carries a public key and a
+# signature over it -- nothing secret. That is what keeps this state, and
+# everything it outputs, free of key material:
 #
-# A key supplied through var.private_keys is used as-is instead, which is how a
-# team adopts the identity match already holds.
-resource "tls_private_key" "signing" {
-  for_each = local.generated_key_roles
-
-  algorithm = "RSA"
-  rsa_bits  = 2048
-}
-
-resource "tls_cert_request" "signing" {
-  for_each = local.issued_certificate_types
-
-  private_key_pem = local.private_keys[each.key]
-
-  subject {
-    common_name  = "${var.app_name} ${each.key}"
-    organization = var.organization_name
-  }
-}
-
+#   openssl genrsa -out distribution.key 2048
+#   openssl req -new -key distribution.key -out distribution.csr \
+#       -subj "/CN=My App distribution"
+#
+# See README.md for the Keychain Access equivalent, which produces a CSR
+# without the key ever becoming a file.
 resource "apple_certificate" "signing" {
   for_each = local.issued_certificate_types
 
   certificate_type    = each.value
-  csr_content         = tls_cert_request.signing[each.key].cert_request_pem
+  csr_content         = var.csr_contents[each.key]
   early_renewal_hours = var.early_renewal_hours
 }
 
@@ -172,7 +166,7 @@ data "apple_certificates" "adopted" {
 # Profiles snapshot the App ID's entitlements at the moment Apple generates
 # them, so they must be created after the capabilities they are meant to carry.
 resource "apple_profile" "development" {
-  count = local.has_devices ? 1 : 0
+  count = local.has_devices && local.has_development ? 1 : 0
 
   name         = "${var.profile_name_prefix} Development"
   profile_type = "IOS_APP_DEVELOPMENT"
