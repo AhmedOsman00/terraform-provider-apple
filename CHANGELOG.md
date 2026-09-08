@@ -1,5 +1,7 @@
 ## 0.1.0 (September 8, 2026)
 
+Initial release.
+
 NOTES:
 
 * The provider is published on the Terraform Registry as `ahmedosman00/apple`;
@@ -10,7 +12,33 @@ NOTES:
 
 FEATURES:
 
-* **New:** one-time in-app purchase support, covering `apple_in_app_purchase`,
+* **Developer Portal:** `apple_bundle_id`, `apple_bundle_id_capability`,
+  `apple_certificate`, `apple_device`, `apple_merchant_id`,
+  `apple_pass_type_id` and `apple_profile`, each with a plural data source that
+  lists the collection with filtering, `sort_by`, `sort_order` and `limit`.
+  Together these cover what a build pipeline needs from the portal: App IDs and
+  their capabilities, signing certificates, registered devices, Apple Pay
+  Merchant IDs, Apple Wallet Pass Type IDs, and provisioning profiles. Two
+  destroy behaviours are worth knowing before the first apply: destroying an
+  `apple_certificate` revokes it at Apple, and every build already signed with
+  it stops verifying; and Apple's API cannot delete a device, so removing an
+  `apple_device` disables it and drops it from state with a warning.
+* `apple_profile.profile_type` is the required argument that selects the
+  distribution method — development, ad hoc, App Store, or in-house — and
+  `platform` is computed from it rather than configured. Apple's
+  `POST /v1/profiles` takes `profileType`, which encodes the platform, and does
+  not accept `platform` at all. `profile_content` is marked sensitive, matching
+  `certificate_content` on `apple_certificate`, so outputs deriving values from
+  it must be declared `sensitive = true`.
+* **App Store Connect — auto-renewable subscriptions:**
+  `apple_subscription_group`, `apple_subscription`,
+  `apple_subscription_localization` and `apple_subscription_price`, with
+  `apple_subscription_groups`, `apple_subscriptions` and
+  `apple_subscription_price_points` data sources. These behave differently from
+  Developer Portal resources: they hang off an app record, and Apple publishes
+  no top-level collection for any of them, so every listing takes a required
+  scope argument and several import forms are composite.
+* **App Store Connect — one-time in-app purchases:** `apple_in_app_purchase`,
   `apple_in_app_purchase_localization`, `apple_in_app_purchase_price_schedule`
   and `apple_in_app_purchase_availability`, with `apple_in_app_purchases` and
   `apple_in_app_purchase_price_points` data sources. These are the consumables,
@@ -24,17 +52,9 @@ FEATURES:
   price schedule and availability are singular records Apple replaces with a
   `POST` and publishes no `DELETE` for, so they update in place and cannot be
   destroyed.
-* **New:** auto-renewable subscription support, covering `apple_subscription_group`,
-  `apple_subscription`, `apple_subscription_localization` and
-  `apple_subscription_price`, with `apple_subscription_groups`,
-  `apple_subscriptions` and `apple_subscription_price_points` data sources.
-  These are App Store Connect resources rather than Developer Portal ones: they
-  hang off an app record, and Apple publishes no top-level collection for any of
-  them, so every listing takes a required scope argument and several import
-  forms are composite.
-* **New:** `apple_apps` data source. There is deliberately no `apple_app`
-  resource — Apple's documentation says to create new apps on the App Store
-  Connect website and publishes no endpoint to create or delete one — but a
+* `apple_apps` data source. There is deliberately no `apple_app` resource —
+  Apple's documentation says to create new apps on the App Store Connect
+  website and publishes no endpoint to create or delete one — but a
   subscription group needs the app's ID, so it has to be readable.
 * examples/signing: a runnable module replacing `fastlane match`, covering the App
   ID, capabilities, devices, signing certificates, and development/Ad Hoc/App Store
@@ -52,38 +72,13 @@ FEATURES:
 
 DOCUMENTATION:
 
-* Per-resource and per-data-source reference pages are now generated for all
-  fifteen resources and thirteen data sources; previously only `docs/index.md`
-  was checked in, so `make generate` produced a diff and the `generate` CI job
-  failed.
-* New guides: `docs/guides/getting-started.md` (creating App Store Connect
-  credentials, installing the provider, a first configuration, and importing
-  existing portal resources) and
-  `docs/guides/code-signing.md` (the `fastlane match` replacement, generating a
-  CSR and installing the issued certificate by hand, what actually needs
-  protecting once the key never enters Terraform, and migrating off match).
-  Hand-written guides live in `templates/guides/` and render into `docs/guides/`.
-* Examples no longer carry a `# Copyright (c) HashiCorp, Inc.` header, which was
-  incorrect attribution and was being embedded into the generated documentation.
-
-BREAKING CHANGES:
-
-* resource/apple_profile: `profile_type` is now a required argument, and `platform` is
-  computed rather than configurable. Apple's `POST /v1/profiles` takes `profileType`
-  (which encodes the platform) and does not accept `platform`, so the profile type is
-  what selects development, ad hoc, App Store, or in-house distribution. Existing
-  configurations must replace `platform = "IOS"` with the corresponding
-  `profile_type`, e.g. `profile_type = "IOS_APP_STORE"`.
-
-BUG FIXES:
-
-* resource/apple_profile: profile creation sent `platform` instead of the required
-  `profileType` attribute, so no profile could be created and the distribution method
-  could not be expressed at all.
-* resource/apple_profile: the `certificates` and `devices` relationships were
-  serialized as arrays of to-one identifiers rather than a single object with a `data`
-  array, which Apple rejects. An empty `devices` relationship is now omitted instead of
-  sent, as App Store and Developer ID profiles have no devices.
-* resource/apple_profile: `profile_content` is now marked sensitive, matching
-  `certificate_content` on `apple_certificate`. Outputs deriving values from it must be
-  declared `sensitive = true`.
+* Generated reference pages for all fifteen resources and thirteen data
+  sources, built by `tfplugindocs` from the schemas and the matching
+  directories under `examples/`.
+* Two hand-written guides: `docs/guides/getting-started.md` (creating App Store
+  Connect credentials, installing the provider, a first configuration, and
+  importing existing portal resources) and `docs/guides/code-signing.md` (the
+  `fastlane match` replacement, generating a CSR and installing the issued
+  certificate by hand, what actually needs protecting once the key never enters
+  Terraform, and migrating off match). Guides live in `templates/guides/` and
+  render into `docs/guides/`.
