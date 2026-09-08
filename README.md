@@ -241,6 +241,16 @@ provider into a throwaway filesystem mirror and runs `terraform validate` in
 every example directory; that is the check that catches an example written
 against a schema the provider does not have.
 
+## Contributing
+
+Bug reports and pull requests are welcome. [`CONTRIBUTING.md`](.github/CONTRIBUTING.md)
+covers the development setup and the four things about this codebase that are
+easy to miss — registering new resources by hand, keeping the API client free of
+Terraform types, paginating every list endpoint, and regenerating `docs/`.
+
+Security problems go through [`SECURITY.md`](.github/SECURITY.md) rather than the
+issue tracker.
+
 ## License
 
 [MPL-2.0](LICENSE).
