@@ -124,6 +124,12 @@ func TestAccCertificateResource_earlyRenewal(t *testing.T) {
 						plancheck.ExpectResourceAction("apple_certificate.test", plancheck.ResourceActionReplace),
 					},
 				},
+				// The replacement certificate is inside the same 99999-hour
+				// window the moment it is issued, so ModifyPlan flips
+				// ready_for_renewal again and the follow-up plan proposes
+				// another renewal. That is the documented behaviour of a window
+				// wider than the certificate's life, not drift.
+				ExpectNonEmptyPlan: true,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckCertificateExists("apple_certificate.test"),
 					testAccCaptureAttr("apple_certificate.test", "serial_number", &serialAfter),
@@ -185,8 +191,10 @@ func TestAccCertificateResource_validation(t *testing.T) {
 				ExpectError: regexp.MustCompile(`Attribute certificate_type value must be one of`),
 			},
 			{
-				Config:      testAccCertificateResourceConfig(testAccCertificateType, "not a csr", ""),
-				ExpectError: regexp.MustCompile(`CSR content must be a valid PEM-encoded certificate signing request`),
+				Config: testAccCertificateResourceConfig(testAccCertificateType, "not a csr", ""),
+				// Terraform hard-wraps diagnostic text at terminal width, so the
+				// phrase can carry a newline: match any whitespace between words.
+				ExpectError: regexp.MustCompile(`CSR content must be a valid PEM-encoded\s+certificate\s+signing request`),
 			},
 			{
 				Config:      testAccCertificateResourceConfig(testAccCertificateType, csr, "early_renewal_hours = -1"),

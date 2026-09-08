@@ -171,6 +171,16 @@ func (r *certificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 	}
 }
 
+// optionalString maps an attribute Apple may omit to null rather than to an
+// empty string, so an absent value is not mistaken for a value of "".
+func optionalString(v string) types.String {
+	if v == "" {
+		return types.StringNull()
+	}
+
+	return types.StringValue(v)
+}
+
 // Create a new resource.
 func (r *certificateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	tflog.Info(ctx, "Creating Certificate resource")
@@ -225,9 +235,11 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 	plan.CertificateContent = types.StringValue(certificate.Attributes.CertificateContent)
 	plan.DisplayName = types.StringValue(certificate.Attributes.DisplayName)
 	plan.Name = types.StringValue(certificate.Attributes.Name)
-	plan.RequesterFirstName = types.StringValue(certificate.Attributes.RequesterFirstName)
-	plan.RequesterLastName = types.StringValue(certificate.Attributes.RequesterLastName)
-	plan.RequesterEmail = types.StringValue(certificate.Attributes.RequesterEmail)
+	// Apple omits the requester fields on most responses; recording them as
+	// null rather than "" keeps Create and Read agreeing on what absent means.
+	plan.RequesterFirstName = optionalString(certificate.Attributes.RequesterFirstName)
+	plan.RequesterLastName = optionalString(certificate.Attributes.RequesterLastName)
+	plan.RequesterEmail = optionalString(certificate.Attributes.RequesterEmail)
 
 	// Handle optional platform field
 	if certificate.Attributes.Platform != nil {
@@ -304,11 +316,30 @@ func (r *certificateResource) Read(ctx context.Context, req resource.ReadRequest
 	state.CertificateContent = types.StringValue(certificate.Attributes.CertificateContent)
 	state.DisplayName = types.StringValue(certificate.Attributes.DisplayName)
 	state.Name = types.StringValue(certificate.Attributes.Name)
-	state.CsrContent = types.StringValue(certificate.Attributes.CsrContent)
 	state.CertificateType = types.StringValue(string(certificate.Attributes.CertificateType))
-	state.RequesterFirstName = types.StringValue(certificate.Attributes.RequesterFirstName)
-	state.RequesterLastName = types.StringValue(certificate.Attributes.RequesterLastName)
-	state.RequesterEmail = types.StringValue(certificate.Attributes.RequesterEmail)
+
+	// csr_content and the requester fields are deliberately not refreshed from
+	// the response. Apple answers csrContent as null on every read and omits
+	// requesterFirstName/LastName/Email entirely, so assigning them here writes
+	// empty strings over values only the configuration and the create response
+	// ever held. For csr_content that is destructive rather than cosmetic: the
+	// attribute is RequiresReplace, so a blanked CSR makes the next plan revoke
+	// the certificate and issue a new one. Prior state is the better record.
+	if csr := certificate.Attributes.CsrContent; csr != "" {
+		state.CsrContent = types.StringValue(csr)
+	}
+
+	if v := certificate.Attributes.RequesterFirstName; v != "" {
+		state.RequesterFirstName = types.StringValue(v)
+	}
+
+	if v := certificate.Attributes.RequesterLastName; v != "" {
+		state.RequesterLastName = types.StringValue(v)
+	}
+
+	if v := certificate.Attributes.RequesterEmail; v != "" {
+		state.RequesterEmail = types.StringValue(v)
+	}
 
 	// Handle optional platform field
 	if certificate.Attributes.Platform != nil {
@@ -479,11 +510,11 @@ func (r *certificateResource) ImportState(ctx context.Context, req resource.Impo
 		CertificateContent: types.StringValue(certificate.Attributes.CertificateContent),
 		DisplayName:        types.StringValue(certificate.Attributes.DisplayName),
 		Name:               types.StringValue(certificate.Attributes.Name),
-		CsrContent:         types.StringValue(certificate.Attributes.CsrContent),
+		CsrContent:         optionalString(certificate.Attributes.CsrContent),
 		CertificateType:    types.StringValue(string(certificate.Attributes.CertificateType)),
-		RequesterFirstName: types.StringValue(certificate.Attributes.RequesterFirstName),
-		RequesterLastName:  types.StringValue(certificate.Attributes.RequesterLastName),
-		RequesterEmail:     types.StringValue(certificate.Attributes.RequesterEmail),
+		RequesterFirstName: optionalString(certificate.Attributes.RequesterFirstName),
+		RequesterLastName:  optionalString(certificate.Attributes.RequesterLastName),
+		RequesterEmail:     optionalString(certificate.Attributes.RequesterEmail),
 	}
 
 	// Handle optional platform field
