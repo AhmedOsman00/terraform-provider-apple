@@ -393,7 +393,6 @@ data "apple_subscription_price_points" "test" {
 resource "apple_subscription_price" "test" {
   subscription_id = apple_subscription.test.id
   price_point_id  = data.apple_subscription_price_points.test.price_points[0].id
-  territory_id    = "USA"
 }
 `, name)
 }
