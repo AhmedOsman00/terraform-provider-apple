@@ -120,6 +120,12 @@ jobs:
   # Acceptance tests create and destroy real resources in an Apple Developer
   # account. They run serially: the suite uses fixed identifiers, so parallel
   # matrix entries would collide with each other in the same team.
+  #
+  # TestAccDeviceResource* is excluded. Apple cannot delete a device, so those
+  # two tests register their hardcoded UDIDs permanently: the first matrix entry
+  # consumes the slots and every entry after it fails on the 409 the create maps
+  # to "Device Already Exists". Running them is a deliberate, once-per-team act
+  # -- see ACCEPTANCE_TESTING.md -- not something CI should do on every push.
   acceptance:
     name: Acceptance Tests (Terraform ${{ matrix.terraform }})
     needs: [build, check-credentials]
@@ -152,4 +158,4 @@ jobs:
           APPLE_APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APPLE_APP_STORE_CONNECT_ISSUER_ID }}
           APPLE_APP_STORE_CONNECT_API_KEY: ${{ secrets.APPLE_APP_STORE_CONNECT_API_KEY }}
           APPLE_APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APPLE_APP_STORE_CONNECT_PRIVATE_KEY }}
-        run: go test ./internal/provider/ -v -timeout 30m
+        run: go test ./internal/provider/ -v -timeout 30m -skip 'TestAccDeviceResource'

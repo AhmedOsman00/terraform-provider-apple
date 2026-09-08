@@ -287,6 +287,11 @@ TF_ACC=1 go test -v ./internal/provider/ -timeout 120m \
 TF_ACC=1 go test -v ./internal/provider/ -timeout 30m -run 'TestAccDeviceResource'
 ```
 
+Step 3 passes once per team and never again: the UDIDs are hardcoded and destroy
+only disables the device, so a second run gets Apple's 409 back as
+`Device Already Exists`. CI therefore runs step 2 rather than the whole suite —
+`.github/workflows/test.yml` passes `-skip 'TestAccDeviceResource'`.
+
 `make testacc` runs everything, devices included. Prefer the staged commands
 above for a first run against a new team.
 
