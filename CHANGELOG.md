@@ -10,6 +10,18 @@ NOTES:
 
 FEATURES:
 
+* **New:** auto-renewable subscription support, covering `apple_subscription_group`,
+  `apple_subscription`, `apple_subscription_localization` and
+  `apple_subscription_price`, with `apple_subscription_groups`,
+  `apple_subscriptions` and `apple_subscription_price_points` data sources.
+  These are App Store Connect resources rather than Developer Portal ones: they
+  hang off an app record, and Apple publishes no top-level collection for any of
+  them, so every listing takes a required scope argument and several import
+  forms are composite.
+* **New:** `apple_apps` data source. There is deliberately no `apple_app`
+  resource — Apple's documentation says to create new apps on the App Store
+  Connect website and publishes no endpoint to create or delete one — but a
+  subscription group needs the app's ID, so it has to be readable.
 * examples/signing: a runnable module replacing `fastlane match`, covering the App
   ID, capabilities, devices, signing certificates, and development/Ad Hoc/App Store
   profiles. It emits a signing bundle holding everything a machine needs to sign.

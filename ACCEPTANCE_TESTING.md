@@ -37,8 +37,9 @@ Assuming every test passes and every destroy completes:
 |---|---|---|
 | **Permanent** | 2 | Device registrations that can never be removed — one iOS, one Mac. Terraform disables them; they still occupy slots until the membership year renews. |
 | **Transient peak** | 2 | Certificates alive at once, at most. Tests run sequentially and each revokes what it issued. |
-| **Net zero** | 5 | Resource kinds fully cleaned up: Bundle IDs, capabilities, Merchant IDs, Pass Type IDs, profiles. |
-| **Touch nothing** | 19 | Tests rejected at plan time or read-only. |
+| **Net zero** | 9 | Resource kinds fully cleaned up: Bundle IDs, capabilities, Merchant IDs, Pass Type IDs, profiles, subscription groups, subscriptions, localizations, prices. |
+| **Reserved forever** | ~7 | Subscription product identifiers, randomised per run. Invisible once deleted, drawn from an unlimited namespace — see [Subscriptions](#subscriptions). |
+| **Touch nothing** | 22 | Tests rejected at plan time or read-only. |
 
 ### Certificates come back; devices do not
 
@@ -67,9 +68,10 @@ not a soft delete.
 
 ## Where each thing appears in the portal
 
-Everything lands under **Certificates, Identifiers & Profiles** on
-developer.apple.com. Nothing appears in App Store Connect itself — no apps, no
-builds, no submissions.
+Most of it lands under **Certificates, Identifiers & Profiles** on
+developer.apple.com. The subscription tests are the exception: they work in App
+Store Connect proper, under the app named by `APPLE_TEST_APP_ID`. Neither tier
+creates apps, builds or submissions.
 
 | Resource | Portal location |
 |---|---|
@@ -80,6 +82,9 @@ builds, no submissions.
 | Certificates | Certificates (revoked ones drop off the list) |
 | Devices | Devices → toggle "Include disabled devices" |
 | Profiles | Profiles |
+| Subscription groups | App Store Connect → the app → Monetization → Subscriptions |
+| Subscriptions | App Store Connect → the app → Monetization → Subscriptions → open the group |
+| Localizations and prices | App Store Connect → open the subscription |
 
 ## Devices — the only irreversible tests
 
@@ -177,6 +182,62 @@ Apple also enables some capabilities on a new Bundle ID by itself
 (`IN_APP_PURCHASE` among them), which is why the data source test asserts a
 floor on the count rather than an exact number.
 
+## Subscriptions
+
+**These tests need an app that already exists.** Apple's API cannot create an
+App Store Connect app record — its documentation says "Don't use this API to
+create new apps; instead, create new apps on the App Store Connect website" —
+so every `TestAccSubscription*` and `TestAccApps*` test skips itself unless
+`APPLE_TEST_APP_ID` names one. Set it to Apple's numeric app ID, the one in the
+App Store Connect URL, not the bundle identifier:
+
+```sh
+export APPLE_TEST_APP_ID=6448459855
+```
+
+Everything these tests create is deletable while it has never been approved, so
+a completed run is net zero. One thing is not reversible, and it is worth
+understanding before the first run:
+
+**Apple never releases a subscription product identifier.** Not when the
+subscription is deleted, not when it was never approved, never. Because of that
+these are the only tests in the suite that *randomise* their identifiers rather
+than fixing them — a fixed product ID would pass once per account and fail on
+every run afterwards, exactly the way the device tests do. The cost is that each
+run consumes a handful of identifiers of the form
+`com.test.terraform.sub<random>` permanently. They come from an unlimited
+namespace and are invisible in the portal once the subscription is deleted, so
+this is bookkeeping rather than a real constraint — but it is why the identifier
+convention differs here.
+
+| Test | Residue | Creates at Apple | What you see in the portal |
+|---|---|---|---|
+| `TestAccSubscriptionGroupResource_basic` | Net zero | A subscription group under the test app, renamed once, then imported as `<app>/<group>`. | A group appears under *Subscriptions*, its reference name changes, then it is deleted. |
+| `TestAccSubscriptionGroupResource_importRejectsBareID` | Net zero | One group; then attempts a bare-ID import and expects it to be refused. | A group appears and is deleted. The failed import changes nothing. |
+| `TestAccSubscriptionResource_basic` | Net zero | A group plus one subscription; renames it and changes its period from `ONE_MONTH` to `ONE_YEAR`; imports by bare ID. | A subscription appears inside the group showing *Missing Metadata*, its name and duration change, then both are deleted. |
+| `TestAccSubscriptionResource_completesMetadata` | Net zero | A group, a subscription, an `en-US` localization, and a USA price read from the price point catalogue. | A subscription that leaves *Missing Metadata* once its name and price are set. All of it is then deleted. |
+| `TestAccSubscriptionResource_requiresReplace` | Net zero | A group plus a subscription, replaced by one with a different product ID. **Consumes two identifiers rather than one.** | One subscription appears, then is destroyed and replaced by another. |
+| `TestAccSubscriptionResource_validation` | Plan-only | Nothing. | No change. |
+| `TestAccAppsDataSource_basic` | Read-only | Nothing — apps cannot be created by the API. | No change. |
+| `TestAccAppsDataSource_filtering` | Read-only | Nothing. | No change. |
+| `TestAccSubscriptionGroupsDataSource_basic` | Net zero | One group, read back through two data sources. | A group appears and is deleted. |
+| `TestAccSubscriptionsDataSource_basic` | Net zero | A group plus two subscriptions at group levels 1 and 2, read back through five data sources. | Two subscriptions appear in one group, then all are deleted. |
+| `TestAccSubscriptionPricePointsDataSource_basic` | Net zero | A group plus one subscription; reads Apple's price catalogue for USA and for USA+GBR. | A subscription appears and is deleted. The catalogue is read-only. |
+
+Three API shapes explain most failures here. Apple publishes **no top-level
+collection** for subscription groups, subscriptions or localizations — `GET
+/v1/subscriptions` is a 404 — so everything is reached through its parent. It
+publishes **no `GET` for a single subscription price**, so a price is read by
+listing its subscription's schedule and scanning, and imports as
+`<subscription_id>/<price_id>`. And it reports **no app linkage on a subscription
+group**: `include=app` is not among the accepted values, so a group imports as
+`<app_id>/<group_id>` and `app_id` is never refreshed from Apple.
+
+A price point ID encodes the subscription it belongs to, so one read from a
+different subscription is rejected. That is why
+`TestAccSubscriptionResource_completesMetadata` reads the catalogue through a
+data source in the same configuration rather than hardcoding an ID.
+
 ## Merchant IDs
 
 Deletable. Apple rejects duplicates, so leftovers block re-runs.
@@ -263,7 +324,18 @@ Profiles
 Certificates
   Any certificate whose CSR common name is
   "terraform-provider-apple acceptance test"  → revoke it
+
+App Store Connect → the APPLE_TEST_APP_ID app → Monetization → Subscriptions
+  Any group named "Terraform Test / Renamed / Import / Sub / Full /
+  Replace / DS / SubDS / PP <random>"     → delete it, and the
+                                             subscriptions inside it first
 ```
+
+Subscription leftovers do not block the next run the way the others do: both the
+group reference name and the product identifiers are randomised, so a second run
+collides with nothing. Clean them up anyway — an abandoned subscription still
+shows in the portal, and a group cannot be deleted once anything inside it has
+been approved.
 
 ## How to run it
 
@@ -277,6 +349,10 @@ with the tests that leave nothing behind before committing the device slots.
 export APPLE_APP_STORE_CONNECT_ISSUER_ID=...
 export APPLE_APP_STORE_CONNECT_API_KEY=...
 export APPLE_APP_STORE_CONNECT_PRIVATE_KEY="$(cat AuthKey_XXXXXXXXXX.p8)"
+
+# Optional. Without it every TestAccSubscription* and TestAccApps* test skips
+# itself, because Apple's API cannot create the app record they hang off.
+export APPLE_TEST_APP_ID=6448459855
 
 # 1. Read-only first — proves the credentials work, creates nothing.
 TF_ACC=1 go test -v ./internal/provider/ -timeout 30m \

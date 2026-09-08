@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Terraform provider (`terraform-provider-apple`, module `github.com/AhmedOsman00/terraform-provider-apple`) for Apple App Store Connect, built on the **Terraform Plugin Framework** (not SDK v2). It is published on the Terraform Registry as `ahmedosman00/apple`. It manages Bundle IDs, Bundle ID capabilities, certificates, devices, merchant IDs, Pass Type IDs, and provisioning profiles.
+A Terraform provider (`terraform-provider-apple`, module `github.com/AhmedOsman00/terraform-provider-apple`) for Apple App Store Connect, built on the **Terraform Plugin Framework** (not SDK v2). It is published on the Terraform Registry as `ahmedosman00/apple`. It manages Bundle IDs, Bundle ID capabilities, certificates, devices, merchant IDs, Pass Type IDs, and provisioning profiles, plus auto-renewable subscriptions (groups, subscriptions, localizations, prices).
 
 ## Commands
 
@@ -45,7 +45,7 @@ cannot be used for this: it makes `terraform init` refuse to run.
 
 `tfplugindocs` builds `docs/` from provider/resource/data-source `MarkdownDescription` strings plus the matching files under `examples/`. CI (`.github/workflows/test.yml`) fails the `generate` job if `make generate` produces a diff, so regenerate and commit whenever a schema, example, or guide changes.
 
-`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All fifteen pages are checked in: `index.md`, seven under `resources/`, and seven under `data-sources/`.
+`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All twenty-three pages are checked in: `index.md`, eleven under `resources/`, and eleven under `data-sources/`.
 
 Hand-written prose lives in `templates/`, which is the only part of the docs pipeline a human edits directly. `templates/guides/<name>.md.tmpl` renders to `docs/guides/<name>.md`; a `templates/` directory does not suppress the auto-generated resource and data-source pages, which are still built from the schemas into a temporary directory. Two guides exist: `getting-started` (credentials, installing the provider from the Registry and overriding it with a local build, first configuration, import IDs per resource) and `code-signing` (the `fastlane match` replacement, the state-vs-bundle distribution model, adopting a match certificate).
 
@@ -56,10 +56,10 @@ Two layers, strictly separated, plus a standalone CLI:
 ### `internal/apple/` — App Store Connect API client
 
 - `client.go`: `Client` holds the JWT (ES256, `kid` header, 20-minute expiry) built from issuer ID + key ID + PKCS#8 private key. The token is minted once in `NewClient` and is immutable thereafter — a 20-minute life outlives any single Terraform command, so there is deliberately no refresh path and the signing key is not retained. `doRequest` decodes `models.ErrorResponse` into a formatted error, preferring Apple's own message; a 401 is reported as a credentials failure rather than retried, since re-signing with the same key yields an equivalent token.
-- One file per Apple resource (`budleIds.go` — note the typo in the filename — `certificates.go`, `devices.go`, `merchantIds.go`, `passTypeIds.go`, `profiles.go`, `bundleIdCapabilities.go`). Each exposes plain `Get*/Create*/Update*/Delete*` methods on `*Client` returning `models.*` structs. No Terraform types here.
+- One file per Apple resource (`budleIds.go` — note the typo in the filename — `certificates.go`, `devices.go`, `merchantIds.go`, `passTypeIds.go`, `profiles.go`, `bundleIdCapabilities.go`, `apps.go`, `subscriptionGroups.go`, `subscriptions.go`, `subscriptionLocalizations.go`, `subscriptionPrices.go`). Each exposes plain `Get*/Create*/Update*/Delete*` methods on `*Client` returning `models.*` structs. No Terraform types here.
 - `models/`: JSON wire types. All responses go through the generics in `common.go`: `Response[T]`, `ListResponse[T]`, `Request[T]`.
-- `pagination.go`: `getAllPages[T]` walks every page of a collection, following the absolute `links.next` URL until it is empty and refusing links that point off-host. All seven `Get*s()` functions go through it — reading only the first page silently truncates results. A `pageSize` of `noPageSize` (0) omits the `limit` parameter entirely, which the `bundleIdCapabilities` relationship requires: it rejects `limit` with a 400.
-- Apple's API has no server-side filtering here — "get by identifier/name" helpers (e.g. `GetPassTypeIDByIdentifier`, `GetProfileByName`) list a full collection and scan client-side, so they depend on pagination being complete.
+- `pagination.go`: `getAllPages[T]` walks every page of a collection, following the absolute `links.next` URL until it is empty and refusing links that point off-host. All seven `Get*s()` functions go through it — reading only the first page silently truncates results. A `pageSize` of `noPageSize` (0) omits the `limit` parameter entirely, which the `bundleIdCapabilities` relationship requires: it rejects `limit` with a 400. `getAllPagesQuery` is the same walk with extra query parameters applied to the first request only — Apple's `links.next` already carries them forward, so re-appending would duplicate them. The subscription collections need it: a price is unreadable without `include=subscriptionPricePoint`, and the price point catalogue is unusable without `filter[territory]`.
+- Apple's API has no server-side filtering here — "get by identifier/name" helpers (e.g. `GetPassTypeIDByIdentifier`, `GetProfileByName`) list a full collection and scan client-side, so they depend on pagination being complete. The App Store Connect endpoints are the exception: `/v1/apps` supports `filter[bundleId]` and the price point catalogue supports `filter[territory]`, and both are used server-side because the collections are too large to pull whole.
 
 ### `internal/provider/` — Terraform layer
 
@@ -69,7 +69,7 @@ The optional `scope` attribute restricts the JWT to named operations. It must be
 
 Env vars: `APPLE_APP_STORE_CONNECT_ISSUER_ID`, `APPLE_APP_STORE_CONNECT_API_KEY`, `APPLE_APP_STORE_CONNECT_PRIVATE_KEY`.
 
-Each domain lives in its own package (`bundle`, `certificate`, `device`, `merchant`, `passtypeid`, `profile`) following a consistent four-file convention:
+Each domain lives in its own package (`bundle`, `certificate`, `device`, `merchant`, `passtypeid`, `profile`, `subscription`, `app`) following a consistent four-file convention:
 
 | File | Contents |
 |---|---|
@@ -79,6 +79,23 @@ Each domain lives in its own package (`bundle`, `certificate`, `device`, `mercha
 | `filters.go` | pure `Filter*` / `Sort*` / `Limit*` functions over `[]models.*`, applied in-memory after fetching |
 
 `bundle` additionally carries `capability_*.go` for the `apple_bundle_id_capability` resource/data source, where `capability_models.go` holds `SettingsFromAPI`/`SettingsToAPI` and `OptionsFromAPI`/`OptionsToAPI` to convert nested capability settings between API structs and `types.List`.
+
+`subscription` carries four resources rather than one, so it prefixes by kind
+the way `bundle` does: `group_*.go`, `localization_*.go`, `price_*.go` and
+`price_point_data_source.go` alongside the unprefixed `resource.go` /
+`data_source.go` for `apple_subscription` itself. `app` is a data source only.
+
+**App Store Connect resources differ from Developer Portal ones in two ways
+that shape the whole `subscription` package.** They hang off an app record,
+which Apple's API cannot create — its documentation says "Don't use this API to
+create new apps; instead, create new apps on the App Store Connect website" —
+so there is deliberately no `apple_app` resource, only the `apple_apps` data
+source. And they nest: a group holds subscriptions, a subscription holds
+localizations and prices, and Apple publishes **no top-level collection** for
+any of them (`GET /v1/subscriptions` and `GET /v1/subscriptionGroups` are both
+404), so the parent must be known before a child can be read. That is why every
+listing data source takes a required scope argument, and why several import
+forms are composite.
 
 **Adding a resource or data source requires registering the constructor in both `DataSources()` and `Resources()` in `internal/provider/provider.go`** — nothing is discovered automatically.
 
@@ -155,6 +172,11 @@ Two things are load-bearing and easy to break:
 - **`apple_bundle_id_capability`**: Apple exposes no `GET` for a single capability (403 `does not allow 'GET_INSTANCE'`), so every read lists the parent Bundle ID's collection and scans — which is why the parent has to be known. Import accepts `<bundle_id>/<capability_id>`; a bare capability ID recovers the parent from the ID itself, which Apple composes as `<bundleID>_<CAPABILITY_TYPE>`, and confirms it against the collection before writing state. The lookup through the parent *is* the ownership check. Capability writes are serialized per Bundle ID (`capability_serialize.go`) because Apple applies them as an unlocked read-modify-write over the whole set: two concurrent creates both return 201 and one silently vanishes. The resource models only what Apple accepts as input — `key` plus `value` or `options` — since Apple has no scalar `value` property (`value` is sent as a one-element options list) and its display metadata, exposed as `Optional+Computed` inside a list, made every plan non-empty.
 
   The resource and the data source therefore describe a setting differently on purpose: `name`, `visible`, `min_count` and the per-option labels stay on the data source (`capability_data_source.go`), which only reports, and are absent from the resource, which only writes. Dropping them from the resource narrowed a published schema, which is normally breaking — it was safe here solely because no configuration could have been relying on them: every capability operation failed before this, so the resource had never created anything. That escape hatch does not generalise. Removing an attribute from a resource that works needs a deprecation cycle instead.
+- **`apple_subscription_group`**: `app_id` is write-once and unreadable. Apple's update request has no `app` member and `GET /v1/subscriptionGroups/{id}` accepts no `app` value for its `include` parameter, so the owning app can never be refreshed — `Read` keeps the configured value, and `ImportState` accepts only the composite `<app_id>/<group_id>` form, confirming ownership against the app's collection before writing state. `reference_name` is the only mutable attribute; it is internal to App Store Connect, and the customer-facing name is a subscription group localization this provider does not manage.
+- **`apple_subscription`**: `product_id` is `RequiresReplace` because Apple's `SubscriptionUpdateRequest` has no `productId` member — and replacing it is expensive in a way Terraform cannot express, because **Apple never releases a product identifier**, not even one belonging to a subscription deleted before it was ever approved. `group_id` is likewise immutable: a subscription cannot move between groups. `state` is Apple's and always starts at `MISSING_METADATA`; it only leaves once a localization *and* a price exist, which is why those are separate resources rather than optional attributes. `Read` and `ImportState` rely on `GetSubscription` requesting `include=group`, without which Apple reports the relationship as links alone and an import would leave `group_id` null.
+- **`apple_subscription_localization`**: `locale` is `RequiresReplace` — it identifies the record and is absent from Apple's update request. This is the customer-facing name and description; the `name` on `apple_subscription` is an internal reference name. Import accepts a bare localization ID (the client asks for `include=subscription`) or the composite `<subscription_id>/<localization_id>`, which additionally checks ownership.
+- **`apple_subscription_price`**: every attribute is `RequiresReplace` and `Update` exists only to report that it was reached, because Apple publishes no `PATCH /v1/subscriptionPrices` — a price change is a new record plus a deletion. There is also no `GET` for a single price, so `Read` lists the subscription's price collection and scans it, the same shape `apple_bundle_id_capability` is forced into; import is therefore composite. A price is never a number: `price_point_id` references Apple's catalogue, read through `apple_subscription_price_points`, and a price point ID encodes the subscription it belongs to, so it cannot be reused across subscriptions. `preserve_current_price` is an instruction Apple does not report back — only its outcome, through the computed `preserved` — so import leaves it null and `ImportStateVerifyIgnore` covers it.
+- **Customer-facing text is validated in characters, not bytes.** `GetNameValidator` and `GetDescriptionValidator` use `stringvalidator.UTF8LengthBetween`, not `LengthBetween`. Apple's 30- and 45-character limits are character counts, while `LengthBetween` counts bytes, which rejected a legal 27-character Arabic description at "49". Any new customer-visible string field must follow this.
 - **`apple_profile`**: every configurable attribute is `RequiresReplace`, `name` included — Apple rejects `PATCH /v1/profiles` with 403 `does not allow 'UPDATE'`, so a rename is a reissue and `Update` exists only to report that it was reached. Profile content/UUID/state/dates are Apple-computed. `CreateProfile` retries a 5xx up to three times: `POST /v1/profiles` intermittently answers 500 for a well-formed request that succeeds on the next attempt. It looks the name up before each retry and adopts an already-issued profile, so a 500 that arrives after Apple committed the write does not duplicate it.
 
 ## Local testing
@@ -171,14 +193,15 @@ Pushing a `v*` tag runs `.github/workflows/release.yml`: GoReleaser cross-compil
 
 Two tiers:
 
-- **Credential-free** (`internal/apple/pagination_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`.
+- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`.
 - **Acceptance** (`internal/provider/*_test.go`, package `provider`): `terraform-plugin-testing` against the real API. `testAccPreCheck` skips when credentials are absent.
 
-All seven resources now have acceptance coverage. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
+All eleven resources now have acceptance coverage. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
 
 Two things constrain what the acceptance tier is allowed to do:
 
 - **Devices are permanent.** Apple has no device delete, so `device_resource_test.go` registers two fake UDIDs that stay in the team forever and consume device slots. Nothing new should register devices — which is why the profile tests use `IOS_APP_STORE` (needs no devices) rather than a development or ad hoc type. The UDIDs are hardcoded and `Delete` only disables, so a second run of those tests hits Apple's 409 and fails on `Device Already Exists`: they pass once per team, ever. CI skips them for that reason; run them by hand when you have accepted the slots.
+- **Subscriptions need an app that already exists.** Apple's API cannot create an app record, so `TestAccSubscription*` and `TestAccApps*` skip unless `APPLE_TEST_APP_ID` names one — `testAccPreCheckSubscription` enforces it, and `.github/workflows/acceptance.yml` warns rather than passing silently when the secret is absent. Product identifiers are **randomised per run** here, deliberately breaking the fixed-identifier convention the rest of the suite follows: Apple reserves every product ID it has ever seen, so a fixed one would pass exactly once per account and fail forever after, the way the device tests do. Randomising still consumes a handful of identifiers per run from an unlimited namespace, which is harmless; a fixed one would consume the only usable value.
 - **Certificates consume a slot while they exist.** `certificate_resource_test.go` and both profile test files issue one and revoke it on destroy, so a completed run is neutral; an interrupted run leaves a certificate to revoke by hand. `IOS_DEVELOPMENT` is preferred over a distribution type where the profile type allows it.
 
 Identifiers are fixed rather than randomised, matching the existing tests, so an interrupted run leaves a Bundle ID, Merchant ID or profile that must be deleted in the portal before the test passes again.
@@ -191,6 +214,6 @@ One trap it records: Bundle ID identifiers cannot contain the underscore the pla
 
 Acceptance tests live in their own workflow, `.github/workflows/acceptance.yml`, and run **only on `workflow_dispatch`**: they create billable resources in a real Apple team, use fixed identifiers that collide if two runs overlap, and leave material to clean up by hand when interrupted. Its inputs are the Terraform version (one per run, not a matrix), a `-run` pattern, and an `include_device_tests` boolean that defaults to false — `TestAccDeviceResource*` registers two UDIDs permanently and passes once per team, ever. The job fails fast if the three `APPLE_APP_STORE_CONNECT_*` secrets are absent, because a suite that skips itself would otherwise report green on a run somebody triggered deliberately, and it sets `cancel-in-progress: false` so a queued run never kills one mid-apply.
 
-All six filter packages have table-driven tests (`internal/provider/*/filters_test.go`) covering filtering, sorting, limiting, and the malformed-pattern errors. Resource CRUD paths are still only reachable through the acceptance tier.
+All eight filter packages have table-driven tests (`internal/provider/*/filters_test.go`) covering filtering, sorting, limiting, and the malformed-pattern errors. Resource CRUD paths are still only reachable through the acceptance tier.
 
-Two behaviours worth knowing when writing filter tests, because they differ per package: `bundle` and `certificate` match `name_pattern` as a **glob** (`filepath.Match`, whole-string), while `device`, `merchant`, `passtypeid`, and `profile` match it as a **regex** (substring unless anchored). `merchant`'s display-name pattern is additionally case-insensitive.
+Two behaviours worth knowing when writing filter tests, because they differ per package: `bundle` and `certificate` match `name_pattern` as a **glob** (`filepath.Match`, whole-string), while `device`, `merchant`, `passtypeid`, `profile`, `subscription`, and `app` match it as a **regex** (substring unless anchored). `merchant`'s display-name pattern is additionally case-insensitive.

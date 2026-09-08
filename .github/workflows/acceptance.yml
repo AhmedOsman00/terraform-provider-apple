@@ -81,6 +81,10 @@ jobs:
           APPLE_APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APPLE_APP_STORE_CONNECT_ISSUER_ID }}
           APPLE_APP_STORE_CONNECT_API_KEY: ${{ secrets.APPLE_APP_STORE_CONNECT_API_KEY }}
           APPLE_APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APPLE_APP_STORE_CONNECT_PRIVATE_KEY }}
+          # Subscription tests hang off an App Store Connect app record, which
+          # Apple's API cannot create. Without this they skip themselves; the
+          # step below says so rather than letting it pass unnoticed.
+          APPLE_TEST_APP_ID: ${{ secrets.APPLE_TEST_APP_ID }}
           RUN_FILTER: ${{ inputs.run_filter }}
           INCLUDE_DEVICE_TESTS: ${{ inputs.include_device_tests }}
         # No -parallel: the suite uses fixed identifiers that collide.
@@ -93,7 +97,15 @@ jobs:
           {
             echo "Terraform: ${{ inputs.terraform_version }}"
             echo "Filter:    -run '$RUN_FILTER' ${skip[*]}"
+            if [ -z "$APPLE_TEST_APP_ID" ]; then
+              echo "Subscriptions: SKIPPED (no APPLE_TEST_APP_ID secret)"
+            else
+              echo "Subscriptions: app $APPLE_TEST_APP_ID"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$APPLE_TEST_APP_ID" ]; then
+            echo "::warning::APPLE_TEST_APP_ID is not set -- every TestAccSubscription* test will skip itself."
+          fi
           go test ./internal/provider/ -v -timeout 55m -run "$RUN_FILTER" "${skip[@]}"
 
       # A run killed mid-apply never reaches Terraform's destroy, and the
@@ -106,6 +118,12 @@ jobs:
           ### Check for leftovers
 
           A failed or timed-out run can leave a Bundle ID, Merchant ID, Pass
-          Type ID, profile or unrevoked certificate in the portal. See the
-          cleanup list in `ACCEPTANCE_TESTING.md`.
+          Type ID, profile or unrevoked certificate in the portal, and a
+          subscription group under the test app. See the cleanup list in
+          `ACCEPTANCE_TESTING.md`.
+
+          Subscription product identifiers are randomised per run, so a
+          leftover subscription never blocks the next run -- but Apple reserves
+          every identifier it has ever seen, so each run consumes a few
+          permanently. That is expected and harmless.
           EOF

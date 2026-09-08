@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
@@ -38,9 +39,28 @@ const (
 // and for the lookup helpers that scan a full collection to resolve a
 // human-readable identifier.
 func getAllPages[T any](c *Client, endpoint string, pageSize int) ([]T, error) {
-	next := fmt.Sprintf("%s%s?limit=%d", c.HostURL, endpoint, pageSize)
-	if pageSize <= 0 {
-		next = c.HostURL + endpoint
+	return getAllPagesQuery[T](c, endpoint, pageSize, nil)
+}
+
+// getAllPagesQuery is getAllPages with additional query parameters on the first
+// request. The "next" link Apple returns already carries them forward, so they
+// are applied once rather than re-appended per page.
+//
+// The subscription collections need this: a price is unreadable without
+// include=subscriptionPricePoint, and the price point catalogue is large enough
+// that filter[territory] is the difference between one page and hundreds.
+func getAllPagesQuery[T any](c *Client, endpoint string, pageSize int, params url.Values) ([]T, error) {
+	query := url.Values{}
+	for k, v := range params {
+		query[k] = v
+	}
+	if pageSize > 0 {
+		query.Set("limit", strconv.Itoa(pageSize))
+	}
+
+	next := c.HostURL + endpoint
+	if encoded := query.Encode(); encoded != "" {
+		next += "?" + encoded
 	}
 
 	var all []T

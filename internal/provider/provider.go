@@ -10,12 +10,14 @@ import (
 	"strings"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/app"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/bundle"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/certificate"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/device"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/merchant"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/passtypeid"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/profile"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/subscription"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -287,6 +289,10 @@ func (p *appleProvider) DataSources(_ context.Context) []func() datasource.DataS
 		merchant.NewMerchantIDsDataSource,
 		passtypeid.NewPassTypeIDsDataSource,
 		profile.NewProfilesDataSource,
+		app.NewAppsDataSource,
+		subscription.NewSubscriptionGroupsDataSource,
+		subscription.NewSubscriptionsDataSource,
+		subscription.NewSubscriptionPricePointsDataSource,
 	}
 }
 
@@ -300,5 +306,9 @@ func (p *appleProvider) Resources(_ context.Context) []func() resource.Resource 
 		merchant.NewMerchantIDResource,
 		passtypeid.NewPassTypeIDResource,
 		profile.NewProfileResource,
+		subscription.NewSubscriptionGroupResource,
+		subscription.NewSubscriptionResource,
+		subscription.NewSubscriptionLocalizationResource,
+		subscription.NewSubscriptionPriceResource,
 	}
 }
