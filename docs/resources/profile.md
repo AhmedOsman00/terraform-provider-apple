@@ -221,7 +221,9 @@ output "profile_metadata" {
 
 - `bundle_id` (String) The ID of the Bundle ID to associate with this profile. This cannot be changed after creation.
 - `certificates` (List of String) List of certificate IDs to include in the profile. This cannot be changed after creation.
-- `name` (String) A human-readable name for the Profile. This can be updated after creation.
+- `name` (String) A human-readable name for the Profile.
+
+Changing this forces a new Profile to be issued. Apple has no update operation for profiles — `PATCH /v1/profiles` is rejected — so a rename is a revoke and reissue, exactly as it is in the Developer portal. The reissued profile has a new UUID and content.
 - `profile_type` (String) The type of Profile to create. This determines both the platform and the distribution method, and is the attribute that decides whether the profile can be used for development, ad hoc testing, or App Store submission. Valid values are:
 - `IOS_APP_DEVELOPMENT` - iOS development, requires `devices`
 - `IOS_APP_ADHOC` - iOS ad hoc distribution, requires `devices`

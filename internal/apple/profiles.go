@@ -8,9 +8,43 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
+
+const (
+	// POST /v1/profiles intermittently answers 500 "An unexpected error
+	// occurred" for a request that is well formed and succeeds on the next
+	// attempt. It is not tied to the profile name, the bundle, or the
+	// certificate -- issuing the same request repeatedly fails at random.
+	// Terraform surfaces that as a failed apply, so the create is retried.
+	//
+	// Only profile creation retries. Everything else this client does either
+	// succeeds or fails deterministically, and a blanket retry would hide real
+	// errors and repeat non-idempotent writes.
+	profileCreateAttempts = 3
+	profileCreateBackoff  = 2 * time.Second
+)
+
+// isRetryableServerError reports whether an error came back as a 5xx.
+//
+// doRequest renders Apple's errors as text, so this matches on the status it
+// formats in. A 4xx is the caller's fault and never retried.
+func isRetryableServerError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := err.Error()
+	for _, status := range []string{"status 500", "status 502", "status 503", "status 504"} {
+		if strings.Contains(msg, status) {
+			return true
+		}
+	}
+
+	return false
+}
 
 // GetProfiles retrieves all Profiles for the team.
 func (c *Client) GetProfiles() ([]models.Profile, error) {
@@ -94,23 +128,44 @@ func (c *Client) CreateProfile(name string, profileType models.ProfileType, bund
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/v1/profiles", c.HostURL), strings.NewReader(string(rb)))
-	if err != nil {
-		return nil, err
+	var lastErr error
+	for attempt := 0; attempt < profileCreateAttempts; attempt++ {
+		if attempt > 0 {
+			// A 500 sometimes lands after Apple has already issued the profile.
+			// Look before retrying: the name is unique per team, so finding it
+			// means the previous attempt succeeded and a retry would either
+			// duplicate it or fail on the name.
+			if existing, err := c.GetProfileByName(name); err == nil {
+				return existing, nil
+			}
+
+			time.Sleep(profileCreateBackoff)
+		}
+
+		req, err := http.NewRequest("POST", fmt.Sprintf("%s/v1/profiles", c.HostURL), strings.NewReader(string(rb)))
+		if err != nil {
+			return nil, err
+		}
+
+		body, err := c.doRequest(req, authToken)
+		if err != nil {
+			lastErr = err
+			if isRetryableServerError(err) {
+				continue
+			}
+
+			return nil, err
+		}
+
+		response := models.Response[models.Profile]{}
+		if err := json.Unmarshal(body, &response); err != nil {
+			return nil, err
+		}
+
+		return &response.Data, nil
 	}
 
-	body, err := c.doRequest(req, authToken)
-	if err != nil {
-		return nil, err
-	}
-
-	response := models.Response[models.Profile]{}
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return nil, err
-	}
-
-	return &response.Data, nil
+	return nil, fmt.Errorf("creating profile %q failed after %d attempts: %w", name, profileCreateAttempts, lastErr)
 }
 
 // UpdateProfile updates a Profile's name (only field that can be updated).

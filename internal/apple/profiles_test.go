@@ -198,3 +198,118 @@ func TestCreateProfileWithDevices(t *testing.T) {
 		}
 	}
 }
+
+// TestCreateProfileRetriesServerError covers the intermittent 500 Apple returns
+// from POST /v1/profiles for a request that is well formed. A single retry
+// recovers, and the caller must not see the transient failure.
+func TestCreateProfileRetriesServerError(t *testing.T) {
+	var posts int
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/profiles":
+			posts++
+			if posts == 1 {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"errors":[{"status":"500","code":"UNEXPECTED_ERROR","title":"An unexpected error occurred.","detail":"An unexpected error occurred on the server side."}]}`))
+				return
+			}
+
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"data":{"type":"profiles","id":"PROF123","attributes":{"name":"Retry Profile","profileType":"IOS_APP_STORE"}}}`))
+
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/profiles":
+			// The look-before-retry check: nothing was issued by the failed POST.
+			_, _ = w.Write([]byte(`{"data":[]}`))
+
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	client := &Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}
+
+	profile, err := client.CreateProfile("Retry Profile", models.ProfileType("IOS_APP_STORE"), "BUNDLE1", []string{"CERT1"}, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateProfile() returned error: %v", err)
+	}
+
+	if profile.ID != "PROF123" {
+		t.Errorf("profile ID = %q, want PROF123", profile.ID)
+	}
+
+	if posts != 2 {
+		t.Errorf("POST attempts = %d, want 2 (one failure, one retry)", posts)
+	}
+}
+
+// TestCreateProfileAdoptsProfileIssuedByFailedAttempt covers the other half of
+// the retry: a 500 that arrives after Apple has already created the profile.
+// Retrying blindly would either duplicate it or fail on the unique name, so the
+// client looks it up by name and adopts it.
+func TestCreateProfileAdoptsProfileIssuedByFailedAttempt(t *testing.T) {
+	var posts int
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/profiles":
+			posts++
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"errors":[{"status":"500","code":"UNEXPECTED_ERROR","title":"An unexpected error occurred.","detail":""}]}`))
+
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/profiles":
+			_, _ = w.Write([]byte(`{"data":[{"type":"profiles","id":"PROFEXISTING","attributes":{"name":"Retry Profile","profileType":"IOS_APP_STORE"}}]}`))
+
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	client := &Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}
+
+	profile, err := client.CreateProfile("Retry Profile", models.ProfileType("IOS_APP_STORE"), "BUNDLE1", []string{"CERT1"}, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateProfile() returned error: %v", err)
+	}
+
+	if profile.ID != "PROFEXISTING" {
+		t.Errorf("profile ID = %q, want the profile the failed attempt issued", profile.ID)
+	}
+
+	if posts != 1 {
+		t.Errorf("POST attempts = %d, want 1: the lookup should stop the retry", posts)
+	}
+}
+
+// TestCreateProfileDoesNotRetryClientError confirms the retry is limited to
+// 5xx: a 409 is the caller's fault and repeating it only wastes time.
+func TestCreateProfileDoesNotRetryClientError(t *testing.T) {
+	var posts int
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/v1/profiles" {
+			posts++
+			w.WriteHeader(http.StatusConflict)
+			_, _ = w.Write([]byte(`{"errors":[{"status":"409","code":"ENTITY_ERROR","title":"There is a problem with the request entity","detail":"A profile with this name already exists"}]}`))
+			return
+		}
+
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	client := &Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}
+
+	if _, err := client.CreateProfile("Dup", models.ProfileType("IOS_APP_STORE"), "BUNDLE1", []string{"CERT1"}, nil, nil); err == nil {
+		t.Fatal("CreateProfile() succeeded, want the 409 surfaced")
+	}
+
+	if posts != 1 {
+		t.Errorf("POST attempts = %d, want 1: a 409 must not be retried", posts)
+	}
+}

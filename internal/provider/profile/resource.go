@@ -67,9 +67,15 @@ func (r *profileResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				},
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "A human-readable name for the Profile. This can be updated after creation.",
-				Required:            true,
-				Validators:          GetNameValidator(),
+				MarkdownDescription: "A human-readable name for the Profile.\n\n" +
+					"Changing this forces a new Profile to be issued. Apple has no update operation for profiles — " +
+					"`PATCH /v1/profiles` is rejected — so a rename is a revoke and reissue, exactly as it is in the " +
+					"Developer portal. The reissued profile has a new UUID and content.",
+				Required:   true,
+				Validators: GetNameValidator(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"platform": schema.StringAttribute{
 				MarkdownDescription: "The platform the Profile targets (`IOS`, `MAC_OS`, `TV_OS`, or `WATCH_OS`).\n\n" +
@@ -392,87 +398,26 @@ func (r *profileResource) Read(ctx context.Context, req resource.ReadRequest, re
 }
 
 // Update updates the resource.
-func (r *profileResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	tflog.Info(ctx, "Updating Profile resource")
+// Update is unreachable: App Store Connect has no update for a profile.
+//
+// PATCH /v1/profiles answers 403 "The resource 'profiles' does not allow
+// 'UPDATE'. Allowed operations are: CREATE, DELETE, GET_COLLECTION,
+// GET_INSTANCE", so a profile cannot be renamed in place -- Apple's model is
+// that a profile is issued, not edited. Every configurable attribute therefore
+// carries RequiresReplace and Terraform replaces the profile instead, which is
+// what the portal does too: renaming there reissues the profile.
+//
+// The method has to exist to satisfy resource.Resource, so it reports the
+// impossible state rather than pretending to succeed.
+func (r *profileResource) Update(ctx context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse) {
+	tflog.Error(ctx, "Update called on a Profile, which Apple does not support")
 
-	// Retrieve values from plan and current state
-	var plan profileModel
-	var state profileModel
-
-	diags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
-
-	diags = req.State.Get(ctx, &state)
-	resp.Diagnostics.Append(diags...)
-
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	ctx = tflog.SetField(ctx, "profile_id", state.ID.ValueString())
-	ctx = tflog.SetField(ctx, "new_name", plan.Name.ValueString())
-
-	tflog.Debug(ctx, "Updating Profile with Apple API")
-
-	// Update Profile name (only field that can be updated)
-	profile, err := r.client.UpdateProfile(
-		state.ID.ValueString(),
-		plan.Name.ValueString(),
-		nil,
+	resp.Diagnostics.AddError(
+		"Profile Update Not Supported",
+		"App Store Connect cannot update an existing Profile, so this resource replaces it instead. "+
+			"Reaching this method means an attribute changed without forcing replacement, which is a bug in the "+
+			"provider: please report it.",
 	)
-	if err != nil {
-		tflog.Error(ctx, "Failed to update Profile", map[string]interface{}{
-			"error": err.Error(),
-		})
-		resp.Diagnostics.AddError(
-			"Error Updating Profile",
-			fmt.Sprintf("Could not update Profile %s: %s", state.ID.ValueString(), err.Error()),
-		)
-		return
-	}
-
-	// Update the plan with the updated values
-	plan.ID = types.StringValue(profile.ID)
-	plan.Platform = platformValue(profile.Attributes.Platform)
-	if profile.Attributes.ProfileContent != nil {
-		plan.ProfileContent = types.StringValue(*profile.Attributes.ProfileContent)
-	} else {
-		plan.ProfileContent = types.StringNull()
-	}
-	if profile.Attributes.UUID != nil {
-		plan.UUID = types.StringValue(*profile.Attributes.UUID)
-	} else {
-		plan.UUID = types.StringNull()
-	}
-	if profile.Attributes.ProfileState != nil {
-		plan.ProfileState = types.StringValue(string(*profile.Attributes.ProfileState))
-	} else {
-		plan.ProfileState = types.StringNull()
-	}
-	// profile_type is configured, so leave the planned value in place when Apple
-	// omits it: overwriting with null would contradict the config after apply.
-	if profile.Attributes.ProfileType != nil {
-		plan.ProfileType = types.StringValue(string(*profile.Attributes.ProfileType))
-	}
-	if profile.Attributes.CreatedDate != nil {
-		plan.CreatedDate = types.StringValue(profile.Attributes.CreatedDate.Format(time.RFC3339))
-	} else {
-		plan.CreatedDate = types.StringNull()
-	}
-	if profile.Attributes.ExpirationDate != nil {
-		plan.ExpirationDate = types.StringValue(profile.Attributes.ExpirationDate.Format(time.RFC3339))
-	} else {
-		plan.ExpirationDate = types.StringNull()
-	}
-
-	tflog.Info(ctx, "Profile updated successfully")
-
-	// Set updated state
-	diags = resp.State.Set(ctx, plan)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
 }
 
 // Delete deletes the resource.

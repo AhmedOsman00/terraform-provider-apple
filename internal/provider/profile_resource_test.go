@@ -83,13 +83,15 @@ func TestAccProfileResource_basic(t *testing.T) {
 	})
 }
 
-// TestAccProfileResource_rename covers the one in-place update the resource
-// offers.
+// TestAccProfileResource_rename covers renaming a profile, which Apple can only
+// do by reissuing it.
 //
-// The provider implements it as PATCH /v1/profiles/{id}. If Apple answers 404
-// or 405 here, the endpoint does not exist and `name` should carry
-// RequiresReplace like every other attribute on this resource -- fastlane
-// recreates profiles to rename them for exactly that reason.
+// This test is what settled the question the resource used to hedge on: Apple
+// answers PATCH /v1/profiles/{id} with 403 "The resource 'profiles' does not
+// allow 'UPDATE'. Allowed operations are: CREATE, DELETE, GET_COLLECTION,
+// GET_INSTANCE". name therefore carries RequiresReplace like every other
+// attribute here, and a rename is a revoke and reissue -- which is exactly why
+// fastlane recreates profiles to rename them.
 func TestAccProfileResource_rename(t *testing.T) {
 	csr := testAccCertificateCSR(t)
 
@@ -109,7 +111,7 @@ func TestAccProfileResource_rename(t *testing.T) {
 				Config: testAccProfileResourceConfig(csr, "Terraform Rename After", "IOS_APP_STORE"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction("apple_profile.test", plancheck.ResourceActionUpdate),
+						plancheck.ExpectResourceAction("apple_profile.test", plancheck.ResourceActionReplace),
 					},
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
