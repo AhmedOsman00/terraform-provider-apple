@@ -83,13 +83,13 @@ resource "apple_bundle_id_capability" "game_center" {
 # HealthKit capability
 resource "apple_bundle_id_capability" "health_kit" {
   bundle_id       = apple_bundle_id.example_app.id
-  capability_type = "HEALTH_KIT"
+  capability_type = "HEALTHKIT"
 }
 
 # SiriKit capability
 resource "apple_bundle_id_capability" "siri" {
   bundle_id       = apple_bundle_id.example_app.id
-  capability_type = "SIRI"
+  capability_type = "SIRIKIT"
 }
 
 # Personal VPN capability
@@ -101,7 +101,7 @@ resource "apple_bundle_id_capability" "personal_vpn" {
 # Wallet capability for creating passes
 resource "apple_bundle_id_capability" "wallet_passes" {
   bundle_id       = apple_bundle_id.example_app.id
-  capability_type = "WALLET_PASSES"
+  capability_type = "WALLET"
 
   settings = [
     {

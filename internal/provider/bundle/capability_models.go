@@ -7,11 +7,8 @@ package bundle
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"math"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
@@ -133,38 +130,6 @@ func diagnosticsError(diags diag.Diagnostics) string {
 	return strings.Join(msgs, "; ")
 }
 
-// settingValueToString renders a capability setting value as the string the
-// Terraform schema declares.
-//
-// Apple types this field as an arbitrary JSON value: capabilities such as
-// ICLOUD return objects, others return booleans or numbers, and a setting that
-// omits "value" entirely decodes to nil. Asserting it to a string panics the
-// provider on every one of those, so each shape is converted explicitly and
-// complex values round-trip as JSON, matching the schema's description.
-func settingValueToString(value interface{}) (string, error) {
-	switch v := value.(type) {
-	case nil:
-		return "", nil
-	case string:
-		return v, nil
-	case bool:
-		return strconv.FormatBool(v), nil
-	case float64:
-		// encoding/json decodes every JSON number into a float64; render whole
-		// numbers without a misleading decimal component.
-		if v == math.Trunc(v) && math.Abs(v) < 1<<53 {
-			return strconv.FormatInt(int64(v), 10), nil
-		}
-		return strconv.FormatFloat(v, 'f', -1, 64), nil
-	default:
-		encoded, err := json.Marshal(v)
-		if err != nil {
-			return "", fmt.Errorf("could not represent capability setting value of type %T as a string: %w", value, err)
-		}
-		return string(encoded), nil
-	}
-}
-
 // Helper functions to convert between API models and Terraform models
 
 // SettingsFromAPI converts Apple API settings to Terraform settings.
@@ -190,15 +155,20 @@ func SettingsFromAPI(apiSettings []models.CapabilitySetting) (types.List, error)
 			minCount = types.Int64Value(int64(*setting.MinCount))
 		}
 
-		value, err := settingValueToString(setting.Value)
-		if err != nil {
-			return types.ListNull(capabilitySettingType), fmt.Errorf("setting %q: %w", setting.Key, err)
+		// The inverse of the mapping SettingsToAPI applies: a setting with
+		// exactly one option reports that option's key as its value, so a
+		// configuration written with value round-trips unchanged. Anything with
+		// several options is a genuine multi-option setting and has no scalar
+		// value to report.
+		value := types.StringNull()
+		if len(setting.Options) == 1 {
+			value = types.StringValue(setting.Options[0].Key)
 		}
 
 		settingObj, diags := types.ObjectValue(capabilitySettingType.AttrTypes, map[string]attr.Value{
 			"key":       types.StringValue(setting.Key),
 			"name":      types.StringValue(setting.Name),
-			"value":     types.StringValue(value),
+			"value":     value,
 			"visible":   visible,
 			"min_count": minCount,
 			"options":   options,
@@ -254,8 +224,8 @@ func OptionsFromAPI(apiOptions []models.CapabilitySettingOption) (types.List, er
 // each attribute's type. A missing or differently typed attribute returns a
 // diagnostic here, where the old assertions panicked the provider.
 //
-// Note that value is sent back as the string the schema declares, even when it
-// originally arrived from Apple as an object or number. See settingValueToString.
+// Note that value is shorthand: it is sent to Apple as a single-element options
+// list, because Apple has no scalar value property on a capability setting.
 func SettingsToAPI(ctx context.Context, tfSettings types.List) ([]models.CapabilitySetting, error) {
 	if tfSettings.IsNull() || tfSettings.IsUnknown() {
 		return nil, nil
@@ -269,9 +239,8 @@ func SettingsToAPI(ctx context.Context, tfSettings types.List) ([]models.Capabil
 	var apiSettings []models.CapabilitySetting
 	for _, settingModel := range settingModels {
 		setting := models.CapabilitySetting{
-			Key:   settingModel.Key.ValueString(),
-			Name:  settingModel.Name.ValueString(),
-			Value: settingModel.Value.ValueString(),
+			Key:  settingModel.Key.ValueString(),
+			Name: settingModel.Name.ValueString(),
 		}
 
 		if !settingModel.Visible.IsNull() && !settingModel.Visible.IsUnknown() {
@@ -288,6 +257,14 @@ func SettingsToAPI(ctx context.Context, tfSettings types.List) ([]models.Capabil
 		if err != nil {
 			return nil, fmt.Errorf("setting %q: %w", setting.Key, err)
 		}
+
+		// Apple takes the chosen value as a one-element options list keyed by
+		// the value itself. Explicit options win when both are given; value is
+		// the shorthand for the overwhelmingly common single-choice setting.
+		if len(options) == 0 && !settingModel.Value.IsNull() && settingModel.Value.ValueString() != "" {
+			options = []models.CapabilitySettingOption{{Key: settingModel.Value.ValueString()}}
+		}
+
 		setting.Options = options
 
 		apiSettings = append(apiSettings, setting)
@@ -324,4 +301,139 @@ func OptionsToAPI(ctx context.Context, tfOptions types.List) ([]models.Capabilit
 	}
 
 	return apiOptions, nil
+}
+
+// The resource and the data source describe capability settings differently,
+// and deliberately so.
+//
+// Apple returns display metadata alongside a setting -- name, visible,
+// minCount, and per-option labels -- none of which is configuration. Exposing
+// them on the resource as Optional+Computed made every plan non-empty: nested
+// computed attributes inside a non-computed list are marked unknown on each
+// plan rather than taking their prior state, so Terraform proposed a change to
+// a resource nobody had touched. The resource therefore models only what Apple
+// accepts as input, and the data source keeps reporting everything.
+
+// capabilitySettingInputOptionType is the option form the resource accepts.
+var capabilitySettingInputOptionType = types.ObjectType{
+	AttrTypes: map[string]attr.Type{
+		"key": types.StringType,
+	},
+}
+
+// capabilitySettingInputType is the setting form the resource accepts.
+var capabilitySettingInputType = types.ObjectType{
+	AttrTypes: map[string]attr.Type{
+		"key":     types.StringType,
+		"value":   types.StringType,
+		"options": types.ListType{ElemType: capabilitySettingInputOptionType},
+	},
+}
+
+type capabilitySettingInputModel struct {
+	Key     types.String `tfsdk:"key"`
+	Value   types.String `tfsdk:"value"`
+	Options types.List   `tfsdk:"options"`
+}
+
+type capabilitySettingInputOptionModel struct {
+	Key types.String `tfsdk:"key"`
+}
+
+// SettingsInputToAPI converts the resource's settings into Apple's form.
+//
+// value is shorthand for a single-choice setting and becomes a one-element
+// options list; explicit options win when both are given.
+func SettingsInputToAPI(ctx context.Context, tfSettings types.List) ([]models.CapabilitySetting, error) {
+	if tfSettings.IsNull() || tfSettings.IsUnknown() {
+		return nil, nil
+	}
+
+	var settingModels []capabilitySettingInputModel
+	if diags := tfSettings.ElementsAs(ctx, &settingModels, false); diags.HasError() {
+		return nil, fmt.Errorf("failed to read capability settings: %s", diagnosticsError(diags))
+	}
+
+	var apiSettings []models.CapabilitySetting
+	for _, settingModel := range settingModels {
+		setting := models.CapabilitySetting{Key: settingModel.Key.ValueString()}
+
+		if !settingModel.Options.IsNull() && !settingModel.Options.IsUnknown() {
+			var optionModels []capabilitySettingInputOptionModel
+			if diags := settingModel.Options.ElementsAs(ctx, &optionModels, false); diags.HasError() {
+				return nil, fmt.Errorf("setting %q: failed to read options: %s", setting.Key, diagnosticsError(diags))
+			}
+
+			for _, optionModel := range optionModels {
+				setting.Options = append(setting.Options, models.CapabilitySettingOption{
+					Key: optionModel.Key.ValueString(),
+				})
+			}
+		}
+
+		if len(setting.Options) == 0 && !settingModel.Value.IsNull() && settingModel.Value.ValueString() != "" {
+			setting.Options = []models.CapabilitySettingOption{{Key: settingModel.Value.ValueString()}}
+		}
+
+		apiSettings = append(apiSettings, setting)
+	}
+
+	return apiSettings, nil
+}
+
+// SettingsInputFromAPI converts Apple's settings back into the resource's form.
+//
+// A setting with exactly one option is reported through value with options left
+// null, which is the shape a configuration using the shorthand wrote; anything
+// with several options is reported through options with value null. Keeping the
+// two mutually exclusive is what makes the round trip produce an empty plan.
+func SettingsInputFromAPI(apiSettings []models.CapabilitySetting) (types.List, error) {
+	if len(apiSettings) == 0 {
+		return types.ListNull(capabilitySettingInputType), nil
+	}
+
+	var settingsObjects []attr.Value
+	for _, setting := range apiSettings {
+		value := types.StringNull()
+		options := types.ListNull(capabilitySettingInputOptionType)
+
+		switch {
+		case len(setting.Options) == 1:
+			value = types.StringValue(setting.Options[0].Key)
+		case len(setting.Options) > 1:
+			var optionObjects []attr.Value
+			for _, option := range setting.Options {
+				optionObj, diags := types.ObjectValue(capabilitySettingInputOptionType.AttrTypes, map[string]attr.Value{
+					"key": types.StringValue(option.Key),
+				})
+				if diags.HasError() {
+					return types.ListNull(capabilitySettingInputType), fmt.Errorf("failed to create option object: %s", diagnosticsError(diags))
+				}
+				optionObjects = append(optionObjects, optionObj)
+			}
+
+			optionsList, diags := types.ListValue(capabilitySettingInputOptionType, optionObjects)
+			if diags.HasError() {
+				return types.ListNull(capabilitySettingInputType), fmt.Errorf("failed to create options list: %s", diagnosticsError(diags))
+			}
+			options = optionsList
+		}
+
+		settingObj, diags := types.ObjectValue(capabilitySettingInputType.AttrTypes, map[string]attr.Value{
+			"key":     types.StringValue(setting.Key),
+			"value":   value,
+			"options": options,
+		})
+		if diags.HasError() {
+			return types.ListNull(capabilitySettingInputType), fmt.Errorf("failed to create setting object: %s", diagnosticsError(diags))
+		}
+		settingsObjects = append(settingsObjects, settingObj)
+	}
+
+	settingsList, diags := types.ListValue(capabilitySettingInputType, settingsObjects)
+	if diags.HasError() {
+		return types.ListNull(capabilitySettingInputType), fmt.Errorf("failed to create settings list: %s", diagnosticsError(diags))
+	}
+
+	return settingsList, nil
 }

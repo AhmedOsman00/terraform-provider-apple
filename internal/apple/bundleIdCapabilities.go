@@ -14,28 +14,45 @@ import (
 
 // GetBundleIDCapabilities retrieves all capabilities for a specific Bundle ID.
 func (c *Client) GetBundleIDCapabilities(bundleID string) ([]models.BundleIDCapability, error) {
-	return getAllPages[models.BundleIDCapability](c, fmt.Sprintf("/v1/bundleIds/%s/bundleIdCapabilities", bundleID), relationshipPageSize)
+	return getAllPages[models.BundleIDCapability](c, fmt.Sprintf("/v1/bundleIds/%s/bundleIdCapabilities", bundleID), noPageSize)
 }
 
-// GetBundleIDCapability retrieves a specific Bundle ID capability by its ID.
-func (c *Client) GetBundleIDCapability(capabilityID string) (*models.BundleIDCapability, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/bundleIdCapabilities/%s", c.HostURL, capabilityID), nil)
+// GetBundleIDCapability retrieves a single capability of a Bundle ID.
+//
+// Apple exposes no GET for an individual capability: requesting one answers
+// 403 "The resource 'bundleIdCapabilities' does not allow 'GET_INSTANCE'.
+// Allowed operations are: CREATE, DELETE, UPDATE". The parent Bundle ID's
+// capability collection is the only readable form, so the lookup lists it and
+// scans -- which is also why every caller has to know the parent Bundle ID.
+func (c *Client) GetBundleIDCapability(bundleID, capabilityID string) (*models.BundleIDCapability, error) {
+	capabilities, err := c.GetBundleIDCapabilities(bundleID)
 	if err != nil {
 		return nil, err
 	}
 
-	body, err := c.doRequest(req, nil)
-	if err != nil {
-		return nil, err
+	for i := range capabilities {
+		if capabilities[i].ID == capabilityID {
+			return &capabilities[i], nil
+		}
 	}
 
-	response := models.Response[models.BundleIDCapability]{}
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return nil, err
+	return nil, fmt.Errorf("bundle ID capability %q not found on bundle ID %q", capabilityID, bundleID)
+}
+
+// BundleIDFromCapabilityID recovers the parent Bundle ID from a capability ID.
+//
+// Apple composes capability IDs as "<bundleID>_<CAPABILITY_TYPE>", for example
+// "VT4WL83433_PUSH_NOTIFICATIONS". The capability type itself contains
+// underscores, so the split is on the first one only. This format is not
+// documented, so callers must confirm the result against Apple rather than
+// trusting it: an empty string means the ID did not have the expected shape.
+func BundleIDFromCapabilityID(capabilityID string) string {
+	bundleID, _, found := strings.Cut(capabilityID, "_")
+	if !found {
+		return ""
 	}
 
-	return &response.Data, nil
+	return bundleID
 }
 
 // CreateBundleIDCapability creates a new Bundle ID capability.
@@ -46,25 +63,19 @@ func (c *Client) CreateBundleIDCapability(bundleID string, capabilityType models
 			CapabilityType: capabilityType,
 			Settings:       settings,
 		},
+		Relationships: models.BundleIDCapabilityCreateRelationships{
+			BundleID: models.ResourceIdentifier{
+				Data: models.ResourceData{
+					Type: "bundleIds",
+					ID:   bundleID,
+				},
+			},
+		},
 	}
 
-	requestData := struct {
-		Data          models.BundleIDCapabilityCreateRequest `json:"data"`
-		Relationships struct {
-			BundleID struct {
-				Data struct {
-					Type string `json:"type"`
-					ID   string `json:"id"`
-				} `json:"data"`
-			} `json:"bundleId"`
-		} `json:"relationships"`
-	}{
+	requestData := models.Request[models.BundleIDCapabilityCreateRequest]{
 		Data: capabilityRequest,
 	}
-
-	// Set the bundle ID relationship
-	requestData.Relationships.BundleID.Data.Type = "bundleIds"
-	requestData.Relationships.BundleID.Data.ID = bundleID
 
 	rb, err := json.Marshal(requestData)
 	if err != nil {

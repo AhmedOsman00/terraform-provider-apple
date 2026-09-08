@@ -103,7 +103,7 @@ resource "apple_bundle_id_capability" "associated_domains" {
 # Capability for macOS app - HomeKit
 resource "apple_bundle_id_capability" "homekit_macos" {
   bundle_id       = apple_bundle_id.macos_app.id
-  capability_type = "HOME_KIT"
+  capability_type = "HOMEKIT"
   # HomeKit doesn't require additional settings for basic functionality
 }
 

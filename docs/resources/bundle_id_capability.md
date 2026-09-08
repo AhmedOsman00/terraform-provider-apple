@@ -101,13 +101,13 @@ resource "apple_bundle_id_capability" "game_center" {
 # HealthKit capability
 resource "apple_bundle_id_capability" "health_kit" {
   bundle_id       = apple_bundle_id.example_app.id
-  capability_type = "HEALTH_KIT"
+  capability_type = "HEALTHKIT"
 }
 
 # SiriKit capability
 resource "apple_bundle_id_capability" "siri" {
   bundle_id       = apple_bundle_id.example_app.id
-  capability_type = "SIRI"
+  capability_type = "SIRIKIT"
 }
 
 # Personal VPN capability
@@ -119,7 +119,7 @@ resource "apple_bundle_id_capability" "personal_vpn" {
 # Wallet capability for creating passes
 resource "apple_bundle_id_capability" "wallet_passes" {
   bundle_id       = apple_bundle_id.example_app.id
-  capability_type = "WALLET_PASSES"
+  capability_type = "WALLET"
 
   settings = [
     {
@@ -165,15 +165,20 @@ resource "apple_bundle_id_capability" "data_protection" {
 - `APP_GROUPS` - App Groups for data sharing
 - `APPLE_PAY` - Apple Pay payments
 - `ASSOCIATED_DOMAINS` - Associated domains
-- `HEALTH_KIT` - HealthKit data access
-- `HOME_KIT` - HomeKit device control
-- `SIRI` - SiriKit integration
-- `WALLET_PASSES` - Wallet passes
-And many more. This cannot be changed after creation.
+- `HEALTHKIT` - HealthKit data access
+- `HOMEKIT` - HomeKit device control
+- `SIRIKIT` - SiriKit integration
+- `WALLET` - Wallet passes
+
+Note the spelling: Apple writes HEALTHKIT, HOMEKIT, CLASSKIT and SIRIKIT without an underscore, and Wallet as WALLET. Capabilities that Xcode configures rather than the App Store Connect API -- APP_ATTEST, WEATHER_KIT, GROUP_ACTIVITIES and similar -- are not accepted here. This cannot be changed after creation.
 
 ### Optional
 
-- `settings` (Attributes List) Configuration settings for the capability. The available settings depend on the capability type. Some capabilities like PUSH_NOTIFICATIONS don't require settings, while others like ICLOUD have multiple configuration options. (see [below for nested schema](#nestedatt--settings))
+- `settings` (Attributes List) Configuration settings for the capability. The available settings depend on the capability type: `PUSH_NOTIFICATIONS` takes none, while `DATA_PROTECTION` and `ICLOUD` take one each.
+
+Set `value` for a single-choice setting, which is the common case, or `options` for a setting that takes several. The two are mutually exclusive -- Apple models both as an options list, and this resource reports a setting with one option through `value`.
+
+Apple's display metadata for a setting (its name, visibility and available choices) is not configuration and is not recorded here; read it from the `apple_bundle_id_capabilities` data source. (see [below for nested schema](#nestedatt--settings))
 
 ### Read-Only
 
@@ -184,15 +189,12 @@ And many more. This cannot be changed after creation.
 
 Required:
 
-- `key` (String) The setting key identifier.
-- `value` (String) The setting value. This can be a string, boolean (as string), or JSON for complex values.
+- `key` (String) The setting key identifier, for example `DATA_PROTECTION_PERMISSION_LEVEL`.
 
 Optional:
 
-- `min_count` (Number) Minimum number of values required for this setting.
-- `name` (String) Human-readable name for the setting.
-- `options` (Attributes List) Available options for this setting. (see [below for nested schema](#nestedatt--settings--options))
-- `visible` (Boolean) Whether this setting is visible in the Apple Developer portal.
+- `options` (Attributes List) The chosen values for a setting that takes more than one. Mutually exclusive with `value`. (see [below for nested schema](#nestedatt--settings--options))
+- `value` (String) The chosen value for a single-choice setting, for example `COMPLETE_PROTECTION`. Mutually exclusive with `options`.
 
 <a id="nestedatt--settings--options"></a>
 ### Nested Schema for `settings.options`
@@ -200,9 +202,3 @@ Optional:
 Required:
 
 - `key` (String) The option key identifier.
-
-Optional:
-
-- `description` (String) Description of what this option enables.
-- `enabled` (Boolean) Whether this option is enabled.
-- `name` (String) Human-readable name for the option.

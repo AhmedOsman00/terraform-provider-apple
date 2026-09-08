@@ -73,11 +73,14 @@ func (r *bundleIDCapabilityResource) Schema(_ context.Context, _ resource.Schema
 					"- `APP_GROUPS` - App Groups for data sharing\n" +
 					"- `APPLE_PAY` - Apple Pay payments\n" +
 					"- `ASSOCIATED_DOMAINS` - Associated domains\n" +
-					"- `HEALTH_KIT` - HealthKit data access\n" +
-					"- `HOME_KIT` - HomeKit device control\n" +
-					"- `SIRI` - SiriKit integration\n" +
-					"- `WALLET_PASSES` - Wallet passes\n" +
-					"And many more. This cannot be changed after creation.",
+					"- `HEALTHKIT` - HealthKit data access\n" +
+					"- `HOMEKIT` - HomeKit device control\n" +
+					"- `SIRIKIT` - SiriKit integration\n" +
+					"- `WALLET` - Wallet passes\n\n" +
+					"Note the spelling: Apple writes HEALTHKIT, HOMEKIT, CLASSKIT and SIRIKIT without an " +
+					"underscore, and Wallet as WALLET. Capabilities that Xcode configures rather than the " +
+					"App Store Connect API -- APP_ATTEST, WEATHER_KIT, GROUP_ACTIVITIES and similar -- are " +
+					"not accepted here. This cannot be changed after creation.",
 				Required:   true,
 				Validators: GetCapabilityTypeValidator(),
 				PlanModifiers: []planmodifier.String{
@@ -85,8 +88,13 @@ func (r *bundleIDCapabilityResource) Schema(_ context.Context, _ resource.Schema
 				},
 			},
 			"settings": schema.ListNestedAttribute{
-				MarkdownDescription: "Configuration settings for the capability. The available settings depend on the capability type. " +
-					"Some capabilities like PUSH_NOTIFICATIONS don't require settings, while others like ICLOUD have multiple configuration options.",
+				MarkdownDescription: "Configuration settings for the capability. The available settings depend on the capability type: " +
+					"`PUSH_NOTIFICATIONS` takes none, while `DATA_PROTECTION` and `ICLOUD` take one each.\n\n" +
+					"Set `value` for a single-choice setting, which is the common case, or `options` for a setting that " +
+					"takes several. The two are mutually exclusive -- Apple models both as an options list, and this " +
+					"resource reports a setting with one option through `value`.\n\n" +
+					"Apple's display metadata for a setting (its name, visibility and available choices) is not " +
+					"configuration and is not recorded here; read it from the `apple_bundle_id_capabilities` data source.",
 				Optional: true,
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.UseStateForUnknown(),
@@ -94,52 +102,23 @@ func (r *bundleIDCapabilityResource) Schema(_ context.Context, _ resource.Schema
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"key": schema.StringAttribute{
-							MarkdownDescription: "The setting key identifier.",
+							MarkdownDescription: "The setting key identifier, for example `DATA_PROTECTION_PERMISSION_LEVEL`.",
 							Required:            true,
-						},
-						"name": schema.StringAttribute{
-							MarkdownDescription: "Human-readable name for the setting.",
-							Optional:            true,
-							Computed:            true,
 						},
 						"value": schema.StringAttribute{
-							MarkdownDescription: "The setting value. This can be a string, boolean (as string), or JSON for complex values.",
-							Required:            true,
-						},
-						"visible": schema.BoolAttribute{
-							MarkdownDescription: "Whether this setting is visible in the Apple Developer portal.",
-							Optional:            true,
-							Computed:            true,
-						},
-						"min_count": schema.Int64Attribute{
-							MarkdownDescription: "Minimum number of values required for this setting.",
-							Optional:            true,
-							Computed:            true,
+							MarkdownDescription: "The chosen value for a single-choice setting, for example `COMPLETE_PROTECTION`. " +
+								"Mutually exclusive with `options`.",
+							Optional: true,
 						},
 						"options": schema.ListNestedAttribute{
-							MarkdownDescription: "Available options for this setting.",
-							Optional:            true,
-							Computed:            true,
+							MarkdownDescription: "The chosen values for a setting that takes more than one. " +
+								"Mutually exclusive with `value`.",
+							Optional: true,
 							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
 									"key": schema.StringAttribute{
 										MarkdownDescription: "The option key identifier.",
 										Required:            true,
-									},
-									"name": schema.StringAttribute{
-										MarkdownDescription: "Human-readable name for the option.",
-										Optional:            true,
-										Computed:            true,
-									},
-									"description": schema.StringAttribute{
-										MarkdownDescription: "Description of what this option enables.",
-										Optional:            true,
-										Computed:            true,
-									},
-									"enabled": schema.BoolAttribute{
-										MarkdownDescription: "Whether this option is enabled.",
-										Optional:            true,
-										Computed:            true,
 									},
 								},
 							},
@@ -170,7 +149,7 @@ func (r *bundleIDCapabilityResource) Create(ctx context.Context, req resource.Cr
 	tflog.Debug(ctx, "Creating Bundle ID Capability with Apple API")
 
 	// Convert settings from Terraform to API format
-	settings, err := SettingsToAPI(ctx, plan.Settings)
+	settings, err := SettingsInputToAPI(ctx, plan.Settings)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Converting Settings",
@@ -178,6 +157,11 @@ func (r *bundleIDCapabilityResource) Create(ctx context.Context, req resource.Cr
 		)
 		return
 	}
+
+	// Serialized per Bundle ID: Apple loses one of two concurrent capability
+	// writes to the same bundle. See capability_serialize.go.
+	unlock := lockBundleCapabilities(plan.BundleID.ValueString())
+	defer unlock()
 
 	// Create new Bundle ID Capability
 	capability, err := r.client.CreateBundleIDCapability(
@@ -220,7 +204,7 @@ func (r *bundleIDCapabilityResource) Create(ctx context.Context, req resource.Cr
 	plan.ID = types.StringValue(capability.ID)
 
 	// Convert settings from API to Terraform format
-	tfSettings, err := SettingsFromAPI(capability.Attributes.Settings)
+	tfSettings, err := SettingsInputFromAPI(capability.Attributes.Settings)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Converting Settings",
@@ -256,10 +240,30 @@ func (r *bundleIDCapabilityResource) Read(ctx context.Context, req resource.Read
 
 	ctx = tflog.SetField(ctx, "capability_id", state.ID.ValueString())
 
+	// A capability can only be read through its parent Bundle ID's collection.
+	// State carries the parent for anything this provider created; a resource
+	// imported by bare ID before that was recorded falls back to the ID's own
+	// "<bundleID>_<TYPE>" prefix.
+	bundleID := state.BundleID.ValueString()
+	if bundleID == "" {
+		bundleID = apple.BundleIDFromCapabilityID(state.ID.ValueString())
+	}
+
+	if bundleID == "" {
+		resp.Diagnostics.AddError(
+			"Unknown Parent Bundle ID",
+			fmt.Sprintf("Bundle ID Capability %s has no bundle_id in state and none could be recovered from its ID. "+
+				"Re-import it as \"<bundle_id>/<capability_id>\".", state.ID.ValueString()),
+		)
+		return
+	}
+
 	// Get refreshed Bundle ID Capability value from Apple
-	capability, err := r.client.GetBundleIDCapability(state.ID.ValueString())
+	capability, err := r.client.GetBundleIDCapability(bundleID, state.ID.ValueString())
 	if err != nil {
-		// Handle 404 - resource no longer exists
+		// Handle 404 - resource no longer exists. A capability absent from its
+		// parent's collection reports "not found" the same way, and a deleted
+		// parent Bundle ID 404s the list call, so both land here.
 		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
 			tflog.Warn(ctx, "Bundle ID Capability not found, removing from state")
 			resp.Diagnostics.AddWarning(
@@ -281,7 +285,7 @@ func (r *bundleIDCapabilityResource) Read(ctx context.Context, req resource.Read
 	}
 
 	// Convert settings from API to Terraform format
-	tfSettings, err := SettingsFromAPI(capability.Attributes.Settings)
+	tfSettings, err := SettingsInputFromAPI(capability.Attributes.Settings)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Converting Settings",
@@ -330,7 +334,7 @@ func (r *bundleIDCapabilityResource) Update(ctx context.Context, req resource.Up
 	tflog.Debug(ctx, "Updating Bundle ID Capability with Apple API")
 
 	// Convert settings from Terraform to API format
-	settings, err := SettingsToAPI(ctx, plan.Settings)
+	settings, err := SettingsInputToAPI(ctx, plan.Settings)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Converting Settings",
@@ -339,7 +343,11 @@ func (r *bundleIDCapabilityResource) Update(ctx context.Context, req resource.Up
 		return
 	}
 
-	// Update Bundle ID Capability (only settings can be updated)
+	// Update Bundle ID Capability (only settings can be updated), serialized
+	// per Bundle ID for the reason capability_serialize.go documents.
+	unlock := lockBundleCapabilities(plan.BundleID.ValueString())
+	defer unlock()
+
 	capability, err := r.client.UpdateBundleIDCapability(state.ID.ValueString(), nil, settings, nil)
 	if err != nil {
 		// Handle specific update errors
@@ -361,7 +369,7 @@ func (r *bundleIDCapabilityResource) Update(ctx context.Context, req resource.Up
 	}
 
 	// Convert settings from API to Terraform format
-	tfSettings, err := SettingsFromAPI(capability.Attributes.Settings)
+	tfSettings, err := SettingsInputFromAPI(capability.Attributes.Settings)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Converting Settings",
@@ -400,7 +408,11 @@ func (r *bundleIDCapabilityResource) Delete(ctx context.Context, req resource.De
 
 	tflog.Debug(ctx, "Deleting Bundle ID Capability with Apple API")
 
-	// Delete Bundle ID Capability
+	// Delete Bundle ID Capability, serialized per Bundle ID: a delete is the
+	// same read-modify-write over the bundle's capability set as a create.
+	unlock := lockBundleCapabilities(state.BundleID.ValueString())
+	defer unlock()
+
 	err := r.client.DeleteBundleIDCapability(state.ID.ValueString(), nil)
 	if err != nil {
 		// Handle specific delete errors
@@ -461,52 +473,54 @@ func (r *bundleIDCapabilityResource) ImportState(ctx context.Context, req resour
 		capabilityID = importID
 	}
 
-	// Get the capability from Apple API
-	capability, err := r.client.GetBundleIDCapability(capabilityID)
-	if err != nil {
-		tflog.Error(ctx, "Failed to import Bundle ID Capability", map[string]interface{}{
-			"import_id": importID,
-			"error":     err.Error(),
-		})
+	// A bare capability ID still has to name its parent, because reading a
+	// capability means listing the parent's collection. Apple embeds the parent
+	// in the ID, so recover it from there -- and let the lookup below prove the
+	// guess, since the format is undocumented.
+	derivedBundleID := false
+	if bundleID == "" {
+		bundleID = apple.BundleIDFromCapabilityID(capabilityID)
+		derivedBundleID = bundleID != ""
+	}
+
+	if bundleID == "" {
 		resp.Diagnostics.AddError(
-			"Bundle ID Capability Not Found",
-			fmt.Sprintf("Could not find Bundle ID Capability with ID '%s'. Please verify the capability ID exists in your Apple Developer account. Error: %s", capabilityID, err.Error()),
+			"Invalid Import Identifier",
+			fmt.Sprintf("Could not determine which Bundle ID owns capability '%s'. Apple does not allow reading a capability "+
+				"on its own, so the parent is required: import as \"<bundle_id>/<capability_id>\".", capabilityID),
 		)
 		return
 	}
 
-	// When a Bundle ID was supplied, confirm it actually owns this capability.
-	// Importing a mismatched pair would write state that a later apply resolves
-	// by destroying and recreating the capability.
-	if bundleID != "" {
-		capabilities, err := r.client.GetBundleIDCapabilities(bundleID)
-		if err != nil {
+	// Fetching through the parent's collection is itself the ownership check:
+	// a capability the Bundle ID does not own is simply absent from the list.
+	capability, err := r.client.GetBundleIDCapability(bundleID, capabilityID)
+	if err != nil {
+		tflog.Error(ctx, "Failed to import Bundle ID Capability", map[string]interface{}{
+			"import_id": importID,
+			"bundle_id": bundleID,
+			"error":     err.Error(),
+		})
+
+		if derivedBundleID {
 			resp.Diagnostics.AddError(
-				"Unable to Verify Bundle ID",
-				fmt.Sprintf("Could not list capabilities for Bundle ID '%s' to confirm it owns capability '%s': %s", bundleID, capabilityID, err.Error()),
+				"Bundle ID Capability Not Found",
+				fmt.Sprintf("Could not find capability '%s' on Bundle ID '%s', which was inferred from the capability ID. "+
+					"Import as \"<bundle_id>/<capability_id>\" to name the parent explicitly. Error: %s", capabilityID, bundleID, err.Error()),
 			)
 			return
 		}
 
-		owned := false
-		for _, c := range capabilities {
-			if c.ID == capabilityID {
-				owned = true
-				break
-			}
-		}
-
-		if !owned {
-			resp.Diagnostics.AddError(
-				"Bundle ID Does Not Own This Capability",
-				fmt.Sprintf("Capability '%s' is not a capability of Bundle ID '%s'. Check the import ID, which must be \"<bundle_id>/<capability_id>\".", capabilityID, bundleID),
-			)
-			return
-		}
+		resp.Diagnostics.AddError(
+			"Bundle ID Capability Not Found",
+			fmt.Sprintf("Could not find capability '%s' on Bundle ID '%s'. Verify both exist in your Apple Developer account "+
+				"and that the Bundle ID owns this capability. Error: %s", capabilityID, bundleID, err.Error()),
+		)
+		return
 	}
 
 	// Convert settings from API to Terraform format
-	tfSettings, err := SettingsFromAPI(capability.Attributes.Settings)
+	tfSettings, err := SettingsInputFromAPI(capability.Attributes.Settings)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Converting Settings",
@@ -515,16 +529,15 @@ func (r *bundleIDCapabilityResource) ImportState(ctx context.Context, req resour
 		return
 	}
 
-	// State may never hold an unknown value, so an unresolved bundle_id is
-	// recorded as null and flagged below rather than left unknown.
+	// bundle_id is always known by this point: it was either given in the
+	// composite import ID or recovered from the capability ID and confirmed by
+	// the lookup above. Import therefore never writes partial state, and the
+	// next plan is empty rather than a forced replacement.
 	state := bundleIDCapabilityModel{
 		ID:             types.StringValue(capability.ID),
-		BundleID:       types.StringNull(),
+		BundleID:       types.StringValue(bundleID),
 		CapabilityType: types.StringValue(string(capability.Attributes.CapabilityType)),
 		Settings:       tfSettings,
-	}
-	if bundleID != "" {
-		state.BundleID = types.StringValue(bundleID)
 	}
 
 	diags := resp.State.Set(ctx, &state)
@@ -535,17 +548,9 @@ func (r *bundleIDCapabilityResource) ImportState(ctx context.Context, req resour
 
 	tflog.Info(ctx, "Bundle ID Capability imported successfully", map[string]interface{}{
 		"capability_id":   capability.ID,
+		"bundle_id":       bundleID,
 		"capability_type": string(capability.Attributes.CapabilityType),
 	})
-
-	if bundleID == "" {
-		resp.Diagnostics.AddWarning(
-			"Bundle ID Not Recorded During Import",
-			fmt.Sprintf("Bundle ID Capability '%s' (type: %s) was imported without a bundle_id, because Apple's capability response does not include its parent Bundle ID. "+
-				"The next plan will show bundle_id changing from null, which forces replacement. "+
-				"Re-run the import as \"terraform import <address> <bundle_id>/%s\" to record it directly.", capability.ID, capability.Attributes.CapabilityType, capability.ID),
-		)
-	}
 }
 
 // Configure adds the provider configured client to the resource.

@@ -15,86 +15,98 @@ import (
 func boolPtr(b bool) *bool { return &b }
 func intPtr(i int) *int    { return &i }
 
-// TestSettingValueToString covers every JSON shape Apple can put in a
-// capability setting's value. Each non-string case panicked before.
-func TestSettingValueToString(t *testing.T) {
-	tests := []struct {
-		name  string
-		value interface{}
-		want  string
-	}{
-		{"string passes through", "TEN_GB", "TEN_GB"},
-		{"empty string", "", ""},
-		{"nil becomes empty", nil, ""},
-		{"true", true, "true"},
-		{"false", false, "false"},
-		{"whole number has no decimal part", float64(25), "25"},
-		{"fractional number", 1.5, "1.5"},
-		{"negative whole number", float64(-3), "-3"},
-		{"object encodes as JSON", map[string]interface{}{"a": "b"}, `{"a":"b"}`},
-		{"array encodes as JSON", []interface{}{"a", "b"}, `["a","b"]`},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := settingValueToString(tt.value)
-			if err != nil {
-				t.Fatalf("settingValueToString(%#v) returned error: %v", tt.value, err)
-			}
-			if got != tt.want {
-				t.Errorf("settingValueToString(%#v) = %q, want %q", tt.value, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestSettingsFromAPINonStringValues is the regression test for the panic: a
-// capability whose settings omit "value" or return a non-string must convert.
-func TestSettingsFromAPINonStringValues(t *testing.T) {
-	apiSettings := []models.CapabilitySetting{
-		{Key: "ICLOUD_VERSION", Value: "XCODE_6"},
-		{Key: "OMITTED_VALUE", Value: nil},
-		{Key: "BOOL_VALUE", Value: true},
-		{Key: "NUMERIC_VALUE", Value: float64(10)},
-		{Key: "OBJECT_VALUE", Value: map[string]interface{}{"limit": "10GB"}},
-	}
-
-	got, err := SettingsFromAPI(apiSettings)
+// TestSettingsValueMapsToSingleOption pins the shorthand: Apple has no scalar
+// value property on a capability setting, so settings.value is sent as a
+// one-element options list keyed by the value and read back the same way.
+func TestSettingsValueMapsToSingleOption(t *testing.T) {
+	tfList, err := SettingsFromAPI([]models.CapabilitySetting{
+		{
+			Key:     "DATA_PROTECTION_PERMISSION_LEVEL",
+			Options: []models.CapabilitySettingOption{{Key: "COMPLETE_PROTECTION"}},
+		},
+	})
 	if err != nil {
 		t.Fatalf("SettingsFromAPI() returned error: %v", err)
 	}
-	if got.IsNull() {
-		t.Fatal("SettingsFromAPI() returned a null list, want 5 settings")
-	}
-	if n := len(got.Elements()); n != 5 {
-		t.Fatalf("SettingsFromAPI() produced %d settings, want 5", n)
+
+	var settings []capabilitySettingModel
+	if diags := tfList.ElementsAs(context.Background(), &settings, false); diags.HasError() {
+		t.Fatalf("reading settings: %s", diagnosticsError(diags))
 	}
 
-	// Round-trip back and confirm the rendered values survive.
-	back, err := SettingsToAPI(context.Background(), got)
+	if len(settings) != 1 {
+		t.Fatalf("got %d settings, want 1", len(settings))
+	}
+
+	if got := settings[0].Value.ValueString(); got != "COMPLETE_PROTECTION" {
+		t.Errorf("value = %q, want COMPLETE_PROTECTION recovered from the single option", got)
+	}
+
+	// And back out again: the wire form must be options, never a value field.
+	back, err := SettingsToAPI(context.Background(), tfList)
 	if err != nil {
 		t.Fatalf("SettingsToAPI() returned error: %v", err)
 	}
 
-	want := map[string]string{
-		"ICLOUD_VERSION": "XCODE_6",
-		"OMITTED_VALUE":  "",
-		"BOOL_VALUE":     "true",
-		"NUMERIC_VALUE":  "10",
-		"OBJECT_VALUE":   `{"limit":"10GB"}`,
+	if len(back) != 1 || len(back[0].Options) != 1 {
+		t.Fatalf("round trip produced %+v, want one setting with one option", back)
 	}
-	if len(back) != len(want) {
-		t.Fatalf("SettingsToAPI() produced %d settings, want %d", len(back), len(want))
+
+	if got := back[0].Options[0].Key; got != "COMPLETE_PROTECTION" {
+		t.Errorf("option key = %q, want COMPLETE_PROTECTION", got)
 	}
-	for _, s := range back {
-		w, ok := want[s.Key]
-		if !ok {
-			t.Errorf("unexpected setting key %q", s.Key)
-			continue
+}
+
+// TestSettingsValueAbsentForMultiOption covers the other direction: a setting
+// Apple reports with several options has no single value to report, so value is
+// null rather than an arbitrary pick.
+func TestSettingsValueAbsentForMultiOption(t *testing.T) {
+	tfList, err := SettingsFromAPI([]models.CapabilitySetting{
+		{
+			Key: "ICLOUD_VERSION",
+			Options: []models.CapabilitySettingOption{
+				{Key: "XCODE_5"},
+				{Key: "XCODE_6"},
+			},
+		},
+		{Key: "NO_OPTIONS"},
+	})
+	if err != nil {
+		t.Fatalf("SettingsFromAPI() returned error: %v", err)
+	}
+
+	var settings []capabilitySettingModel
+	if diags := tfList.ElementsAs(context.Background(), &settings, false); diags.HasError() {
+		t.Fatalf("reading settings: %s", diagnosticsError(diags))
+	}
+
+	for _, setting := range settings {
+		if !setting.Value.IsNull() {
+			t.Errorf("setting %q reported value %q, want null", setting.Key.ValueString(), setting.Value.ValueString())
 		}
-		if s.Value != w {
-			t.Errorf("setting %q value = %#v, want %q", s.Key, s.Value, w)
-		}
+	}
+}
+
+// TestSettingsExplicitOptionsWinOverValue documents the precedence rule when a
+// configuration supplies both forms.
+func TestSettingsExplicitOptionsWinOverValue(t *testing.T) {
+	tfList, err := SettingsFromAPI([]models.CapabilitySetting{
+		{
+			Key:     "ICLOUD_VERSION",
+			Options: []models.CapabilitySettingOption{{Key: "XCODE_5"}, {Key: "XCODE_6"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SettingsFromAPI() returned error: %v", err)
+	}
+
+	back, err := SettingsToAPI(context.Background(), tfList)
+	if err != nil {
+		t.Fatalf("SettingsToAPI() returned error: %v", err)
+	}
+
+	if len(back) != 1 || len(back[0].Options) != 2 {
+		t.Fatalf("got %+v, want the two explicit options preserved", back)
 	}
 }
 
@@ -105,7 +117,6 @@ func TestSettingsRoundTripPreservesOptionalFields(t *testing.T) {
 		{
 			Key:      "ICLOUD_VERSION",
 			Name:     "iCloud Version",
-			Value:    "XCODE_6",
 			Visible:  boolPtr(true),
 			MinCount: intPtr(1),
 			Options: []models.CapabilitySettingOption{
@@ -113,7 +124,7 @@ func TestSettingsRoundTripPreservesOptionalFields(t *testing.T) {
 				{Key: "XCODE_6", Name: "Xcode 6", Enabled: boolPtr(true)},
 			},
 		},
-		{Key: "NO_OPTIONALS", Value: "plain"},
+		{Key: "NO_OPTIONALS"},
 	}
 
 	tfList, err := SettingsFromAPI(apiSettings)

@@ -94,7 +94,7 @@ resource "apple_bundle_id_capability" "push" {
 
 resource "apple_bundle_id_capability" "health" {
   bundle_id       = apple_bundle_id.test.id
-  capability_type = "HEALTH_KIT"
+  capability_type = "HEALTHKIT"
 }
 
 data "apple_bundle_id_capabilities" "all" {

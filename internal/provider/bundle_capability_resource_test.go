@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
+
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -53,9 +55,10 @@ func TestAccBundleIDCapabilityResource_basic(t *testing.T) {
 	})
 }
 
-// TestAccBundleIDCapabilityResource_importBareID covers the degraded import
-// path: a bare capability ID resolves, but bundle_id cannot be recovered, so
-// import records it as null and warns that the next plan forces replacement.
+// TestAccBundleIDCapabilityResource_importBareID covers importing without the
+// composite "<bundle_id>/<capability_id>" form. Apple embeds the parent in the
+// capability ID, so bundle_id is recovered from there and confirmed against the
+// parent's collection -- a bare import yields complete state, not partial.
 func TestAccBundleIDCapabilityResource_importBareID(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -80,8 +83,13 @@ func TestAccBundleIDCapabilityResource_importBareID(t *testing.T) {
 						return fmt.Errorf("imported capability_type is %q, expected PUSH_NOTIFICATIONS", got)
 					}
 
-					if got, ok := is.Attributes["bundle_id"]; ok && got != "" {
-						return fmt.Errorf("importing a bare capability ID recorded bundle_id as %q, expected it to be null", got)
+					bundleID := is.Attributes["bundle_id"]
+					if bundleID == "" {
+						return fmt.Errorf("importing a bare capability ID left bundle_id empty, expected it recovered from %q", is.ID)
+					}
+
+					if prefix := apple.BundleIDFromCapabilityID(is.ID); bundleID != prefix {
+						return fmt.Errorf("imported bundle_id is %q, expected %q from capability ID %q", bundleID, prefix, is.ID)
 					}
 
 					return nil
@@ -155,7 +163,7 @@ func TestAccBundleIDCapabilityResource_requiresReplace(t *testing.T) {
 				Check:  testAccCheckBundleIDCapabilityExists("apple_bundle_id_capability.test"),
 			},
 			{
-				Config: testAccBundleIDCapabilityResourceConfig("HEALTH_KIT", ""),
+				Config: testAccBundleIDCapabilityResourceConfig("HEALTHKIT", ""),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction("apple_bundle_id_capability.test", plancheck.ResourceActionReplace),
@@ -163,7 +171,7 @@ func TestAccBundleIDCapabilityResource_requiresReplace(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckBundleIDCapabilityExists("apple_bundle_id_capability.test"),
-					resource.TestCheckResourceAttr("apple_bundle_id_capability.test", "capability_type", "HEALTH_KIT"),
+					resource.TestCheckResourceAttr("apple_bundle_id_capability.test", "capability_type", "HEALTHKIT"),
 				),
 			},
 		},
@@ -237,7 +245,15 @@ func testAccCheckBundleIDCapabilityExists(resourceName string) resource.TestChec
 			return fmt.Errorf("building API client: %w", err)
 		}
 
-		capability, err := client.GetBundleIDCapability(is.ID)
+		// Apple allows no GET on a single capability, so the check reads the
+		// parent's collection. bundle_id is in state for anything the tests
+		// create; the ID's own prefix covers a bare-ID import.
+		bundleID := is.Attributes["bundle_id"]
+		if bundleID == "" {
+			bundleID = apple.BundleIDFromCapabilityID(is.ID)
+		}
+
+		capability, err := client.GetBundleIDCapability(bundleID, is.ID)
 		if err != nil {
 			return fmt.Errorf("reading Bundle ID Capability %s from Apple: %w", is.ID, err)
 		}
@@ -261,7 +277,16 @@ func testAccCheckBundleIDCapabilityDestroy(s *terraform.State) error {
 			continue
 		}
 
-		if _, err := client.GetBundleIDCapability(rs.Primary.ID); err == nil {
+		bundleID := rs.Primary.Attributes["bundle_id"]
+		if bundleID == "" {
+			bundleID = apple.BundleIDFromCapabilityID(rs.Primary.ID)
+		}
+
+		// The parent Bundle ID is normally destroyed in the same run, which
+		// makes the list call fail rather than return an empty collection.
+		// Either way the capability is gone; only a successful lookup is a
+		// failure here.
+		if _, err := client.GetBundleIDCapability(bundleID, rs.Primary.ID); err == nil {
 			return fmt.Errorf("Bundle ID Capability %s still exists at Apple after destroy", rs.Primary.ID)
 		}
 	}

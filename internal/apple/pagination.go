@@ -17,11 +17,12 @@ const (
 	// top-level collections this provider reads.
 	defaultPageSize = 200
 
-	// relationshipPageSize is used for sub-resource collections, which cap the
-	// limit parameter lower than the top-level collections do. Requesting more
-	// than an endpoint allows is rejected with a parameter error, so this stays
-	// conservative.
-	relationshipPageSize = 50
+	// noPageSize omits the limit parameter entirely. Some relationship
+	// collections reject it outright -- bundleIdCapabilities answers 400 "The
+	// parameter 'limit' can not be used with this request : This relationship
+	// does not support this parameter" -- and return the whole set in one
+	// response instead. Pagination still follows any "next" link that appears.
+	noPageSize = 0
 
 	// maxPages bounds the walk so a malformed or self-referential "next" link
 	// cannot spin forever.
@@ -38,6 +39,9 @@ const (
 // human-readable identifier.
 func getAllPages[T any](c *Client, endpoint string, pageSize int) ([]T, error) {
 	next := fmt.Sprintf("%s%s?limit=%d", c.HostURL, endpoint, pageSize)
+	if pageSize <= 0 {
+		next = c.HostURL + endpoint
+	}
 
 	var all []T
 	for page := 0; next != ""; page++ {
