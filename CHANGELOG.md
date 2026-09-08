@@ -45,7 +45,10 @@ FEATURES:
   from the price to the availability, since nothing else connects them. And
   like the in-app purchase availability, the record is a singular one Apple
   replaces with a `POST` and publishes no `DELETE` for: it updates in place and
-  cannot be destroyed.
+  cannot be destroyed. Destroying an `apple_subscription_price` that is already
+  in effect likewise warns and drops state rather than deleting: Apple removes
+  only price changes scheduled for the future, and a live price is superseded by
+  a later one rather than withdrawn. Deleting the subscription removes both.
 * **App Store Connect — one-time in-app purchases:** `apple_in_app_purchase`,
   `apple_in_app_purchase_localization`, `apple_in_app_purchase_price_schedule`
   and `apple_in_app_purchase_availability`, with `apple_in_app_purchases` and

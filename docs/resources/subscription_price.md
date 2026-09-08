@@ -97,6 +97,8 @@ resource "apple_subscription_price" "pro_monthly_usa_increase" {
 - `start_date` (String) The date the price takes effect, as a plain date in `YYYY-MM-DD` form — not a timestamp. Omit it for a price that takes effect immediately.
 - `territory_id` (String) The three-letter Apple territory code this price applies to, for example `USA`, `GBR` or `EGY`. Optional: a price point already belongs to a territory, and Apple infers it. Set this only when deliberately equalizing prices across territories.
 
+Computed when it is not configured, because Apple reports the territory of every price whether or not one was sent. Leaving it merely optional made `Read` write Apple's value into state against a configuration that held none, and since the attribute forces replacement, the next plan destroyed the price to remove it.
+
 ### Read-Only
 
 - `id` (String) The unique Apple-generated identifier for the scheduled price.

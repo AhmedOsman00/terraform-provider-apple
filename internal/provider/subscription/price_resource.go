@@ -80,11 +80,17 @@ func (r *subscriptionPriceResource) Schema(_ context.Context, _ resource.SchemaR
 			"territory_id": schema.StringAttribute{
 				MarkdownDescription: "The three-letter Apple territory code this price applies to, for example " +
 					"`USA`, `GBR` or `EGY`. Optional: a price point already belongs to a territory, and " +
-					"Apple infers it. Set this only when deliberately equalizing prices across territories.",
+					"Apple infers it. Set this only when deliberately equalizing prices across territories.\n\n" +
+					"Computed when it is not configured, because Apple reports the territory of every price " +
+					"whether or not one was sent. Leaving it merely optional made `Read` write Apple's value " +
+					"into state against a configuration that held none, and since the attribute forces " +
+					"replacement, the next plan destroyed the price to remove it.",
 				Optional:   true,
+				Computed:   true,
 				Validators: []validator.String{TerritoryValidator},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"start_date": schema.StringAttribute{
@@ -302,6 +308,30 @@ func (r *subscriptionPriceResource) Delete(ctx context.Context, req resource.Del
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "404") {
 			tflog.Info(ctx, "Subscription price already deleted")
+			return
+		}
+
+		// Apple refuses to delete a price that is already in effect:
+		//
+		//   409 Cannot delete Subscription Price with id <id>.
+		//       Only future price changes can be deleted.
+		//
+		// A live price is not a record that can be withdrawn -- it is what the
+		// subscription currently costs, and the only way past it is to schedule
+		// another price that supersedes it. Warn and let Terraform drop it from
+		// state, the way apple_device does for a deletion Apple cannot perform
+		// either. Deleting the subscription removes the price with it.
+		if strings.Contains(err.Error(), "Only future price changes can be deleted") {
+			resp.Diagnostics.AddWarning(
+				"Subscription Price Removed From State Rather Than Deleted",
+				fmt.Sprintf("Price '%s' is the price subscription '%s' currently charges, and Apple deletes "+
+					"only price changes scheduled for the future. It has been removed from Terraform state "+
+					"and still applies in App Store Connect.\n\nTo change what the subscription costs, add "+
+					"another apple_subscription_price rather than destroying this one. Deleting the "+
+					"subscription removes its prices along with it.",
+					state.ID.ValueString(), state.SubscriptionID.ValueString()),
+			)
+			tflog.Info(ctx, "Subscription price is currently in effect; removed from state only")
 			return
 		}
 

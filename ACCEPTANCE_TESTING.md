@@ -249,7 +249,10 @@ territory. Nothing in a price references an availability, so
 it Terraform is free to create the price first and the test fails
 intermittently. The availability is one of the two resources in the suite that
 cannot be deleted in its own right — destroying the subscription takes it along,
-which is why the test is still net zero.
+which is why the test is still net zero. The price is the other: once it is in
+effect Apple deletes only future price changes, so `terraform destroy` warns and
+drops it from state, and the subscription's own deletion is what actually
+removes it.
 
 ## In-app purchases
 
