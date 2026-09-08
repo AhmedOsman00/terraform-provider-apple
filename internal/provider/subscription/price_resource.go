@@ -225,6 +225,31 @@ func (r *subscriptionPriceResource) Create(ctx context.Context, req resource.Cre
 	plan.ID = types.StringValue(price.ID)
 	applyPriceAttributes(&plan, price)
 
+	// Apple omits the territory relationship from the create response. Only a
+	// read carries one, because the read asks for include=territory and a POST
+	// takes no include parameter -- so a configuration that leaves territory_id
+	// to be computed still held an unknown after apply, which the framework
+	// rejects as an invalid result. Re-read the price to resolve it.
+	if plan.TerritoryID.IsUnknown() {
+		created, readErr := r.client.GetSubscriptionPrice(plan.SubscriptionID.ValueString(), price.ID)
+		if readErr != nil {
+			tflog.Warn(ctx, "Could not re-read the created price to resolve its territory", map[string]interface{}{
+				"error": readErr.Error(),
+			})
+		} else {
+			applyPriceAttributes(&plan, created)
+		}
+
+		// A territory Apple will not report is null, never unknown: an unknown
+		// left in state fails the apply outright, while a null is filled in by
+		// the next refresh without proposing a change -- territory_id is
+		// computed, so a configuration that omits it accepts whatever Apple
+		// reports.
+		if plan.TerritoryID.IsUnknown() {
+			plan.TerritoryID = types.StringNull()
+		}
+	}
+
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 }
