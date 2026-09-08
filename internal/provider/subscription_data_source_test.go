@@ -168,7 +168,7 @@ func TestAccSubscriptionPricePointsDataSource_basic(t *testing.T) {
 		),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccSubscriptionConfig(referenceName, productID, "Pro Monthly", "ONE_MONTH") + `
+				Config: testAccSubscriptionConfig(referenceName, productID, testAccProductName("Pro Monthly"), "ONE_MONTH") + `
 data "apple_subscription_price_points" "usa" {
   subscription_id = apple_subscription.test.id
   territories     = ["USA"]
@@ -197,11 +197,11 @@ data "apple_subscription_price_points" "two_territories" {
 }
 
 func testAccSubscriptionsDataSourceConfig(referenceName, primary, secondary string) string {
-	return testAccSubscriptionConfig(referenceName, primary, "Pro Monthly", "ONE_MONTH") + fmt.Sprintf(`
+	return testAccSubscriptionConfig(referenceName, primary, testAccProductName("Pro Monthly"), "ONE_MONTH") + fmt.Sprintf(`
 resource "apple_subscription" "second" {
   group_id            = apple_subscription_group.test.id
   product_id          = %[1]q
-  name                = "Basic Yearly"
+  name                = %[2]q
   subscription_period = "ONE_YEAR"
   group_level         = 2
 }
@@ -235,5 +235,5 @@ data "apple_subscriptions" "none" {
   name_pattern = "^no subscription is named this$"
   depends_on   = [apple_subscription.test, apple_subscription.second]
 }
-`, secondary)
+`, secondary, testAccProductName("Basic Yearly"))
 }

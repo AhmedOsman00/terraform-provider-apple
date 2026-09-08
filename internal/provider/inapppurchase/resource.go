@@ -385,6 +385,14 @@ func (r *inAppPurchaseResource) ImportState(ctx context.Context, req resource.Im
 	}
 	applyPurchaseAttributes(&state, purchase)
 
+	// Unlike Read, an import has no configuration to contradict, so the review
+	// note Apple holds is the only value there is. Leaving it null dropped it
+	// silently and made the first plan after an import propose a change that
+	// only restored what was already there.
+	if purchase.Attributes.ReviewNote != nil {
+		state.ReviewNote = types.StringValue(*purchase.Attributes.ReviewNote)
+	}
+
 	diags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 }
@@ -393,7 +401,8 @@ func (r *inAppPurchaseResource) ImportState(ctx context.Context, req resource.Im
 //
 // review_note is left alone: it is Optional without Computed, so a null in
 // configuration must stay null in state, and Apple omits the field entirely
-// when it was never set.
+// when it was never set. ImportState sets it separately, where there is no
+// configuration for a non-null value to disagree with.
 func applyPurchaseAttributes(model *inAppPurchaseModel, purchase *models.InAppPurchase) {
 	model.Name = types.StringValue(purchase.Attributes.Name)
 	model.ProductID = types.StringValue(purchase.Attributes.ProductID)

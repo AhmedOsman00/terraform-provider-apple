@@ -51,7 +51,9 @@ FEATURES:
   version, which the provider resolves and reports as `version_id`; and the
   price schedule and availability are singular records Apple replaces with a
   `POST` and publishes no `DELETE` for, so they update in place and cannot be
-  destroyed.
+  destroyed. Destroying the *only* localization of a purchase likewise warns and
+  drops state rather than deleting: Apple requires every version to keep one.
+  Deleting the `apple_in_app_purchase` removes it for real.
 * `apple_apps` data source. There is deliberately no `apple_app` resource —
   Apple's documentation says to create new apps on the App Store Connect
   website and publishes no endpoint to create or delete one — but a

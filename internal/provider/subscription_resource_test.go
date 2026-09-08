@@ -51,6 +51,21 @@ func testAccSubscriptionProductID() string {
 	return fmt.Sprintf("com.test.terraform.sub%s", strings.ToLower(acctest.RandString(8)))
 }
 
+// testAccProductName returns a display name unique to this run.
+//
+// Apple enforces name uniqueness across the live products of an app -- "This
+// name is already being used by another in-app purchase associated with this
+// app", where "in-app purchase" covers subscriptions too. A fixed name
+// therefore collides with whatever an earlier failed test left behind, and
+// with the test that ran a second before if Apple has not finished deleting
+// its subscription yet. That is a weaker constraint than the one on product
+// identifiers, which Apple never releases at all, but it needs the same fix.
+//
+// Names are capped at 30 characters, so base must leave room for " " plus six.
+func testAccProductName(base string) string {
+	return fmt.Sprintf("%s %s", base, acctest.RandString(6))
+}
+
 func TestAccSubscriptionGroupResource_basic(t *testing.T) {
 	referenceName := "Terraform Test " + acctest.RandString(6)
 	renamed := "Terraform Renamed " + acctest.RandString(6)
@@ -115,6 +130,7 @@ func TestAccSubscriptionGroupResource_importRejectsBareID(t *testing.T) {
 func TestAccSubscriptionResource_basic(t *testing.T) {
 	referenceName := "Terraform Sub " + acctest.RandString(6)
 	productID := testAccSubscriptionProductID()
+	name := testAccProductName("Pro Monthly")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckSubscription(t) },
@@ -125,11 +141,11 @@ func TestAccSubscriptionResource_basic(t *testing.T) {
 		),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccSubscriptionConfig(referenceName, productID, "Pro Monthly", "ONE_MONTH"),
+				Config: testAccSubscriptionConfig(referenceName, productID, name, "ONE_MONTH"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckSubscriptionExists("apple_subscription.test"),
 					resource.TestCheckResourceAttr("apple_subscription.test", "product_id", productID),
-					resource.TestCheckResourceAttr("apple_subscription.test", "name", "Pro Monthly"),
+					resource.TestCheckResourceAttr("apple_subscription.test", "name", name),
 					resource.TestCheckResourceAttr("apple_subscription.test", "subscription_period", "ONE_MONTH"),
 					// A subscription with neither a localization nor a price is
 					// incomplete, and Apple says so.
@@ -166,6 +182,7 @@ func TestAccSubscriptionResource_basic(t *testing.T) {
 func TestAccSubscriptionResource_completesMetadata(t *testing.T) {
 	referenceName := "Terraform Full " + acctest.RandString(6)
 	productID := testAccSubscriptionProductID()
+	name := testAccProductName("Pro Monthly")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckSubscription(t) },
@@ -176,11 +193,11 @@ func TestAccSubscriptionResource_completesMetadata(t *testing.T) {
 		),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccSubscriptionCompleteConfig(referenceName, productID),
+				Config: testAccSubscriptionCompleteConfig(referenceName, productID, name),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckSubscriptionExists("apple_subscription.test"),
 					resource.TestCheckResourceAttr("apple_subscription_localization.test", "locale", "en-US"),
-					resource.TestCheckResourceAttr("apple_subscription_localization.test", "name", "Pro Monthly"),
+					resource.TestCheckResourceAttr("apple_subscription_localization.test", "name", name),
 					resource.TestCheckResourceAttrSet("apple_subscription_localization.test", "state"),
 					resource.TestCheckResourceAttrSet("apple_subscription_price.test", "id"),
 					resource.TestCheckResourceAttrSet("apple_subscription_price.test", "price_point_id"),
@@ -215,6 +232,7 @@ func TestAccSubscriptionResource_requiresReplace(t *testing.T) {
 	referenceName := "Terraform Replace " + acctest.RandString(6)
 	before := testAccSubscriptionProductID()
 	after := testAccSubscriptionProductID()
+	name := testAccProductName("Pro Monthly")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckSubscription(t) },
@@ -225,14 +243,14 @@ func TestAccSubscriptionResource_requiresReplace(t *testing.T) {
 		),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccSubscriptionConfig(referenceName, before, "Pro Monthly", "ONE_MONTH"),
+				Config: testAccSubscriptionConfig(referenceName, before, name, "ONE_MONTH"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckSubscriptionExists("apple_subscription.test"),
 					resource.TestCheckResourceAttr("apple_subscription.test", "product_id", before),
 				),
 			},
 			{
-				Config: testAccSubscriptionConfig(referenceName, after, "Pro Monthly", "ONE_MONTH"),
+				Config: testAccSubscriptionConfig(referenceName, after, name, "ONE_MONTH"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckSubscriptionExists("apple_subscription.test"),
 					resource.TestCheckResourceAttr("apple_subscription.test", "product_id", after),
@@ -356,12 +374,12 @@ resource "apple_subscription" "test" {
 // needs to consider it complete. The price point is looked up rather than
 // hardcoded: a price point ID encodes the subscription it belongs to, so it
 // cannot be known before the subscription exists.
-func testAccSubscriptionCompleteConfig(referenceName, productID string) string {
-	return testAccSubscriptionConfig(referenceName, productID, "Pro Monthly", "ONE_MONTH") + `
+func testAccSubscriptionCompleteConfig(referenceName, productID, name string) string {
+	return testAccSubscriptionConfig(referenceName, productID, name, "ONE_MONTH") + fmt.Sprintf(`
 resource "apple_subscription_localization" "test" {
   subscription_id = apple_subscription.test.id
   locale          = "en-US"
-  name            = "Pro Monthly"
+  name            = %[1]q
   description     = "Everything in Pro, billed monthly."
 }
 
@@ -375,7 +393,7 @@ resource "apple_subscription_price" "test" {
   subscription_id = apple_subscription.test.id
   price_point_id  = data.apple_subscription_price_points.test.price_points[0].id
 }
-`
+`, name)
 }
 
 // --- import ID functions ---

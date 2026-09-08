@@ -8,6 +8,8 @@ description: |-
   The locale must be one the app itself supports; Apple rejects a localization for a locale the app has not been localized into.
   Versions
   Apple attaches localizations to an in-app purchase version — the draft that carries metadata through App Review — rather than to the purchase itself. This resource resolves the version for you: it writes into whichever draft still accepts edits, and creates one when every existing version is in review or already approved, which is what App Store Connect's own UI does when you edit approved metadata. The version it used is reported as version_id. Versions cannot be deleted, so one created this way outlives the localization.
+  Destroying the last localization
+  Apple requires every version to keep at least one localization, and rejects the deletion of the only one with 409 Cannot delete the last localization. Destroying it therefore removes it from Terraform state and emits a warning, leaving the record in App Store Connect; deleting the apple_in_app_purchase removes it for real. Destroying one of several localizations deletes it normally.
 ---
 
 # apple_in_app_purchase_localization (Resource)
@@ -21,6 +23,10 @@ The locale must be one the app itself supports; Apple rejects a localization for
 ## Versions
 
 Apple attaches localizations to an *in-app purchase version* — the draft that carries metadata through App Review — rather than to the purchase itself. This resource resolves the version for you: it writes into whichever draft still accepts edits, and creates one when every existing version is in review or already approved, which is what App Store Connect's own UI does when you edit approved metadata. The version it used is reported as `version_id`. Versions cannot be deleted, so one created this way outlives the localization.
+
+## Destroying the last localization
+
+Apple requires every version to keep at least one localization, and rejects the deletion of the only one with `409 Cannot delete the last localization`. Destroying it therefore removes it from Terraform state and emits a warning, leaving the record in App Store Connect; deleting the `apple_in_app_purchase` removes it for real. Destroying one of several localizations deletes it normally.
 
 ## Example Usage
 

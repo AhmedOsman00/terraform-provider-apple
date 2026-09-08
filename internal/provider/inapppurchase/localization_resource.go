@@ -54,7 +54,13 @@ func (r *inAppPurchaseLocalizationResource) Schema(_ context.Context, _ resource
 			"the version for you: it writes into whichever draft still accepts edits, and creates one " +
 			"when every existing version is in review or already approved, which is what App Store " +
 			"Connect's own UI does when you edit approved metadata. The version it used is reported as " +
-			"`version_id`. Versions cannot be deleted, so one created this way outlives the localization.",
+			"`version_id`. Versions cannot be deleted, so one created this way outlives the localization.\n\n" +
+			"## Destroying the last localization\n\n" +
+			"Apple requires every version to keep at least one localization, and rejects the deletion " +
+			"of the only one with `409 Cannot delete the last localization`. Destroying it therefore " +
+			"removes it from Terraform state and emits a warning, leaving the record in App Store " +
+			"Connect; deleting the `apple_in_app_purchase` removes it for real. Destroying one of " +
+			"several localizations deletes it normally.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -281,6 +287,30 @@ func (r *inAppPurchaseLocalizationResource) Delete(ctx context.Context, req reso
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "404") {
 			tflog.Info(ctx, "In-app purchase localization already deleted")
+			return
+		}
+
+		// Apple refuses to delete the only localization a version has:
+		//
+		//   409 Cannot delete the last localization.
+		//       This version must have at least one localization.
+		//
+		// That is a constraint on the version, not on this record, and it has
+		// no Terraform-side remedy: destroying the sole localization of a
+		// purchase is exactly what `terraform destroy` asks for, and the
+		// localization does go away when the purchase does. Erroring here made
+		// the whole destroy fail and left the purchase behind. Warn and let
+		// Terraform drop it from state, the way apple_device does for a
+		// deletion Apple cannot perform either.
+		if strings.Contains(err.Error(), "Cannot delete the last localization") {
+			resp.Diagnostics.AddWarning(
+				"Localization Removed From State Rather Than Deleted",
+				fmt.Sprintf("Apple requires every in-app purchase version to keep at least one localization, so localization '%s' (%s) could not be deleted. "+
+					"It has been removed from Terraform state and still exists in App Store Connect. Deleting the in-app purchase removes it.",
+					state.ID.ValueString(), state.Locale.ValueString()),
+			)
+
+			tflog.Info(ctx, "In-app purchase localization is the last one; removed from state only")
 			return
 		}
 

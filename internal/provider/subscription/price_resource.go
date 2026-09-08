@@ -125,6 +125,16 @@ func (r *subscriptionPriceResource) Schema(_ context.Context, _ resource.SchemaR
 }
 
 // Create a new resource.
+// territorySuffix names the territory in an error when one was configured.
+// A price usually derives its territory from the price point, so the attribute
+// is absent more often than not and an empty clause reads better than "<null>".
+func territorySuffix(territoryID types.String) string {
+	if territoryID.IsNull() || territoryID.ValueString() == "" {
+		return ""
+	}
+	return fmt.Sprintf(" in territory '%s'", territoryID.ValueString())
+}
+
 func (r *subscriptionPriceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	tflog.Info(ctx, "Creating subscription price resource")
 
@@ -167,10 +177,18 @@ func (r *subscriptionPriceResource) Create(ctx context.Context, req resource.Cre
 					err.Error(), plan.SubscriptionID.ValueString()),
 			)
 		default:
+			// Apple answers a rejected price with "An error occurred while
+			// processing the pricing information" and nothing else -- no
+			// mention of which part of the request it objected to. Name the
+			// price point and territory here, because they are the only inputs
+			// and the message cannot be diagnosed without them.
 			resp.Diagnostics.AddError(
 				"Error Creating Subscription Price",
-				fmt.Sprintf("Could not create price for subscription '%s': %s",
-					plan.SubscriptionID.ValueString(), err.Error()),
+				fmt.Sprintf("Could not create price for subscription '%s' from price point '%s'%s: %s",
+					plan.SubscriptionID.ValueString(),
+					plan.PricePointID.ValueString(),
+					territorySuffix(plan.TerritoryID),
+					err.Error()),
 			)
 		}
 		tflog.Error(ctx, "Failed to create subscription price", map[string]interface{}{"error": err.Error()})

@@ -90,11 +90,11 @@ data "apple_in_app_purchase_price_points" "two_territories" {
 }
 
 func testAccInAppPurchasesDataSourceConfig(primary, secondary string) string {
-	return testAccInAppPurchaseConfig(primary, "Pro Unlock", "NON_CONSUMABLE") + fmt.Sprintf(`
+	return testAccInAppPurchaseConfig(primary, testAccProductName("Pro Unlock"), "NON_CONSUMABLE") + fmt.Sprintf(`
 resource "apple_in_app_purchase" "second" {
   app_id               = %[1]q
   product_id           = %[2]q
-  name                 = "Coin Pack"
+  name                 = %[4]q
   in_app_purchase_type = "CONSUMABLE"
 }
 
@@ -119,5 +119,5 @@ data "apple_in_app_purchases" "none" {
 
   depends_on = [apple_in_app_purchase.test, apple_in_app_purchase.second]
 }
-`, testAccAppID(), secondary, primary)
+`, testAccAppID(), secondary, primary, testAccProductName("Coin Pack"))
 }

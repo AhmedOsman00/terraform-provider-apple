@@ -37,6 +37,8 @@ func testAccInAppPurchaseProductID() string {
 
 func TestAccInAppPurchaseResource_basic(t *testing.T) {
 	productID := testAccInAppPurchaseProductID()
+	name := testAccProductName("Pro Unlock")
+	renamed := testAccProductName("Pro Renamed")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckInAppPurchase(t) },
@@ -44,11 +46,11 @@ func TestAccInAppPurchaseResource_basic(t *testing.T) {
 		CheckDestroy:             testAccCheckInAppPurchaseDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccInAppPurchaseConfig(productID, "Pro Unlock", "NON_CONSUMABLE"),
+				Config: testAccInAppPurchaseConfig(productID, name, "NON_CONSUMABLE"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckInAppPurchaseExists("apple_in_app_purchase.test"),
 					resource.TestCheckResourceAttr("apple_in_app_purchase.test", "product_id", productID),
-					resource.TestCheckResourceAttr("apple_in_app_purchase.test", "name", "Pro Unlock"),
+					resource.TestCheckResourceAttr("apple_in_app_purchase.test", "name", name),
 					resource.TestCheckResourceAttr("apple_in_app_purchase.test", "in_app_purchase_type", "NON_CONSUMABLE"),
 					resource.TestCheckResourceAttr("apple_in_app_purchase.test", "app_id", testAccAppID()),
 					// A purchase with no localization, price or availability is
@@ -61,10 +63,10 @@ func TestAccInAppPurchaseResource_basic(t *testing.T) {
 			// Apple's update request accepts, so this is the whole in-place
 			// update path.
 			{
-				Config: testAccInAppPurchaseUpdatedConfig(productID),
+				Config: testAccInAppPurchaseUpdatedConfig(productID, renamed),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckInAppPurchaseExists("apple_in_app_purchase.test"),
-					resource.TestCheckResourceAttr("apple_in_app_purchase.test", "name", "Pro Unlock Renamed"),
+					resource.TestCheckResourceAttr("apple_in_app_purchase.test", "name", renamed),
 					resource.TestCheckResourceAttr("apple_in_app_purchase.test", "family_sharable", "true"),
 					resource.TestCheckResourceAttr("apple_in_app_purchase.test", "review_note", "Open Settings, then tap Unlock Pro."),
 				),
@@ -109,6 +111,7 @@ func TestAccInAppPurchaseResource_importRejectsBareID(t *testing.T) {
 // and the version resolution behind a localization.
 func TestAccInAppPurchaseResource_completesMetadata(t *testing.T) {
 	productID := testAccInAppPurchaseProductID()
+	name := testAccProductName("Pro Unlock")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckInAppPurchase(t) },
@@ -116,11 +119,11 @@ func TestAccInAppPurchaseResource_completesMetadata(t *testing.T) {
 		CheckDestroy:             testAccCheckInAppPurchaseDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccInAppPurchaseCompleteConfig(productID),
+				Config: testAccInAppPurchaseCompleteConfig(productID, name),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckInAppPurchaseExists("apple_in_app_purchase.test"),
 					resource.TestCheckResourceAttr("apple_in_app_purchase_localization.test", "locale", "en-US"),
-					resource.TestCheckResourceAttr("apple_in_app_purchase_localization.test", "name", "Pro Unlock"),
+					resource.TestCheckResourceAttr("apple_in_app_purchase_localization.test", "name", name),
 					// The version is resolved by the provider, never configured.
 					resource.TestCheckResourceAttrSet("apple_in_app_purchase_localization.test", "version_id"),
 					resource.TestCheckResourceAttr("apple_in_app_purchase_price_schedule.test", "base_territory", "USA"),
@@ -264,17 +267,17 @@ resource "apple_in_app_purchase" "test" {
 `, testAccAppID(), productID, name, purchaseType)
 }
 
-func testAccInAppPurchaseUpdatedConfig(productID string) string {
+func testAccInAppPurchaseUpdatedConfig(productID, name string) string {
 	return fmt.Sprintf(`
 resource "apple_in_app_purchase" "test" {
   app_id               = %[1]q
   product_id           = %[2]q
-  name                 = "Pro Unlock Renamed"
+  name                 = %[3]q
   in_app_purchase_type = "NON_CONSUMABLE"
   family_sharable      = true
   review_note          = "Open Settings, then tap Unlock Pro."
 }
-`, testAccAppID(), productID)
+`, testAccAppID(), productID, name)
 }
 
 // testAccInAppPurchaseCompleteConfig builds a purchase with everything Apple
@@ -283,19 +286,19 @@ resource "apple_in_app_purchase" "test" {
 // The price point is read back from Apple rather than hardcoded: a price point
 // ID encodes the purchase it belongs to, so it cannot be known before the
 // purchase exists.
-func testAccInAppPurchaseCompleteConfig(productID string) string {
+func testAccInAppPurchaseCompleteConfig(productID, name string) string {
 	return fmt.Sprintf(`
 resource "apple_in_app_purchase" "test" {
   app_id               = %[1]q
   product_id           = %[2]q
-  name                 = "Pro Unlock"
+  name                 = %[3]q
   in_app_purchase_type = "NON_CONSUMABLE"
 }
 
 resource "apple_in_app_purchase_localization" "test" {
   in_app_purchase_id = apple_in_app_purchase.test.id
   locale             = "en-US"
-  name               = "Pro Unlock"
+  name               = %[3]q
   description        = "Unlock every Pro feature."
 }
 
@@ -320,7 +323,7 @@ resource "apple_in_app_purchase_availability" "test" {
   available_in_new_territories = false
   available_territories        = ["USA"]
 }
-`, testAccAppID(), productID)
+`, testAccAppID(), productID, name)
 }
 
 // --- import ID functions ---
