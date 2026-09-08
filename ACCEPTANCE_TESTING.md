@@ -267,8 +267,11 @@ Certificates
 
 ## How to run it
 
-Export the three credentials the provider reads, then start with the tests that
-leave nothing behind before committing the device slots.
+These tests never run automatically. In CI they are a manual
+`workflow_dispatch` of **Acceptance Tests** (`.github/workflows/acceptance.yml`),
+which takes a Terraform version, a `-run` pattern, and an `include_device_tests`
+toggle. Locally, export the three credentials the provider reads, then start
+with the tests that leave nothing behind before committing the device slots.
 
 ```bash
 export APPLE_APP_STORE_CONNECT_ISSUER_ID=...
@@ -289,14 +292,17 @@ TF_ACC=1 go test -v ./internal/provider/ -timeout 30m -run 'TestAccDeviceResourc
 
 Step 3 passes once per team and never again: the UDIDs are hardcoded and destroy
 only disables the device, so a second run gets Apple's 409 back as
-`Device Already Exists`. CI therefore runs step 2 rather than the whole suite —
-`.github/workflows/test.yml` passes `-skip 'TestAccDeviceResource'`.
+`Device Already Exists`. The CI equivalent is step 2 —
+`.github/workflows/acceptance.yml` passes `-skip 'TestAccDeviceResource'` unless
+its `include_device_tests` input is set.
 
 `make testacc` runs everything, devices included. Prefer the staged commands
 above for a first run against a new team.
 
 Do not add `-parallel`: the suite uses fixed identifiers that would collide.
-CI serialises the acceptance job with `max-parallel: 1` for the same reason.
+For the same reason CI runs one Terraform version per dispatch rather than a
+matrix, and its `concurrency` group queues a second run instead of starting it
+alongside the first.
 
 If Go's test timeout kills a run mid-apply, Terraform never destroys — that is
 the main way you end up with the leftovers listed above.

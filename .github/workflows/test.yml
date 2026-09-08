@@ -1,20 +1,36 @@
 # Terraform Provider testing workflow.
+#
+# Credential-free by construction: nothing here touches App Store Connect, so
+# it runs identically on forks. The acceptance tests live in
+# .github/workflows/acceptance.yml and are triggered by hand.
 name: Tests
 
 on:
+  # Root-level markdown only: `*` does not match `/`, so a change under docs/
+  # still runs the generate job that checks docs/ is in sync.
   pull_request:
     paths-ignore:
-      - 'README.md'
+      - '*.md'
+      - 'LICENSE'
+  # Only on main: a branch push that also has a pull request open would
+  # otherwise run this whole workflow twice for the same commit. GitHub
+  # Actions does not support YAML anchors, hence the repeated list.
   push:
+    branches:
+      - main
     paths-ignore:
-      - 'README.md'
-  # Acceptance tests touch a real Apple Developer account, so allow running
-  # them deliberately as well as on push.
+      - '*.md'
+      - 'LICENSE'
   workflow_dispatch:
 
 # Testing only needs permissions to read the repository contents.
 permissions:
   contents: read
+
+# Superseding a commit makes its in-flight run pointless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Ensure the project builds and is clean before running anything heavier.
@@ -39,6 +55,7 @@ jobs:
   generate:
     name: Check Generated Docs
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
@@ -74,12 +91,11 @@ jobs:
       - run: go mod download
       - run: make validate-examples
 
-  # Runs on every push and pull request, including from forks. No App Store
-  # Connect credentials are provided, so the acceptance tests skip themselves
-  # and only the credential-free tests execute.
+  # The acceptance tests in this package skip themselves without TF_ACC and
+  # credentials, so this is the credential-free tier: httptest-backed client
+  # tests, pure filter/model functions, and the provider schema tests.
   unit:
     name: Unit Tests
-    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -96,66 +112,13 @@ jobs:
       - run: go mod download
       - name: Run unit tests
         run: go test ./... -race -covermode=atomic -coverprofile=coverage.out
-
-  # Secrets cannot be referenced from a job-level `if`, so surface their
-  # presence as an output instead. Forks and credential-less checkouts then
-  # skip the acceptance job entirely rather than reporting a red build.
-  check-credentials:
-    name: Check for Credentials
-    runs-on: ubuntu-latest
-    outputs:
-      available: ${{ steps.check.outputs.available }}
-    steps:
-      - id: check
-        env:
-          ISSUER_ID: ${{ secrets.APPLE_APP_STORE_CONNECT_ISSUER_ID }}
+      - name: Coverage summary
+        # The profile was previously written and thrown away.
         run: |
-          if [ -n "$ISSUER_ID" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "App Store Connect credentials are not configured; acceptance tests will be skipped." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-  # Acceptance tests create and destroy real resources in an Apple Developer
-  # account. They run serially: the suite uses fixed identifiers, so parallel
-  # matrix entries would collide with each other in the same team.
-  #
-  # TestAccDeviceResource* is excluded. Apple cannot delete a device, so those
-  # two tests register their hardcoded UDIDs permanently: the first matrix entry
-  # consumes the slots and every entry after it fails on the 409 the create maps
-  # to "Device Already Exists". Running them is a deliberate, once-per-team act
-  # -- see ACCEPTANCE_TESTING.md -- not something CI should do on every push.
-  acceptance:
-    name: Acceptance Tests (Terraform ${{ matrix.terraform }})
-    needs: [build, check-credentials]
-    if: needs.check-credentials.outputs.available == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        terraform:
-          - '1.0.*'
-          - '1.5.*'
-          - '1.9.*'
-          - 'latest'
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
-        with:
-          terraform_version: ${{ matrix.terraform }}
-          terraform_wrapper: false
-      - run: go mod download
-      - name: Run acceptance tests
-        env:
-          TF_ACC: "1"
-          APPLE_APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APPLE_APP_STORE_CONNECT_ISSUER_ID }}
-          APPLE_APP_STORE_CONNECT_API_KEY: ${{ secrets.APPLE_APP_STORE_CONNECT_API_KEY }}
-          APPLE_APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APPLE_APP_STORE_CONNECT_PRIVATE_KEY }}
-        run: go test ./internal/provider/ -v -timeout 30m -skip 'TestAccDeviceResource'
+          {
+            echo '### Coverage'
+            echo
+            echo '```'
+            go tool cover -func=coverage.out | tail -n 1
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
