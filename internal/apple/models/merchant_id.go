@@ -24,12 +24,19 @@ type MerchantIDUpdateRequest struct {
 }
 
 // Merchant ID attributes.
+//
+// Apple calls the human-readable field "name" on merchantIds; sending
+// "displayName" is rejected with a 409 ENTITY_ERROR.ATTRIBUTE.UNKNOWN and a
+// pointer at /data/attributes/displayName. The Go field and the Terraform
+// attribute stay display_name because that is the provider's published schema
+// and Apple's own portal labels it that way -- only the wire tag is "name".
 type MerchantIDAttributes struct {
 	Identifier  string `json:"identifier"`
-	DisplayName string `json:"displayName"`
+	DisplayName string `json:"name"`
+	Prefix      string `json:"prefix,omitempty"`
 }
 
-// Update attributes (only displayName can be updated for Merchant IDs).
+// Update attributes (only the display name can be updated for Merchant IDs).
 type MerchantIDUpdateAttributes struct {
-	DisplayName string `json:"displayName"`
+	DisplayName string `json:"name"`
 }

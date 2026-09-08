@@ -318,13 +318,18 @@ func (r *merchantIDResource) ImportState(ctx context.Context, req resource.Impor
 	var merchantID *models.MerchantID
 	var err error
 
-	// Try to get by Apple ID first (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
-	if strings.Contains(importID, "-") && len(importID) == 36 {
-		tflog.Debug(ctx, "Attempting import by Apple ID")
-		merchantID, err = r.client.GetMerchantID(importID)
-	} else {
+	// A merchant identifier always starts with "merchant." -- it is the one
+	// thing MerchantIdentifierValidator guarantees -- and an Apple-generated ID
+	// never does, so the prefix is what separates the two forms. Matching on a
+	// 36-character dashed UUID instead would send every real Apple ID down the
+	// identifier path: Apple issues 10-character alphanumeric IDs like
+	// "4B62XU6945", not UUIDs.
+	if strings.HasPrefix(importID, "merchant.") {
 		tflog.Debug(ctx, "Attempting import by identifier")
 		merchantID, err = r.client.GetMerchantIDByIdentifier(importID)
+	} else {
+		tflog.Debug(ctx, "Attempting import by Apple ID")
+		merchantID, err = r.client.GetMerchantID(importID)
 	}
 
 	if err != nil {
@@ -332,7 +337,7 @@ func (r *merchantIDResource) ImportState(ctx context.Context, req resource.Impor
 			"Error Importing Merchant ID",
 			fmt.Sprintf("Could not import Merchant ID '%s': %s\n\n"+
 				"Import ID should be either:\n"+
-				"- The Apple-generated Merchant ID (e.g., 12345678-1234-1234-1234-123456789012)\n"+
+				"- The Apple-generated Merchant ID (e.g., 4B62XU6945)\n"+
 				"- The merchant identifier (e.g., merchant.com.example.myapp)",
 				importID, err.Error()),
 		)
