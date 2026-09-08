@@ -20,10 +20,10 @@ func TestAccPassTypeIDResource_basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccPassTypeIDResourceConfig("pass.com.test.example", "Test Example Pass"),
+				Config: testAccPassTypeIDResourceConfig("pass.com.test.terraform-example", "Test Example Pass"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckPassTypeIDExists("apple_pass_type_id.test"),
-					resource.TestCheckResourceAttr("apple_pass_type_id.test", "identifier", "pass.com.test.example"),
+					resource.TestCheckResourceAttr("apple_pass_type_id.test", "identifier", "pass.com.test.terraform-example"),
 					resource.TestCheckResourceAttr("apple_pass_type_id.test", "name", "Test Example Pass"),
 					resource.TestCheckResourceAttrSet("apple_pass_type_id.test", "id"),
 				),
@@ -37,10 +37,10 @@ func TestAccPassTypeIDResource_basic(t *testing.T) {
 			},
 			// Update and Read testing (only name can be updated)
 			{
-				Config: testAccPassTypeIDResourceConfig("pass.com.test.example", "Updated Example Pass"),
+				Config: testAccPassTypeIDResourceConfig("pass.com.test.terraform-example", "Updated Example Pass"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckPassTypeIDExists("apple_pass_type_id.test"),
-					resource.TestCheckResourceAttr("apple_pass_type_id.test", "identifier", "pass.com.test.example"),
+					resource.TestCheckResourceAttr("apple_pass_type_id.test", "identifier", "pass.com.test.terraform-example"),
 					resource.TestCheckResourceAttr("apple_pass_type_id.test", "name", "Updated Example Pass"),
 				),
 			},
@@ -56,7 +56,7 @@ func TestAccPassTypeIDResource_importByIdentifier(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create initial resource
 			{
-				Config: testAccPassTypeIDResourceConfig("pass.com.test.import", "Import Test Pass"),
+				Config: testAccPassTypeIDResourceConfig("pass.com.test.terraform-import", "Import Test Pass"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckPassTypeIDExists("apple_pass_type_id.test"),
 				),
@@ -65,7 +65,7 @@ func TestAccPassTypeIDResource_importByIdentifier(t *testing.T) {
 			{
 				ResourceName:      "apple_pass_type_id.test",
 				ImportState:       true,
-				ImportStateId:     "pass.com.test.import",
+				ImportStateId:     "pass.com.test.terraform-import",
 				ImportStateVerify: true,
 			},
 		},
@@ -96,17 +96,25 @@ func testAccCheckPassTypeIDExists(resourceName string) resource.TestCheckFunc {
 	}
 }
 
+// testAccCheckPassTypeIDDestroy asks Apple rather than reading Terraform state.
+//
+// Inspecting state cannot detect what this check exists to catch -- a Pass Type
+// ID still live in the portal -- and it also reports a false failure: after a
+// step that imports, the state handed to CheckDestroy still lists the resource
+// even though the destroy removed it at Apple. Only Apple's answer decides.
 func testAccCheckPassTypeIDDestroy(s *terraform.State) error {
-	// Since we don't have access to the actual client in test mode,
-	// we'll just check that the resource is removed from state
+	client, err := testAccAPIClient()
+	if err != nil {
+		return fmt.Errorf("building API client: %w", err)
+	}
+
 	for _, rs := range s.RootModule().Resources {
-		if rs.Type != "apple_pass_type_id" {
+		if rs.Type != "apple_pass_type_id" || rs.Primary == nil || rs.Primary.ID == "" {
 			continue
 		}
 
-		// If we reach here, the resource still exists in state
-		if rs.Primary.ID != "" {
-			return fmt.Errorf("Pass Type ID %s still exists in state", rs.Primary.ID)
+		if _, err := client.GetPassTypeID(rs.Primary.ID); err == nil {
+			return fmt.Errorf("Pass Type ID %s still exists at Apple after destroy", rs.Primary.ID)
 		}
 	}
 
@@ -144,7 +152,7 @@ func TestAccPassTypeIDResource_invalidName(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccPassTypeIDResourceConfig("pass.com.test.example", "Invalid@Name!"),
+				Config:      testAccPassTypeIDResourceConfig("pass.com.test.terraform-example", "Invalid@Name!"),
 				ExpectError: regexp.MustCompile("Pass Type ID name can only contain"),
 			},
 		},

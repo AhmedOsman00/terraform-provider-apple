@@ -126,11 +126,11 @@ delete would go unnoticed by the test.
 
 | Test | Residue | Creates at Apple | What you see in the portal |
 |---|---|---|---|
-| `TestAccBundleIDResource_basic` | Net zero | `com.test.example` (iOS), renamed "Test Example" → "Updated Example". | One App ID appears, its name changes, then it is deleted. |
-| `TestAccBundleIDResource_platforms` | Net zero | Four subtests: `com.test.platform-ios`, `-mac-os`, `-tv-os`, `-watch-os`. | Four App IDs appear and are deleted, one per subtest. |
+| `TestAccBundleIDResource_basic` | Net zero | `com.test.terraform-example` (iOS), renamed "Test Example" → "Updated Example". | One App ID appears, its name changes, then it is deleted. |
+| `TestAccBundleIDResource_platforms` | Net zero | Three subtests: `com.test.platform-ios`, `-mac-os`, `-universal`. | Three App IDs appear and are deleted, one per subtest. |
 | `TestAccBundleIDResource_validation` | Plan-only | Nothing — bad identifier, empty name, bad platform all fail validation. | No change. |
 | `TestAccBundleIDResource_requiresReplace` | Net zero | `com.test.original`, then replaced by `com.test.changed`. | Two App IDs appear in sequence, both deleted. |
-| `TestAccBundleIDResource_disappears` | Net zero | `com.test.disappear`. The "external deletion" is a stub that does nothing, so this is just a create/destroy with `ExpectNonEmptyPlan`. | One App ID appears and is deleted. |
+| `TestAccBundleIDResource_disappears` | Net zero | `com.test.terraform-disappear`, deleted at Apple behind Terraform's back to force drift. | One App ID appears and is deleted mid-test; the destroy finds it already gone. |
 | `TestAccBundleIDsDataSource_basic` | Net zero | `com.test.datasource`, plus an unfiltered list of every Bundle ID in the team. | One App ID appears and is deleted. |
 | `TestAccBundleIDsDataSource_empty` | Read-only | Nothing. Lists every Bundle ID. | No change. |
 | `TestAccBundleIDsDataSource_filtering` | Net zero | `com.test.filter.ios` (iOS) and `com.test.filter.macos` (macOS). | Two App IDs appear and are deleted. |
@@ -144,6 +144,12 @@ is `^[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+$`, so `com.test.MAC_OS` would fail at plan
 time, and Apple's App ID name accepts only alphanumerics and spaces, so the name
 has to lose the underscore too. Keep both substitutions if you touch that test.
 
+The subtests cover `IOS`, `MAC_OS` and `UNIVERSAL`, which is everything Apple
+accepts: `TV_OS` and `WATCH_OS` are rejected with a 409 naming the three valid
+values, and tvOS and watchOS App IDs are created as `UNIVERSAL`. Apple then
+stores *every* Bundle ID as `UNIVERSAL` whatever was sent, so `platform` records
+what was configured and import ignores it.
+
 ## Bundle ID capabilities
 
 Each test creates its own parent Bundle ID. Both are deletable, so a completed
@@ -152,12 +158,24 @@ run leaves nothing.
 | Test | Residue | Creates at Apple | What you see in the portal |
 |---|---|---|---|
 | `TestAccBundleIDCapabilityResource_basic` | Net zero | `com.test.terraform-capability` + Push Notifications; then imports it as `<bundle>/<capability>`. | An App ID appears with *Push Notifications* ticked, then both are deleted. |
-| `TestAccBundleIDCapabilityResource_importBareID` | Net zero | Same Bundle ID + Push Notifications, imported by bare capability ID to exercise the degraded path. | Same as above. Expect a warning that the next plan would force replacement. |
+| `TestAccBundleIDCapabilityResource_importBareID` | Net zero | Same Bundle ID + Push Notifications, imported by bare capability ID. | Same as above. `bundle_id` is recovered from the capability ID, which Apple composes as `<bundleID>_<TYPE>`, and confirmed against the parent before it is written, so the import is complete rather than partial. |
 | `TestAccBundleIDCapabilityResource_settings` | Net zero | Same Bundle ID + Data Protection, flipping the level from *Complete Protection* to *Protected Until First User Auth* in place. | The App ID's *Data Protection* capability shows a changed protection level mid-run. |
 | `TestAccBundleIDCapabilityResource_requiresReplace` | Net zero | Same Bundle ID; Push Notifications replaced by HealthKit. | The capability tick moves from *Push Notifications* to *HealthKit*. |
 | `TestAccBundleIDCapabilityResource_validation` | Plan-only | Nothing. | No change. |
 | `TestAccBundleIDCapabilitiesDataSource_basic` | Net zero | `com.test.terraform-capability-ds` + Push Notifications + HealthKit; reads back via four data sources. | An App ID with two capabilities ticked, then deleted. |
 | `TestAccBundleIDCapabilitiesDataSource_validation` | Plan-only | Nothing. | No change. |
+
+Two things about capabilities are worth knowing before reading a failure here.
+Apple exposes no `GET` for a single capability — it answers 403 `does not allow
+'GET_INSTANCE'` — so every read goes through the parent Bundle ID's collection,
+and that collection rejects a `limit` parameter. And Apple applies a capability
+write as a read-modify-write over the whole set without locking, so two
+concurrent creates on one Bundle ID both return 201 while only one survives; the
+provider serializes capability writes per Bundle ID to prevent it.
+
+Apple also enables some capabilities on a new Bundle ID by itself
+(`IN_APP_PURCHASE` among them), which is why the data source test asserts a
+floor on the count rather than an exact number.
 
 ## Merchant IDs
 
@@ -180,8 +198,8 @@ catch a Pass Type ID that survived at Apple — verify in the portal after a run
 
 | Test | Residue | Creates at Apple | What you see in the portal |
 |---|---|---|---|
-| `TestAccPassTypeIDResource_basic` | Net zero | `pass.com.test.example`, renamed "Test Example Pass" → "Updated Example Pass". | A Pass Type ID appears, its name changes, then it is deleted. |
-| `TestAccPassTypeIDResource_importByIdentifier` | Net zero | `pass.com.test.import`. | One Pass Type ID appears and is deleted. |
+| `TestAccPassTypeIDResource_basic` | Net zero | `pass.com.test.terraform-example`, renamed "Test Example Pass" → "Updated Example Pass". | A Pass Type ID appears, its name changes, then it is deleted. |
+| `TestAccPassTypeIDResource_importByIdentifier` | Net zero | `pass.com.test.terraform-import`. | One Pass Type ID appears and is deleted. |
 | `TestAccPassTypeIDResource_invalidIdentifier` | Plan-only | Nothing — identifier must start with `pass.`. | No change. |
 | `TestAccPassTypeIDResource_invalidName` | Plan-only | Nothing. | No change. |
 | `TestAccPassTypeIDsDataSource_basic` | Read-only | Nothing. Lists every Pass Type ID. | No change. |
@@ -198,7 +216,7 @@ require devices, and devices are permanent.
 | Test | Residue | Creates at Apple | What you see in the portal |
 |---|---|---|---|
 | `TestAccProfileResource_basic` | Slot, returned | `com.test.terraform-profile` + 1 distribution certificate + profile "Terraform Test Profile"; imported by ID and by name. | An App ID, a Distribution certificate and an *App Store* profile all appear, then all three are removed. |
-| `TestAccProfileResource_rename` | Slot, returned | Same trio; profile renamed "Terraform Rename Before" → "Terraform Rename After" in place. | The profile's name changes without recreation. If Apple answers 404/405 on the PATCH, this is the test telling you `name` should be `RequiresReplace`. |
+| `TestAccProfileResource_rename` | Slot, returned | Same trio; profile renamed "Terraform Rename Before" → "Terraform Rename After", which reissues it. | The first profile disappears and a second appears under the new name. Apple rejects `PATCH /v1/profiles` with 403 `does not allow 'UPDATE'`, so `name` is `RequiresReplace`. |
 | `TestAccProfileResource_requiresReplace` | Slot, returned | Two Bundle IDs (`…-first`, `…-second`) + 1 certificate; the profile is moved between them, forcing a recreate. | Two App IDs, one certificate, and a profile that is deleted and reissued against the second App ID. |
 | `TestAccProfileResource_validation` | Plan-only | Nothing. | No change. |
 | `TestAccProfilesDataSource_basic` | Slot, returned | `com.test.terraform-profile-ds` + 1 certificate + profile "Terraform DS Profile"; read back through five data sources. | An App ID, a Distribution certificate and a profile appear, then all are removed. |
@@ -218,7 +236,7 @@ Delete these in the portal before retrying:
 
 ```
 Identifiers → App IDs
-  com.test.example                   com.test.original
+  com.test.terraform-example         com.test.original
   com.test.changed                   com.test.disappear
   com.test.datasource                com.test.filter.ios
   com.test.filter.macos              com.test.sort.aaa
@@ -236,7 +254,7 @@ Identifiers → Merchant IDs
   merchant.com.test.terraform-ds-beta
 
 Identifiers → Pass Type IDs
-  pass.com.test.example                pass.com.test.import
+  pass.com.test.terraform-example      pass.com.test.terraform-import
 
 Profiles
   Terraform Test Profile               Terraform Rename Before / After

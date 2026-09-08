@@ -21,10 +21,10 @@ func TestAccBundleIDResource_basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccBundleIDResourceConfig("com.test.example", "Test Example", "IOS"),
+				Config: testAccBundleIDResourceConfig("com.test.terraform-example", "Test Example", "IOS"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckBundleIDExists("apple_bundle_id.test"),
-					resource.TestCheckResourceAttr("apple_bundle_id.test", "identifier", "com.test.example"),
+					resource.TestCheckResourceAttr("apple_bundle_id.test", "identifier", "com.test.terraform-example"),
 					resource.TestCheckResourceAttr("apple_bundle_id.test", "name", "Test Example"),
 					resource.TestCheckResourceAttr("apple_bundle_id.test", "platform", "IOS"),
 					resource.TestCheckResourceAttrSet("apple_bundle_id.test", "id"),
@@ -43,10 +43,10 @@ func TestAccBundleIDResource_basic(t *testing.T) {
 			},
 			// Update and Read testing (only name can be updated)
 			{
-				Config: testAccBundleIDResourceConfig("com.test.example", "Updated Example", "IOS"),
+				Config: testAccBundleIDResourceConfig("com.test.terraform-example", "Updated Example", "IOS"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckBundleIDExists("apple_bundle_id.test"),
-					resource.TestCheckResourceAttr("apple_bundle_id.test", "identifier", "com.test.example"),
+					resource.TestCheckResourceAttr("apple_bundle_id.test", "identifier", "com.test.terraform-example"),
 					resource.TestCheckResourceAttr("apple_bundle_id.test", "name", "Updated Example"),
 					resource.TestCheckResourceAttr("apple_bundle_id.test", "platform", "IOS"),
 				),
@@ -137,7 +137,7 @@ func TestAccBundleIDResource_disappears(t *testing.T) {
 		CheckDestroy:             testAccCheckBundleIDDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccBundleIDResourceConfig("com.test.disappear", "Test Disappear", "IOS"),
+				Config: testAccBundleIDResourceConfig("com.test.terraform-disappear", "Test Disappear", "IOS"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckBundleIDExists("apple_bundle_id.test"),
 					testAccCheckBundleIDDisappears("apple_bundle_id.test"),
@@ -222,8 +222,19 @@ func testAccCheckBundleIDDisappears(resourceName string) resource.TestCheckFunc 
 			return fmt.Errorf("Resource ID not set")
 		}
 
-		// Here you would typically make an API call to delete the resource outside of Terraform
-		// This simulates external deletion to test drift detection
+		// Actually delete the Bundle ID at Apple, behind Terraform's back. A
+		// stub that only returned nil left the resource in place, so the
+		// refresh plan was empty and ExpectNonEmptyPlan could only be satisfied
+		// by unrelated drift -- which is what the platform attribute used to
+		// supply. Deleting for real is what makes this a drift-detection test.
+		client, err := testAccAPIClient()
+		if err != nil {
+			return fmt.Errorf("building API client: %w", err)
+		}
+
+		if err := client.DeleteBundleID(rs.Primary.ID, nil); err != nil {
+			return fmt.Errorf("deleting Bundle ID %s outside Terraform: %w", rs.Primary.ID, err)
+		}
 
 		return nil
 	}
