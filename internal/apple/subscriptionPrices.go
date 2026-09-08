@@ -77,6 +77,21 @@ func (c *Client) CreateSubscriptionPrice(
 		}
 	}
 
+	// Send no attributes member at all when nothing is set, rather than an
+	// empty object. Every field is omitempty, so a non-nil struct with all
+	// fields unset marshals to "attributes":{}, and App Store Connect rejects
+	// that with 409 "An error occurred while processing the pricing
+	// information" -- an error that names the pricing rather than the empty
+	// member it is actually objecting to. The provider has met this before:
+	// a token carrying an empty scope claim is refused the same way, with a
+	// message about JSON processing. A price with neither a start date nor
+	// preserveCurrentPrice nor a plan type is the ordinary case, so this was
+	// every default price.
+	if attributes != nil && attributes.StartDate == nil &&
+		attributes.PreserveCurrentPrice == nil && attributes.PlanType == nil {
+		attributes = nil
+	}
+
 	requestData := models.Request[models.SubscriptionPriceCreateRequest]{
 		Data: models.SubscriptionPriceCreateRequest{
 			Type:          "subscriptionPrices",

@@ -198,3 +198,57 @@ func TestCreateSubscriptionOmitsUnsetAttributes(t *testing.T) {
 		t.Errorf("group type = %v, want subscriptionGroups", got)
 	}
 }
+
+// TestCreateSubscriptionPriceOmitsEmptyAttributes pins the wire format.
+//
+// Every attribute is optional, so a price with no start date, no
+// preserveCurrentPrice and no plan type marshalled to "attributes":{} — and
+// App Store Connect answered 409 "An error occurred while processing the
+// pricing information", which reads like a complaint about the price point.
+// The member has to be absent, not empty.
+func TestCreateSubscriptionPriceOmitsEmptyAttributes(t *testing.T) {
+	var body map[string]any
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding request body: %s", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":{"type":"subscriptionPrices","id":"price-1","attributes":{}}}`)
+	}))
+	defer srv.Close()
+
+	client := &Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}
+
+	if _, err := client.CreateSubscriptionPrice(
+		"sub-1", "point-1", nil, &models.SubscriptionPriceCreateAttributes{}, nil,
+	); err != nil {
+		t.Fatalf("CreateSubscriptionPrice: %s", err)
+	}
+
+	data, ok := body["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("request has no data member: %v", body)
+	}
+	if _, present := data["attributes"]; present {
+		t.Errorf("attributes member sent for a price with nothing set: %v", data["attributes"])
+	}
+
+	// A price that does set something must still carry it.
+	startDate := "2027-01-01"
+	if _, err := client.CreateSubscriptionPrice(
+		"sub-1", "point-1", nil,
+		&models.SubscriptionPriceCreateAttributes{StartDate: &startDate}, nil,
+	); err != nil {
+		t.Fatalf("CreateSubscriptionPrice with a start date: %s", err)
+	}
+
+	data, _ = body["data"].(map[string]any)
+	attrs, ok := data["attributes"].(map[string]any)
+	if !ok {
+		t.Fatalf("attributes dropped for a price that sets a start date: %v", data)
+	}
+	if attrs["startDate"] != startDate {
+		t.Errorf("startDate = %v, want %q", attrs["startDate"], startDate)
+	}
+}
