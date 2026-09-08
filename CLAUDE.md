@@ -177,6 +177,10 @@ Two things constrain what the acceptance tier is allowed to do:
 
 Identifiers are fixed rather than randomised, matching the existing tests, so an interrupted run leaves a Bundle ID, Merchant ID or profile that must be deleted in the portal before the test passes again.
 
+`ACCEPTANCE_TESTING.md` is the per-test reference: what every `TestAcc*` creates at Apple, where it appears in the portal, what it leaves behind, the cleanup list for an interrupted run, and a staged run order that defers the two irreversible device tests. It is hand-written and unverified — update the matching table when you add or rename an acceptance test.
+
+One trap it records: Bundle ID identifiers cannot contain the underscore the platform constants carry (`BundleIdentifierValidator` is `^[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+$`), and Apple's App ID *name* accepts only alphanumerics and spaces. `testAccBundleIDPlatformFixture` does both substitutions for `TestAccBundleIDResource_platforms`; interpolating a platform constant straight into either field fails.
+
 `.github/workflows/test.yml` runs five jobs: `build` (build + lint), `generate` (docs diff), `examples` (`make validate-examples`), `unit` (always, no credentials), and `acceptance` (gated on a `check-credentials` output because secrets cannot be read from a job-level `if`; serialized with `max-parallel: 1` since the suite uses fixed identifiers that would collide across matrix entries).
 
 All six filter packages have table-driven tests (`internal/provider/*/filters_test.go`) covering filtering, sorting, limiting, and the malformed-pattern errors. Resource CRUD paths are still only reachable through the acceptance tier.

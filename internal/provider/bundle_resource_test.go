@@ -6,6 +6,7 @@ package provider
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -56,17 +57,15 @@ func TestAccBundleIDResource_platforms(t *testing.T) {
 
 	for _, platform := range platforms {
 		t.Run(platform, func(t *testing.T) {
+			identifier, name := testAccBundleIDPlatformFixture(platform)
+
 			resource.Test(t, resource.TestCase{
 				PreCheck:                 func() { testAccPreCheck(t) },
 				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 				CheckDestroy:             testAccCheckBundleIDDestroy,
 				Steps: []resource.TestStep{
 					{
-						Config: testAccBundleIDResourceConfig(
-							fmt.Sprintf("com.test.%s", platform),
-							fmt.Sprintf("Test %s", platform),
-							platform,
-						),
+						Config: testAccBundleIDResourceConfig(identifier, name, platform),
 						Check: resource.ComposeAggregateTestCheckFunc(
 							testAccCheckBundleIDExists("apple_bundle_id.test"),
 							resource.TestCheckResourceAttr("apple_bundle_id.test", "platform", platform),
@@ -140,6 +139,24 @@ func TestAccBundleIDResource_disappears(t *testing.T) {
 			},
 		},
 	})
+}
+
+// testAccBundleIDPlatformFixture derives an identifier and name from a
+// platform constant, neither of which may contain the underscore the constants
+// themselves carry.
+//
+// BundleIdentifierValidator is `^[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+$`, so an
+// identifier of "com.test.MAC_OS" fails at plan time and the subtest never
+// reaches Apple. Apple's own App ID name accepts only alphanumerics and
+// spaces, so the name has to lose the underscore too -- a name that passes the
+// provider's length-only validator can still be rejected by the API.
+//
+// MAC_OS therefore becomes "com.test.platform-mac-os" / "Test MAC OS".
+func testAccBundleIDPlatformFixture(platform string) (identifier, name string) {
+	slug := strings.ToLower(strings.ReplaceAll(platform, "_", "-"))
+
+	return fmt.Sprintf("com.test.platform-%s", slug),
+		fmt.Sprintf("Test %s", strings.ReplaceAll(platform, "_", " "))
 }
 
 func testAccBundleIDResourceConfig(identifier, name, platform string) string {
