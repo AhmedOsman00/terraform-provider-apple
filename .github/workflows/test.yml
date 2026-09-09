@@ -104,9 +104,13 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
+      # Pinned rather than @latest: the module carries its own `go` directive,
+      # and a release that raises it past the version go.mod pins fails to
+      # build here under GOTOOLCHAIN=local. v1.8.0 did exactly that, requiring
+      # go 1.26 against this module's 1.25.8. Raise this together with go.mod.
       - name: Run govulncheck
         run: |
-          go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+          go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
   # The acceptance tests in this package skip themselves without TF_ACC and
   # credentials, so this is the credential-free tier: httptest-backed client
