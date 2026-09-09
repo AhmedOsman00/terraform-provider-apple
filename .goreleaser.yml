@@ -66,5 +66,8 @@ release:
       name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
   # If you want to manually examine the release before its live, uncomment this line:
   # draft: true
-changelog:
-  disable: true
+# No changelog block: `--release-notes` in the release workflow supplies the
+# body from CHANGELOG.md, and GoReleaser loads that file during the changelog
+# step. `disable: true` here skips the step -- and with it the file, silently
+# publishing an empty release body. Omitting the block leaves the step enabled;
+# it does not generate a commit list of its own when --release-notes is given.

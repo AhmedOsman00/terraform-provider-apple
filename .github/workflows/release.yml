@@ -32,9 +32,11 @@ jobs:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
       # The Terraform Registry shows the GitHub release body as the release
-      # notes, and GoReleaser's own changelog is disabled -- a list of commit
-      # subjects is not release notes. CHANGELOG.md already holds a written
-      # section per version, so hand GoReleaser that instead.
+      # notes, and a list of commit subjects is not release notes. CHANGELOG.md
+      # already holds a written section per version, so hand GoReleaser that
+      # instead. Note that .goreleaser.yml must NOT disable the changelog: that
+      # is the step which loads this file, and disabling it publishes an empty
+      # body while every step still reports success.
       #
       # Fails when the tag has no matching section rather than releasing with
       # an empty body: a version is ingested once and cannot be re-released,
