@@ -31,13 +31,37 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
+      # The Terraform Registry shows the GitHub release body as the release
+      # notes, and GoReleaser's own changelog is disabled -- a list of commit
+      # subjects is not release notes. CHANGELOG.md already holds a written
+      # section per version, so hand GoReleaser that instead.
+      #
+      # Fails when the tag has no matching section rather than releasing with
+      # an empty body: a version is ingested once and cannot be re-released,
+      # so silently shipping no notes is worse than not shipping.
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            !found && $0 ~ "^## " v "([ (]|$)" { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          if [ ! -s "$RUNNER_TEMP/release-notes.md" ]; then
+            echo "CHANGELOG.md has no '## $version' section for tag $GITHUB_REF_NAME." >&2
+            echo "Add one before tagging: it becomes the release notes on the Registry." >&2
+            exit 1
+          fi
+          echo "Release notes ($(wc -l < "$RUNNER_TEMP/release-notes.md") lines):"
+          cat "$RUNNER_TEMP/release-notes.md"
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@9ed2f89a662bf1735a48bc8557fd212fa902bebf # v6.1.0
         with:
           # Pinned to the v2 line: a future major could drop options this
           # configuration still uses, and a release is not the place to find out.
           version: '~> v2'
-          args: release --clean
+          args: release --clean --release-notes=${{ runner.temp }}/release-notes.md
         env:
           # GitHub sets the GITHUB_TOKEN secret automatically.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

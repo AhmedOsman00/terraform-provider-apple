@@ -1,4 +1,4 @@
-## 0.1.0 (September 8, 2026)
+## 0.1.0 (September 9, 2026)
 
 Initial release.
 
