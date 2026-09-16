@@ -142,6 +142,16 @@ and there is deliberately no `apple_app` resource.
 |---|---|---|
 | — | `apple_apps` | App records (read-only) |
 | — | `apple_territories` | The App Store's storefronts (read-only) |
+| — | `apple_app_categories` | The App Store's category catalogue (read-only) |
+| `apple_app_settings` | — | Content rights, primary language, notification URLs |
+| `apple_app_info` | — | App Store categories |
+| `apple_app_info_localization` | — | App name, subtitle and privacy policy link, per language |
+| `apple_app_age_rating_declaration` | — | The content questionnaire behind the age rating |
+| `apple_app_store_version` | `apple_app_store_versions` | A release: version string, copyright, release type |
+| `apple_app_store_version_localization` | — | Description, keywords and release notes, per language |
+| `apple_app_store_review_detail` | — | What App Review is told: contact, demo account, notes |
+| `apple_app_price_schedule` | `apple_app_price_points` | What the app costs |
+| `apple_app_availability` | — | The storefronts the app sells in |
 | `apple_subscription_group` | `apple_subscription_groups` | Auto-renewable subscription groups |
 | `apple_subscription_group_localization` | — | Customer-facing subscription group name |
 | `apple_subscription` | `apple_subscriptions` | Auto-renewable subscriptions |
@@ -166,6 +176,25 @@ Behaviour worth knowing before you plan against a real team:
   forces replacement and Apple does not reliably return the original CSR, so the
   next apply reissues — and revokes the original. Read it through the
   `apple_certificates` data source instead.
+- **App Privacy has no API.** App Store Connect blocks a submission until the
+  data-collection questionnaire is answered, and Apple publishes no endpoint for
+  it — there is no `appDataUsages` resource in the App Store Connect API. It has
+  to be answered once on the website. It is declared per app rather than per
+  version, so it does not recur with each release.
+- **Listing metadata is split across two lifetimes.** The app's name, subtitle,
+  categories and privacy policy link live on `apple_app_info*` and survive every
+  release; the description, keywords, promotional text and release notes live on
+  `apple_app_store_version*` and are replaced with the version. A flat metadata
+  file of the kind EAS and fastlane use hides that split; `examples/app-listing`
+  shows how a configuration keeps one map and fans it out to both.
+- **Listing metadata can only be written while a version is being prepared.**
+  Apple freezes an app info once it is in review or distributed, and publishes no
+  way to create a fresh one, so the categories, the localized name and the age
+  rating cannot change until the current review finishes.
+- **`apple_app_settings`, `apple_app_info` and `apple_app_age_rating_declaration`
+  adopt records Apple already created.** Apple makes them with the app and
+  publishes no `POST` for them, so these resources patch rather than create, and
+  `terraform destroy` drops them from state with a warning.
 - **App Store Connect resources are incomplete until their metadata exists.** A
   new `apple_subscription` or `apple_in_app_purchase` reports `MISSING_METADATA`
   until its localization, price and — for a one-time purchase — availability are

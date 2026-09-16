@@ -1,3 +1,81 @@
+## 0.2.0 (September 16, 2026)
+
+FEATURES:
+
+* **App Store listing metadata.** Nine resources and three data sources that
+  manage what the App Store shows about an app: `apple_app_settings` (content
+  rights, primary language, subscription notification URLs), `apple_app_info`
+  (categories), `apple_app_info_localization` (name, subtitle, privacy policy
+  link), `apple_app_age_rating_declaration` (the content questionnaire),
+  `apple_app_store_version` (version string, copyright, release type),
+  `apple_app_store_version_localization` (description, keywords, promotional
+  text, release notes), `apple_app_store_review_detail` (what App Review is
+  told), `apple_app_price_schedule` (what the app costs) and
+  `apple_app_availability` (the storefronts it sells in), alongside
+  `apple_app_categories`, `apple_app_price_points` and
+  `apple_app_store_versions`.
+
+  Together these cover three of the four items App Store Connect blocks a
+  submission on. Content Rights Information is `content_rights_declaration` on
+  `apple_app_settings`; the price tier is `apple_app_price_schedule`, Apple
+  having retired tiers in favour of price points. **App Privacy is the fourth,
+  and it has no API** — Apple's published App Store Connect API contains no
+  `appDataUsages` resource, so the data-collection questionnaire has to be
+  answered once on the website. It is declared per app rather than per version,
+  so it does not recur with each release.
+
+* `examples/app-listing` is a runnable module that manages a whole listing from
+  one `terraform.tfvars`, the way an EAS `store.config.json` or a fastlane
+  `Deliverfile` does. Its `remaining_manual_steps` output names what no
+  configuration can do: App Privacy, screenshots, the build upload, and
+  submitting for review.
+
+NOTES:
+
+* **Localized metadata is split across two resources, because Apple splits it
+  across two records.** The app's name, subtitle and privacy policy link live on
+  an `AppInfo` and survive every release; the description, keywords,
+  promotional text and release notes live on an `AppStoreVersion` and are
+  replaced with it. A flat metadata file hides that; Terraform cannot, since the
+  two have different lifecycles. `examples/app-listing` keeps one map and fans
+  it out to both.
+
+* **`apple_app_settings`, `apple_app_info` and
+  `apple_app_age_rating_declaration` adopt records Apple already created.** Apple
+  makes them alongside the app and publishes no `POST` for any of them, so these
+  resources patch on create and `terraform destroy` drops them from state with a
+  warning rather than deleting anything. The same is true of
+  `apple_app_price_schedule` and `apple_app_availability`, which Apple replaces
+  wholesale with a `POST` and never deletes.
+
+* **Listing metadata can only be written while a version is being prepared.**
+  Apple freezes an app info once it is in review or distributed and publishes no
+  way to create a fresh one, so the categories, the localized name and the age
+  rating cannot change until the current review finishes. The provider resolves
+  the editable record itself and says so plainly when there is none.
+
+* **The age rating questionnaire has changed.** The provider models Apple's
+  current form, which adds `age_assurance`, `loot_box`, `messaging_and_chat`,
+  `parental_controls`, `social_media`, `social_media_age_restricted`,
+  `user_generated_content`, `advertising`, `health_or_wellness_topics` and
+  `guns_or_other_weapons`, and replaces `age_rating_override` with
+  `age_rating_override_v2` (in which `SEVENTEEN_PLUS` became `EIGHTEEN_PLUS`).
+  Both override attributes and both frequency vocabularies are accepted, because
+  an existing declaration may hold either. An omitted answer is **not** `NONE`:
+  Apple leaves it as it was, which for a new app means unanswered.
+
+* **`keywords` is a list in Terraform and one 100-character comma-separated
+  string at Apple.** The provider joins with no space after the comma, because a
+  space is a character and every one comes out of the hundred. The cap applies
+  to the joined string, so it is checked at plan time rather than per keyword.
+
+* Two acceptance tests — `TestAccAppPriceScheduleResource_basic` and
+  `TestAccAppAvailabilityResource_basic` — skip unless
+  `APPLE_TEST_ALLOW_APP_PRICING` is set, because they change what an app costs
+  and where it sells and Apple publishes no `DELETE` for either record. The rest
+  of the app listing tests edit the `APPLE_TEST_APP_ID` app's own metadata in
+  place; point it at a scratch app. `ACCEPTANCE_TESTING.md` has the detail.
+
 ## 0.1.0 (September 9, 2026)
 
 Initial release.

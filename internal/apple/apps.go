@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
@@ -62,4 +63,43 @@ func (c *Client) GetAppByBundleID(bundleID string) (*models.App, error) {
 	}
 
 	return nil, fmt.Errorf("app with bundle ID '%s' not found. The app record must be created in App Store Connect first -- Apple's API cannot create one", bundleID)
+}
+
+// UpdateApp patches the account-level settings on an app record.
+//
+// The app itself is never created or deleted here -- Apple's API cannot do
+// either -- but the record it makes on the website does accept a PATCH, and
+// that is where contentRightsDeclaration lives. App Store Connect blocks a
+// submission until that question is answered, and answering it is the only
+// thing the API offers for it.
+func (c *Client) UpdateApp(appID string, attributes models.AppUpdateAttributes, authToken *string) (*models.App, error) {
+	requestData := models.Request[models.AppUpdateRequest]{
+		Data: models.AppUpdateRequest{
+			Type:       "apps",
+			ID:         appID,
+			Attributes: attributes,
+		},
+	}
+
+	rb, err := json.Marshal(requestData)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/apps/%s", c.HostURL, appID), strings.NewReader(string(rb)))
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := c.doRequest(req, authToken)
+	if err != nil {
+		return nil, err
+	}
+
+	response := models.Response[models.App]{}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, err
+	}
+
+	return &response.Data, nil
 }

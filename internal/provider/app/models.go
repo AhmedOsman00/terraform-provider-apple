@@ -1,15 +1,43 @@
 // Copyright (c) AO Studio
 // SPDX-License-Identifier: MPL-2.0
 
-// Package app exposes App Store Connect app records to the Apple Terraform
-// provider as a read-only data source.
+// Package app manages an App Store Connect app's listing: the settings on the
+// app record, its categories, its localized name and product page, its age
+// rating, its review information, its price and the storefronts it sells in.
 //
 // There is deliberately no apple_app resource. Apple's API documentation states
 // "Don't use this API to create new apps; instead, create new apps on the App
-// Store Connect website", and there is no endpoint to delete one either, so an
-// app cannot be managed as a Terraform resource in any meaningful sense. What
-// the provider needs from an app is its ID, which every subscription group
-// hangs off -- so it looks one up rather than owning it.
+// Store Connect website", and there is no endpoint to delete one either, so the
+// app record itself is always looked up rather than owned -- which is what the
+// apple_apps data source is for.
+//
+// Everything else here hangs off that record, and three things shape all of it:
+//
+// The metadata is split across two lifetimes. What describes the app -- its
+// name, subtitle, categories, privacy policy link and age rating -- lives on an
+// AppInfo and survives every release. What describes one release -- the
+// description, keywords, promotional text, copyright and release notes -- lives
+// on an AppStoreVersion and is replaced with it. Tools that present a single
+// flat metadata file paper over that split; Terraform cannot, because the two
+// are separate Apple records with separate lifecycles.
+//
+// Several of these records already exist. Apple creates the AppInfo, the age
+// rating declaration and (for a released app) the price schedule and
+// availability along with the app, and publishes no POST for most of them. The
+// resources covering those adopt what is there on create and drop it from state
+// on destroy, rather than pretending to own a lifecycle they do not.
+//
+// An AppInfo accepts a write only while it is being prepared. A record in
+// review or already distributed is frozen, and unlike an in-app purchase
+// version there is no way to create a fresh one -- Apple publishes no POST
+// /v1/appInfos -- so the categories, the localized name and the age rating
+// cannot be changed until the current review finishes.
+//
+// One thing App Store Connect requires is missing from all of this: App
+// Privacy. Apple publishes no endpoint for the data-collection questionnaire at
+// all -- there is no appDataUsages resource in the API -- so it has to be
+// answered once on the website. It is declared per app rather than per version,
+// so it does not recur.
 package app
 
 import (
