@@ -300,6 +300,60 @@ points are meaningless here — which is why
 `TestAccInAppPurchaseResource_completesMetadata` reads the catalogue through a
 data source in the same configuration rather than hardcoding an ID.
 
+## App listing metadata
+
+**These tests need the same app the subscription tests do**, and skip without
+`APPLE_TEST_APP_ID` — `testAccPreCheckSubscription` is the check.
+
+They are unlike everything else in this suite, and the difference matters before
+you run them. Every other test *creates* something and deletes it. Most of these
+**edit the app itself**, and cannot put it back.
+
+**Point `APPLE_TEST_APP_ID` at a scratch app.** These tests rewrite its
+categories, its age rating answers, and its localized name and subtitle. Apple
+creates the app info, the age rating declaration and the app record with the app
+and publishes no `POST` and no `DELETE` for them, so the provider adopts them and
+`terraform destroy` only drops state — the values the test wrote stay on the app
+afterwards. `testAccCheckAppStillExists` is the only honest `CheckDestroy` for
+those: there is nothing to assert gone, so it asserts the app survived.
+
+**Two tests are guarded past credentials.** `TestAccAppPriceScheduleResource_basic`
+and `TestAccAppAvailabilityResource_basic` change what the app costs and which
+storefronts sell it, and Apple publishes no `DELETE` for either record. They skip
+unless `APPLE_TEST_ALLOW_APP_PRICING` is set. Never point them at a live app: on
+one, they would change the price customers pay and remove storefronts from sale.
+
+| Test | Residue | Creates at Apple | What you see in the portal |
+|---|---|---|---|
+| `TestAccAppSettingsResource_contentRights` | **Leaves the declaration set** | Nothing. Patches the app record's content rights declaration, then flips it to `USES_THIRD_PARTY_CONTENT`, then imports. | App Information > Content Rights changes twice and stays at the second value. |
+| `TestAccAppInfoResource_categories` | **Leaves the categories set** | Nothing. Sets Finance + Productivity, then Productivity alone, then imports. | App Information > Category changes twice; the secondary category ends up cleared. |
+| `TestAccAppInfoLocalizationResource_basic` | **Leaves the name and subtitle set** | An `en-US` app info localization if one did not exist. Sets the name to `TF Acceptance App` once and varies the subtitle. | The app's displayed name and subtitle change. The name is fixed, so a second run does not rename it again. |
+| `TestAccAgeRatingDeclarationResource_basic` | **Leaves the answers set** | Nothing. Answers the questionnaire, then raises cartoon violence to `INFREQUENT_OR_MILD`, then imports. | App Information > Age Rating changes, and Apple recomputes the rating from it. |
+| `TestAccAppStoreVersionResource_basic` | Net zero | One iOS version at `99.x.y`; updates its copyright and release type; imports. | A version appears under the app, then is deleted. |
+| `TestAccAppStoreVersionLocalizationResource_basic` | Net zero | A version plus its `en-US` product page; changes the keyword list from three to two. | A version with a description and keywords appears, then is deleted. |
+| `TestAccAppStoreVersionLocalizationResource_keywordsTooLong` | Plan-only | Nothing. Twelve keywords that join past 100 characters are refused at plan time. | No change. |
+| `TestAccAppStoreReviewDetailResource_basic` | Net zero | A version plus its review contact and notes; updates the notes; imports. | App Review Information appears under the version, then goes with it. |
+| `TestAccAppPriceScheduleResource_basic` | **Leaves the app priced** — opt-in | A price schedule at the USA zero price point. | Pricing and Availability shows the app as free. There is no way to undo this. |
+| `TestAccAppAvailabilityResource_basic` | **Leaves availability set** — opt-in | Availability in USA + GBR, then USA + GBR + DEU. | Pricing and Availability lists three storefronts. There is no way to undo this. |
+| `TestAccAppCategoriesDataSource_basic` | Net zero | Nothing — and needs no app, only credentials. Reads Apple's category catalogue. | No change. |
+| `TestAccAppPricePointsDataSource_basic` | Net zero | Nothing. Reads the app's price catalogue for USA. | No change. |
+| `TestAccAppStoreVersionsDataSource_basic` | Net zero | Nothing. Lists the app's iOS versions. | No change. |
+
+The version tests are the only ones here that create a deletable record, and
+only while it is still being prepared: a version that reached review cannot be
+removed, and `Delete` warns rather than erroring. Version strings are randomised
+in the `99.x.y` range because an app holds **one editable version per platform at
+a time** — a fixed one would collide with whatever an interrupted run left
+behind, and Apple answers that with a 409.
+
+An interrupted run leaves at most one version, which takes its localization and
+review detail with it when deleted. Everything else was an edit, not a creation.
+
+**A note on timing.** Apple freezes the app info once a version is in review or
+distributed, and publishes no way to create a fresh one. If the scratch app has a
+version in review, the four editing tests above fail with *No Editable App Info*
+rather than doing anything harmful. Wait for review to finish.
+
 ## Merchant IDs
 
 Deletable. Apple rejects duplicates, so leftovers block re-runs.
@@ -397,7 +451,19 @@ App Store Connect → the APPLE_TEST_APP_ID app → Monetization → In-App Purc
   "com.test.terraform.iap"                → delete it. Its price and
                                              availability go with it; neither
                                              can be deleted on its own.
+
+App Store Connect → the APPLE_TEST_APP_ID app → the version list
+  Any iOS version numbered "99.x.y"       → delete it, if it is still in
+                                             Prepare for Submission. Its
+                                             localization and review detail go
+                                             with it.
 ```
+
+The app listing tests leave more than that behind, and none of it is cleanup in
+the usual sense — it is the app's own metadata, edited in place. After a run the
+scratch app's content rights declaration, categories, age rating answers,
+localized name and subtitle are whatever the tests last set. There is nothing to
+delete; set them back by hand if you care what the scratch app says.
 
 App Store Connect leftovers do not block the next run the way the others do:
 group reference names and every product identifier are randomised, so a second
@@ -429,12 +495,27 @@ TF_ACC=1 go test -v ./internal/provider/ -timeout 30m \
   -run 'TestAccProvider|DataSource_validation|DataSource_empty|DevicesDataSource'
 
 # 2. Everything except the two permanent device tests.
+#
+#    The app listing tests run here, and they edit the APPLE_TEST_APP_ID app's
+#    own metadata in place -- categories, age rating, localized name -- with no
+#    way to put it back. Use a scratch app.
 TF_ACC=1 go test -v ./internal/provider/ -timeout 120m \
   -run 'TestAcc' -skip 'TestAccDeviceResource'
 
 # 3. Only when you have accepted the permanent slots.
 TF_ACC=1 go test -v ./internal/provider/ -timeout 30m -run 'TestAccDeviceResource'
+
+# 4. Only on an app whose price and storefronts you are willing to change
+#    permanently. Apple publishes no DELETE for either record.
+export APPLE_TEST_ALLOW_APP_PRICING=1
+TF_ACC=1 go test -v ./internal/provider/ -timeout 30m \
+  -run 'TestAccAppPriceScheduleResource|TestAccAppAvailabilityResource'
 ```
+
+Step 4 is opt-in past credentials for a reason: those two tests are the only
+ones in the suite that change what an app costs and where it sells, and neither
+record can be deleted. Without `APPLE_TEST_ALLOW_APP_PRICING` they skip, which
+is why step 2 is safe to run on a scratch app that is otherwise configured.
 
 Step 3 passes once per team and never again: the UDIDs are hardcoded and destroy
 only disables the device, so a second run gets Apple's 409 back as

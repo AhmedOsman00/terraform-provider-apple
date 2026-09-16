@@ -296,6 +296,15 @@ them. Anything whose parent cannot be read back takes a composite ID:
 
 | Resource | Accepted import IDs |
 |---|---|
+| `apple_app_settings` | App ID, or bundle identifier |
+| `apple_app_info` | App ID |
+| `apple_app_info_localization` | Apple ID, or `<app_id>/<locale>` |
+| `apple_app_age_rating_declaration` | App ID |
+| `apple_app_store_version` | Apple ID, or `<app_id>/<platform>/<version_string>` |
+| `apple_app_store_version_localization` | Apple ID, or `<app_store_version_id>/<locale>` |
+| `apple_app_store_review_detail` | `<app_store_version_id>` |
+| `apple_app_price_schedule` | `<app_id>` |
+| `apple_app_availability` | `<app_id>` |
 | `apple_subscription_group` | `<app_id>/<group_id>` |
 | `apple_subscription_group_localization` | Apple ID, or `<group_id>/<localization_id>` |
 | `apple_subscription` | Apple ID |
@@ -333,6 +342,29 @@ ID is the purchase itself:
 terraform import apple_in_app_purchase.pro_unlock "6478123456/6739472901"
 terraform import apple_in_app_purchase_price_schedule.pro_unlock 6739472901
 ```
+
+Most of the app listing resources import by the **app ID** rather than by the ID
+of the record they manage. That is not a shortcut: Apple issues a new app info
+record — and a new age rating declaration, and new localization IDs with them —
+for each version cycle, so the ID of the one being edited today is not stable
+enough to name a resource by. The app is.
+
+An `apple_app_store_version` is the exception, because a version really is a
+durable record. Its composite form needs all three parts, since the same version
+string exists once per platform:
+
+```bash
+terraform import apple_app_settings.app 6478123456
+terraform import apple_app_info.app 6478123456
+terraform import apple_app_store_version.v1 "6478123456/IOS/1.0"
+terraform import 'apple_app_info_localization.this["en-US"]' "6478123456/en-US"
+```
+
+Importing the version already being prepared is the usual first move: an app
+holds only one editable version per platform at a time, so `apple_app_store_version`
+cannot create a second, and Apple answers the attempt with a 409. Find it with
+the `apple_app_store_versions` data source filtered to
+`app_version_state = "PREPARE_FOR_SUBMISSION"`.
 
 !> **Do not import `apple_certificate` if you are still using the certificate.**
 `csr_content` forces replacement and Apple does not reliably return the CSR a

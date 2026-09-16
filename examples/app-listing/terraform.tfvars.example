@@ -1,0 +1,125 @@
+# A worked configuration, translated from the kind of flat metadata file EAS
+# and fastlane use. Copy to terraform.tfvars and edit.
+
+bundle_id      = "com.example.fenn"
+platform       = "IOS"
+version_string = "1.0"
+copyright      = "2026 AO Studio"
+
+# false holds an approved version until it is released by hand.
+automatic_release = false
+
+primary_locale             = "en-US"
+content_rights_declaration = "DOES_NOT_USE_THIRD_PARTY_CONTENT"
+
+primary_category   = "FINANCE"
+secondary_category = "PRODUCTIVITY"
+
+# Free. Set "9.99" and the module picks that price point instead.
+customer_price = "0"
+base_territory = "USA"
+
+# Empty means every storefront the App Store operates in.
+territories = []
+
+locales = {
+  "en-US" = {
+    title              = "Fenn"
+    subtitle           = "Private money tracking"
+    privacy_policy_url = "https://fenn.money/privacy"
+    marketing_url      = "https://fenn.money"
+    support_url        = "https://fenn.money/support"
+
+    promo_text = "Your spending stays on your iPhone, encrypted. Add a record by typing it, saying it, or photographing the receipt."
+
+    description = <<-EOT
+      Fenn keeps your money on your phone.
+
+      Every record lives in an encrypted database on this iPhone. No account is
+      required -- the app is fully usable without one, and signing in later only
+      moves your ledger to a second device.
+
+      ADD A RECORD IN SECONDS
+      Type it, say it out loud, or photograph the receipt. Speech is recognised
+      on the device: the recording is never saved and never sent anywhere.
+
+      SEE WHERE THE MONTH IS GOING
+      A home screen for today, a dashboard for the shape of the month, and a
+      monthly budget you can set and change.
+
+      ENGLISH AND ARABIC
+      The whole app, right to left included, following the language your iPhone
+      is set to.
+
+      Subscriptions renew automatically unless cancelled at least 24 hours
+      before the period ends, and are managed in your App Store account
+      settings.
+    EOT
+
+    # Joined with commas into one string capped at 100 characters. These eight
+    # come to 62, leaving room for two or three more.
+    keywords = [
+      "budget",
+      "expenses",
+      "spending",
+      "receipts",
+      "money",
+      "offline",
+      "private",
+      "tracker",
+    ]
+  }
+
+  "ar-SA" = {
+    title              = "Fenn"
+    subtitle           = "تتبّع مصروفاتك بخصوصية"
+    privacy_policy_url = "https://fenn.money/privacy"
+    marketing_url      = "https://fenn.money"
+    support_url        = "https://fenn.money/support"
+
+    promo_text = "مصروفاتك تبقى على جهازك مشفّرة. أضف أي عملية بالكتابة أو بالصوت أو بتصوير الإيصال."
+
+    description = <<-EOT
+      ‏Fenn يحفظ أموالك على جهازك.
+
+      كل عملية تُخزَّن في قاعدة بيانات مشفّرة على هذا الآيفون. لا يلزم حساب --
+      التطبيق يعمل بالكامل بدونه، وتسجيل الدخول لاحقاً ينقل سجلّك إلى جهاز ثانٍ
+      فقط.
+
+      بالعربية والإنجليزية
+      التطبيق كامل، ومن اليمين إلى اليسار، تبعاً للغة جهازك.
+    EOT
+
+    # The character limits are counted in characters, not bytes, so Arabic
+    # keywords get the same hundred as English ones.
+    keywords = [
+      "ميزانية",
+      "مصروفات",
+      "نفقات",
+      "إيصالات",
+      "ادخار",
+    ]
+  }
+}
+
+review = {
+  first_name    = "Ahmed"
+  last_name     = "Osman"
+  email         = "review@example.com"
+  phone         = "+20 109 255 8423"
+  demo_required = false
+
+  notes = <<-EOT
+    No account and no sign-in are needed. Open the app and add a record by
+    typing, by voice, or by photographing a receipt. Reading a capture uses a
+    free monthly allowance of fifteen; the paywall is reached from
+    Settings > Upgrade, or by exhausting that allowance.
+  EOT
+}
+
+advisory = {
+  # Every frequency question answered NONE, every fact answered false. Read
+  # them rather than trusting the defaults: an unset answer is not NONE, and an
+  # unanswered questionnaire blocks the submission.
+  age_rating_override_v2 = "NONE"
+}
