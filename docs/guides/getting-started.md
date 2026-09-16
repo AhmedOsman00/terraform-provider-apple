@@ -347,11 +347,34 @@ Every resource has a matching plural data source (`apple_bundle_ids`,
 `apple_pass_type_ids`, `apple_profiles`, `apple_bundle_id_capabilities`,
 `apple_apps`, `apple_subscription_groups`, `apple_subscriptions`,
 `apple_in_app_purchases`) for referring to things another state owns.
+Two data sources have no resource behind them at all: `apple_apps`, because
+Apple's API cannot create an app record, and `apple_territories`, because
+territories are the App Store's rather than the account's.
 
 Two of them are catalogues rather than listings: `apple_subscription_price_points`
 and `apple_in_app_purchase_price_points` read Apple's permitted prices, which is
 where the `price_point_id` a price references comes from. Always pass
 `territories` — the unfiltered catalogue covers every storefront Apple sells in.
+
+`apple_territories` is neither: it reads the storefronts themselves, and takes no
+argument at all. It is how an availability record says "everywhere". Both
+`apple_subscription_availability` and `apple_in_app_purchase_availability` require
+`available_territories`, and Apple's default of every territory applies only to a
+product whose availability has never been set — so once Terraform owns the record,
+worldwide has to be spelled out:
+
+```terraform
+data "apple_territories" "all" {}
+
+resource "apple_subscription_availability" "worldwide" {
+  subscription_id              = apple_subscription.pro_monthly.id
+  available_territories        = data.apple_territories.all.ids
+  available_in_new_territories = true
+}
+```
+
+`available_in_new_territories` covers only storefronts Apple opens later, so it is
+not a substitute for the list.
 
 ```terraform
 data "apple_certificates" "distribution" {

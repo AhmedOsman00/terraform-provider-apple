@@ -19,6 +19,7 @@ import (
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/passtypeid"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/profile"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/subscription"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/territory"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -296,6 +297,7 @@ func (p *appleProvider) DataSources(_ context.Context) []func() datasource.DataS
 		subscription.NewSubscriptionPricePointsDataSource,
 		inapppurchase.NewInAppPurchasesDataSource,
 		inapppurchase.NewInAppPurchasePricePointsDataSource,
+		territory.NewTerritoriesDataSource,
 	}
 }
 

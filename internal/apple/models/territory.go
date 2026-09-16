@@ -10,9 +10,11 @@ package models
 // code. The ID is the code itself, which is why a territory relationship can be
 // written without looking anything up first.
 //
-// Territories are read-only and there is no data source for them: the only
-// place the provider reads one back is the list of territories an in-app
-// purchase is available in.
+// Territories are read-only -- they belong to the App Store rather than to the
+// account, so there is no resource and cannot be one. The provider reads them
+// in two places: the apple_territories data source, which lists the storefronts
+// a product may be sold in, and the territory lists an availability record
+// covers.
 type Territory struct {
 	Type       string              `json:"type"`
 	ID         string              `json:"id"`

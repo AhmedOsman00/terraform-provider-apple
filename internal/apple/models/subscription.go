@@ -60,6 +60,19 @@ const (
 	SubscriptionLocalizationStateRejected             SubscriptionLocalizationState = "REJECTED"
 )
 
+// Subscription group localization state enumeration.
+//
+// The same four values as a subscription localization, on a separate Apple
+// type: a group's customer-facing text is reviewed in its own right.
+type SubscriptionGroupLocalizationState string
+
+const (
+	SubscriptionGroupLocalizationStatePrepareForSubmission SubscriptionGroupLocalizationState = "PREPARE_FOR_SUBMISSION"
+	SubscriptionGroupLocalizationStateWaitingForReview     SubscriptionGroupLocalizationState = "WAITING_FOR_REVIEW"
+	SubscriptionGroupLocalizationStateApproved             SubscriptionGroupLocalizationState = "APPROVED"
+	SubscriptionGroupLocalizationStateRejected             SubscriptionGroupLocalizationState = "REJECTED"
+)
+
 // Subscription plan type enumeration.
 //
 // MONTHLY is the recurring price of the subscription. UPFRONT is the price of
@@ -90,7 +103,7 @@ type SubscriptionGroup struct {
 // SubscriptionGroupAttributes holds the group's only attribute.
 //
 // referenceName is internal to App Store Connect. What customers see is a
-// subscriptionGroupLocalization, which this provider does not manage.
+// subscriptionGroupLocalization, modelled below.
 type SubscriptionGroupAttributes struct {
 	ReferenceName string `json:"referenceName"`
 }
@@ -115,6 +128,67 @@ type SubscriptionGroupUpdateRequest struct {
 	Type       string                      `json:"type"`
 	ID         string                      `json:"id"`
 	Attributes SubscriptionGroupAttributes `json:"attributes"`
+}
+
+// --- Subscription group localizations ---
+
+// SubscriptionGroupLocalization resource model.
+//
+// This is the customer-facing half of a subscription group: the display name a
+// customer reads above the list of plans, and optionally an app name to show
+// alongside it. referenceName on the group itself is internal and never shown.
+type SubscriptionGroupLocalization struct {
+	Type          string                                      `json:"type"`
+	ID            string                                      `json:"id"`
+	Attributes    SubscriptionGroupLocalizationAttributes     `json:"attributes"`
+	Relationships *SubscriptionGroupLocalizationRelationships `json:"relationships,omitempty"`
+	Links         *ResourceLinks                              `json:"links,omitempty"`
+}
+
+// SubscriptionGroupLocalizationAttributes covers what is sent and returned.
+//
+// customAppName overrides the app name shown beside the group in the purchase
+// sheet for this locale; Apple falls back to the app's own name when it is
+// absent.
+type SubscriptionGroupLocalizationAttributes struct {
+	Name          string                              `json:"name,omitempty"`
+	CustomAppName *string                             `json:"customAppName,omitempty"`
+	Locale        string                              `json:"locale,omitempty"`
+	State         *SubscriptionGroupLocalizationState `json:"state,omitempty"`
+}
+
+type SubscriptionGroupLocalizationRelationships struct {
+	SubscriptionGroup *ResourceIdentifier `json:"subscriptionGroup,omitempty"`
+}
+
+type SubscriptionGroupLocalizationCreateRequest struct {
+	Type          string                                           `json:"type"`
+	Attributes    SubscriptionGroupLocalizationCreateAttributes    `json:"attributes"`
+	Relationships SubscriptionGroupLocalizationCreateRelationships `json:"relationships"`
+}
+
+type SubscriptionGroupLocalizationCreateAttributes struct {
+	Name          string  `json:"name"`
+	Locale        string  `json:"locale"`
+	CustomAppName *string `json:"customAppName,omitempty"`
+}
+
+type SubscriptionGroupLocalizationCreateRelationships struct {
+	SubscriptionGroup ResourceIdentifier `json:"subscriptionGroup"`
+}
+
+type SubscriptionGroupLocalizationUpdateRequest struct {
+	Type       string                                        `json:"type"`
+	ID         string                                        `json:"id"`
+	Attributes SubscriptionGroupLocalizationUpdateAttributes `json:"attributes"`
+}
+
+// SubscriptionGroupLocalizationUpdateAttributes omits locale: it identifies the
+// localization and cannot be changed in place, exactly as on a subscription
+// localization.
+type SubscriptionGroupLocalizationUpdateAttributes struct {
+	Name          *string `json:"name,omitempty"`
+	CustomAppName *string `json:"customAppName,omitempty"`
 }
 
 // --- Subscriptions ---

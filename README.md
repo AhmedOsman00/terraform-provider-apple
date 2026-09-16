@@ -141,10 +141,12 @@ and there is deliberately no `apple_app` resource.
 | Resource | Data source | Manages |
 |---|---|---|
 | — | `apple_apps` | App records (read-only) |
+| — | `apple_territories` | The App Store's storefronts (read-only) |
 | `apple_subscription_group` | `apple_subscription_groups` | Auto-renewable subscription groups |
 | `apple_subscription` | `apple_subscriptions` | Auto-renewable subscriptions |
 | `apple_subscription_localization` | — | Customer-facing subscription name and description |
 | `apple_subscription_price` | `apple_subscription_price_points` | Subscription prices, per territory |
+| `apple_subscription_availability` | — | The territories a subscription sells in |
 | `apple_in_app_purchase` | `apple_in_app_purchases` | One-time purchases: consumables, non-consumables, non-renewing subscriptions |
 | `apple_in_app_purchase_localization` | — | Customer-facing purchase name and description |
 | `apple_in_app_purchase_price_schedule` | `apple_in_app_purchase_price_points` | The price of a one-time purchase |
