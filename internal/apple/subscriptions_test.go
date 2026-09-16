@@ -336,3 +336,78 @@ func TestCreateSubscriptionAvailabilityRequest(t *testing.T) {
 		}
 	}
 }
+
+// TestGetSubscriptionGroupLocalizationRequestsGroupInclude pins the one part of
+// the group hierarchy whose parent can be read back. A subscription group never
+// reports its owning app, so import has to be composite there; a group
+// localization does report its group, which is what lets a bare ID import.
+func TestGetSubscriptionGroupLocalizationRequestsGroupInclude(t *testing.T) {
+	var gotQuery url.Values
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query()
+		fmt.Fprint(w, `{"data":{"type":"subscriptionGroupLocalizations","id":"loc1",
+			"attributes":{"name":"Premium","locale":"en-US","state":"PREPARE_FOR_SUBMISSION"},
+			"relationships":{"subscriptionGroup":{"data":{"type":"subscriptionGroups","id":"grp1"}}}}}`)
+	}))
+	defer srv.Close()
+
+	localization, err := newTestClient(srv).GetSubscriptionGroupLocalization("loc1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := gotQuery.Get("include"); got != "subscriptionGroup" {
+		t.Errorf("include = %q, want %q", got, "subscriptionGroup")
+	}
+	if localization.Relationships == nil || localization.Relationships.SubscriptionGroup == nil {
+		t.Fatal("subscriptionGroup relationship was not decoded")
+	}
+	if got := localization.Relationships.SubscriptionGroup.Data.ID; got != "grp1" {
+		t.Errorf("subscriptionGroup = %q, want %q", got, "grp1")
+	}
+}
+
+// TestCreateSubscriptionGroupLocalizationOmitsUnsetCustomAppName checks that an
+// unset custom app name is absent from the request rather than sent as an empty
+// string, which Apple would take as an instruction to show no app name at all.
+func TestCreateSubscriptionGroupLocalizationOmitsUnsetCustomAppName(t *testing.T) {
+	var body map[string]any
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("could not decode request body: %v", err)
+		}
+		fmt.Fprint(w, `{"data":{"type":"subscriptionGroupLocalizations","id":"loc1",
+			"attributes":{"name":"Premium","locale":"en-US"}}}`)
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(srv).CreateSubscriptionGroupLocalization("grp1", "en-US", "Premium", nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := body["data"].(map[string]any)
+	if got := data["type"]; got != "subscriptionGroupLocalizations" {
+		t.Errorf("type = %v, want subscriptionGroupLocalizations", got)
+	}
+
+	attributes, _ := data["attributes"].(map[string]any)
+	if _, present := attributes["customAppName"]; present {
+		t.Error("customAppName was sent despite being unset")
+	}
+	if got := attributes["name"]; got != "Premium" {
+		t.Errorf("name = %v, want Premium", got)
+	}
+	if got := attributes["locale"]; got != "en-US" {
+		t.Errorf("locale = %v, want en-US", got)
+	}
+
+	relationships, _ := data["relationships"].(map[string]any)
+	group, _ := relationships["subscriptionGroup"].(map[string]any)
+	groupData, _ := group["data"].(map[string]any)
+	if groupData["type"] != "subscriptionGroups" || groupData["id"] != "grp1" {
+		t.Errorf("subscriptionGroup relationship = %v, want type subscriptionGroups id grp1", groupData)
+	}
+}

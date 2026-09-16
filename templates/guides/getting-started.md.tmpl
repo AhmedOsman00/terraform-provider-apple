@@ -297,6 +297,7 @@ them. Anything whose parent cannot be read back takes a composite ID:
 | Resource | Accepted import IDs |
 |---|---|
 | `apple_subscription_group` | `<app_id>/<group_id>` |
+| `apple_subscription_group_localization` | Apple ID, or `<group_id>/<localization_id>` |
 | `apple_subscription` | Apple ID |
 | `apple_subscription_localization` | Apple ID, or `<subscription_id>/<localization_id>` |
 | `apple_subscription_price` | `<subscription_id>/<price_id>` |

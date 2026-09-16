@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Package subscription contains the auto-renewable subscription resources and
-// data sources for the Apple Terraform provider: subscription groups,
-// subscriptions, their localizations, and their prices.
+// data sources for the Apple Terraform provider: subscription groups and their
+// localizations, subscriptions, their localizations, and their prices.
 //
 // These are App Store Connect resources rather than Developer Portal ones, and
 // they differ from the rest of the provider in two ways that shape every type
@@ -31,6 +31,17 @@ type subscriptionGroupModel struct {
 	ID            types.String `tfsdk:"id"`
 	AppID         types.String `tfsdk:"app_id"`
 	ReferenceName types.String `tfsdk:"reference_name"`
+}
+
+// subscriptionGroupLocalizationModel maps the subscription group localization
+// schema.
+type subscriptionGroupLocalizationModel struct {
+	ID            types.String `tfsdk:"id"`
+	GroupID       types.String `tfsdk:"group_id"`
+	Locale        types.String `tfsdk:"locale"`
+	Name          types.String `tfsdk:"name"`
+	CustomAppName types.String `tfsdk:"custom_app_name"`
+	State         types.String `tfsdk:"state"`
 }
 
 // subscriptionModel maps the subscription schema for both the resource and the
@@ -270,6 +281,16 @@ func GetReferenceNameValidator() []validator.String {
 func GetDescriptionValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.UTF8LengthBetween(1, 45),
+	}
+}
+
+// GetCustomAppNameValidator returns validators for a group localization's
+// custom app name.
+//
+// Counted in characters, not bytes -- see GetNameValidator.
+func GetCustomAppNameValidator() []validator.String {
+	return []validator.String{
+		stringvalidator.UTF8LengthBetween(1, 30),
 	}
 }
 

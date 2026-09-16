@@ -127,6 +127,93 @@ func TestAccSubscriptionGroupResource_importRejectsBareID(t *testing.T) {
 	})
 }
 
+// TestAccSubscriptionGroupLocalizationResource_basic covers the customer-facing
+// half of a group: the heading a customer reads above the list of plans, as
+// opposed to the internal reference_name on the group itself.
+func TestAccSubscriptionGroupLocalizationResource_basic(t *testing.T) {
+	referenceName := "Terraform Loc " + acctest.RandString(6)
+	name := testAccProductName("Premium")
+	renamed := testAccProductName("Premium Plus")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckSubscription(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: testAccCheckDestroyAll(
+			testAccCheckSubscriptionGroupLocalizationDestroy,
+			testAccCheckSubscriptionGroupDestroy,
+		),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSubscriptionGroupLocalizationConfig(referenceName, name, ""),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckSubscriptionGroupLocalizationExists("apple_subscription_group_localization.test"),
+					resource.TestCheckResourceAttr("apple_subscription_group_localization.test", "locale", "en-US"),
+					resource.TestCheckResourceAttr("apple_subscription_group_localization.test", "name", name),
+					resource.TestCheckNoResourceAttr("apple_subscription_group_localization.test", "custom_app_name"),
+					resource.TestCheckResourceAttrSet("apple_subscription_group_localization.test", "state"),
+				),
+			},
+			// Both name and custom_app_name update in place: they are the only
+			// two members of Apple's update request.
+			{
+				Config: testAccSubscriptionGroupLocalizationConfig(referenceName, renamed, "Example App"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckSubscriptionGroupLocalizationExists("apple_subscription_group_localization.test"),
+					resource.TestCheckResourceAttr("apple_subscription_group_localization.test", "name", renamed),
+					resource.TestCheckResourceAttr("apple_subscription_group_localization.test", "custom_app_name", "Example App"),
+				),
+			},
+			// A bare ID suffices here, unlike apple_subscription_group: Apple
+			// does report which group a localization belongs to.
+			{
+				ResourceName:      "apple_subscription_group_localization.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				ResourceName:      "apple_subscription_group_localization.test",
+				ImportState:       true,
+				ImportStateIdFunc: testAccSubscriptionGroupLocalizationImportID("apple_subscription_group_localization.test"),
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+// TestAccSubscriptionGroupLocalizationResource_requiresReplace covers the
+// locale being immutable: it identifies the record, and Apple's update request
+// has no locale member.
+//
+// The replacement locale is en-GB, which the app named by APPLE_TEST_APP_ID has
+// to be localized into -- Apple rejects a localization for a locale the app
+// does not support. Change it if that app carries a different second locale.
+func TestAccSubscriptionGroupLocalizationResource_requiresReplace(t *testing.T) {
+	referenceName := "Terraform LocRep " + acctest.RandString(6)
+	name := testAccProductName("Premium")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckSubscription(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: testAccCheckDestroyAll(
+			testAccCheckSubscriptionGroupLocalizationDestroy,
+			testAccCheckSubscriptionGroupDestroy,
+		),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSubscriptionGroupLocalizationLocaleConfig(referenceName, name, "en-US"),
+				Check:  testAccCheckSubscriptionGroupLocalizationExists("apple_subscription_group_localization.test"),
+			},
+			{
+				Config: testAccSubscriptionGroupLocalizationLocaleConfig(referenceName, name, "en-GB"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckSubscriptionGroupLocalizationExists("apple_subscription_group_localization.test"),
+					resource.TestCheckResourceAttr("apple_subscription_group_localization.test", "locale", "en-GB"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccSubscriptionResource_basic(t *testing.T) {
 	referenceName := "Terraform Sub " + acctest.RandString(6)
 	productID := testAccSubscriptionProductID()
@@ -372,6 +459,34 @@ resource "apple_subscription_group" "test" {
 `, testAccAppID(), referenceName)
 }
 
+// testAccSubscriptionGroupLocalizationConfig builds a group and one
+// localization. An empty customAppName omits the attribute entirely rather than
+// setting it to "", which is a different thing to Apple.
+func testAccSubscriptionGroupLocalizationConfig(referenceName, name, customAppName string) string {
+	custom := ""
+	if customAppName != "" {
+		custom = fmt.Sprintf("\n  custom_app_name = %q\n", customAppName)
+	}
+
+	return testAccSubscriptionGroupConfig(referenceName) + fmt.Sprintf(`
+resource "apple_subscription_group_localization" "test" {
+  group_id = apple_subscription_group.test.id
+  locale   = "en-US"
+  name     = %[1]q
+%[2]s}
+`, name, custom)
+}
+
+func testAccSubscriptionGroupLocalizationLocaleConfig(referenceName, name, locale string) string {
+	return testAccSubscriptionGroupConfig(referenceName) + fmt.Sprintf(`
+resource "apple_subscription_group_localization" "test" {
+  group_id = apple_subscription_group.test.id
+  locale   = %[1]q
+  name     = %[2]q
+}
+`, locale, name)
+}
+
 func testAccSubscriptionConfig(referenceName, productID, name, period string) string {
 	return testAccSubscriptionGroupConfig(referenceName) + fmt.Sprintf(`
 resource "apple_subscription" "test" {
@@ -433,6 +548,16 @@ func testAccSubscriptionGroupImportID(resourceName string) resource.ImportStateI
 	}
 }
 
+func testAccSubscriptionGroupLocalizationImportID(resourceName string) resource.ImportStateIdFunc {
+	return func(s *terraform.State) (string, error) {
+		rs, err := testAccStateResource(s, resourceName)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%s/%s", rs.Attributes["group_id"], rs.ID), nil
+	}
+}
+
 func testAccSubscriptionPriceImportID(resourceName string) resource.ImportStateIdFunc {
 	return func(s *terraform.State) (string, error) {
 		rs, err := testAccStateResource(s, resourceName)
@@ -483,6 +608,30 @@ func testAccCheckSubscriptionGroupExists(resourceName string) resource.TestCheck
 	}
 }
 
+func testAccCheckSubscriptionGroupLocalizationExists(resourceName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, err := testAccStateResource(s, resourceName)
+		if err != nil {
+			return err
+		}
+
+		client, err := testAccAPIClient()
+		if err != nil {
+			return fmt.Errorf("could not build API client: %w", err)
+		}
+
+		localization, err := client.GetSubscriptionGroupLocalization(rs.ID)
+		if err != nil {
+			return fmt.Errorf("subscription group localization %s not found at Apple: %w", rs.ID, err)
+		}
+		if localization.ID != rs.ID {
+			return fmt.Errorf("Apple returned localization %s, expected %s", localization.ID, rs.ID)
+		}
+
+		return nil
+	}
+}
+
 func testAccCheckSubscriptionExists(resourceName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, err := testAccStateResource(s, resourceName)
@@ -522,6 +671,27 @@ func testAccCheckSubscriptionGroupDestroy(s *terraform.State) error {
 			return fmt.Errorf("subscription group %s (%s) still exists at Apple", rs.Primary.ID, name)
 		} else if !testAccIsNotFound(err) {
 			return fmt.Errorf("unexpected error checking subscription group %s: %w", rs.Primary.ID, err)
+		}
+	}
+
+	return nil
+}
+
+func testAccCheckSubscriptionGroupLocalizationDestroy(s *terraform.State) error {
+	client, err := testAccAPIClient()
+	if err != nil {
+		return fmt.Errorf("could not build API client: %w", err)
+	}
+
+	for name, rs := range s.RootModule().Resources {
+		if rs.Type != "apple_subscription_group_localization" {
+			continue
+		}
+
+		if _, err := client.GetSubscriptionGroupLocalization(rs.Primary.ID); err == nil {
+			return fmt.Errorf("subscription group localization %s (%s) still exists at Apple", rs.Primary.ID, name)
+		} else if !testAccIsNotFound(err) {
+			return fmt.Errorf("unexpected error checking subscription group localization %s: %w", rs.Primary.ID, err)
 		}
 	}
 

@@ -312,6 +312,7 @@ func (p *appleProvider) Resources(_ context.Context) []func() resource.Resource 
 		passtypeid.NewPassTypeIDResource,
 		profile.NewProfileResource,
 		subscription.NewSubscriptionGroupResource,
+		subscription.NewSubscriptionGroupLocalizationResource,
 		subscription.NewSubscriptionResource,
 		subscription.NewSubscriptionLocalizationResource,
 		subscription.NewSubscriptionPriceResource,

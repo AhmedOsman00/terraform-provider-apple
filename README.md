@@ -143,6 +143,7 @@ and there is deliberately no `apple_app` resource.
 | — | `apple_apps` | App records (read-only) |
 | — | `apple_territories` | The App Store's storefronts (read-only) |
 | `apple_subscription_group` | `apple_subscription_groups` | Auto-renewable subscription groups |
+| `apple_subscription_group_localization` | — | Customer-facing subscription group name |
 | `apple_subscription` | `apple_subscriptions` | Auto-renewable subscriptions |
 | `apple_subscription_localization` | — | Customer-facing subscription name and description |
 | `apple_subscription_price` | `apple_subscription_price_points` | Subscription prices, per territory |
