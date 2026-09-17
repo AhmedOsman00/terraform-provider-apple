@@ -294,7 +294,7 @@ func (r *appInfoResource) write(ctx context.Context, plan *appInfoModel, diags *
 	ctx = tflog.SetField(ctx, "app_info_id", info.ID)
 	tflog.Debug(ctx, "Writing app info categories")
 
-	updated, err := r.client.UpdateAppInfoCategories(info.ID, models.AppInfoUpdateRelationships{
+	written, err := r.client.UpdateAppInfoCategories(info.ID, models.AppInfoUpdateRelationships{
 		PrimaryCategory:         categoryLinkage(plan.PrimaryCategory),
 		PrimarySubcategoryOne:   categoryLinkage(plan.PrimarySubcategoryOne),
 		PrimarySubcategoryTwo:   categoryLinkage(plan.PrimarySubcategoryTwo),
@@ -331,15 +331,40 @@ func (r *appInfoResource) write(ctx context.Context, plan *appInfoModel, diags *
 		return
 	}
 
-	applyAppInfo(plan, updated)
+	applyAppInfoAttributes(plan, written)
+
+	// The PATCH response carries the six category relationships as links alone:
+	// Apple fills in a linkage only for an include, and the modify endpoint takes
+	// none. Reading the categories off that response would put null in state for
+	// every category just written, which Terraform reports as the provider
+	// producing an inconsistent result after apply.
+	refreshed, err := r.client.GetAppInfo(written.ID)
+	if err != nil {
+		diags.AddWarning(
+			"App Info Categories Not Read Back",
+			fmt.Sprintf("The categories of app '%s' were set, but the app info could not be read back: %s\n\n"+
+				"State keeps the configured categories; the next plan refreshes them from Apple.", appID, err.Error()),
+		)
+		tflog.Warn(ctx, "Failed to read app info back after write", map[string]interface{}{"error": err.Error()})
+
+		return
+	}
+
+	applyAppInfoCategories(plan, refreshed)
 }
 
 // applyAppInfo copies Apple's view of the record into the model.
 //
-// The category members are adopted wholesale, including their absence: a
-// category cleared at Apple has to show up as null in state, or the next plan
-// would see no drift.
+// Only a response that was asked for the category linkages may go through here:
+// the two halves are split because a PATCH response has none, and reading its
+// empty relationships would null out the categories it had just set.
 func applyAppInfo(model *appInfoModel, info *models.AppInfo) {
+	applyAppInfoAttributes(model, info)
+	applyAppInfoCategories(model, info)
+}
+
+// applyAppInfoAttributes copies the members Apple reports on every response.
+func applyAppInfoAttributes(model *appInfoModel, info *models.AppInfo) {
 	model.ID = types.StringValue(info.ID)
 
 	model.State = types.StringNull()
@@ -347,7 +372,13 @@ func applyAppInfo(model *appInfoModel, info *models.AppInfo) {
 		model.State = types.StringValue(string(*info.Attributes.State))
 	}
 	model.AppStoreAgeRating = stringOrNull(info.Attributes.AppStoreAgeRating)
+}
 
+// applyAppInfoCategories copies the six category linkages into the model.
+//
+// They are adopted wholesale, including their absence: a category cleared at
+// Apple has to show up as null in state, or the next plan would see no drift.
+func applyAppInfoCategories(model *appInfoModel, info *models.AppInfo) {
 	model.PrimaryCategory = types.StringNull()
 	model.PrimarySubcategoryOne = types.StringNull()
 	model.PrimarySubcategoryTwo = types.StringNull()

@@ -1,3 +1,17 @@
+## 0.2.1 (September 17, 2026)
+
+BUG FIXES:
+
+* **`apple_app_info` no longer fails an apply with "Provider produced
+  inconsistent result after apply".** Apple's `PATCH /v1/appInfos/{id}` reports
+  the six category relationships as links alone — it fills in a linkage only for
+  an `include`, which the modify endpoint does not accept — so reading the
+  categories off that response wrote null into state for every category the
+  apply had just set. The resource now applies the attributes from the `PATCH`
+  response and re-reads the app info for the categories. If that read fails the
+  apply keeps the configured categories and warns, rather than losing the values
+  it wrote.
+
 ## 0.2.0 (September 16, 2026)
 
 FEATURES:
