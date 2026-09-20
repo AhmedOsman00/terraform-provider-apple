@@ -123,6 +123,11 @@ resource "apple_app_store_version" "this" {
 
   copyright = var.copyright
 
+  # The build is named the way a pipeline names it, by build number.
+  # pre_release_version defaults to version_string, which is the train App Store
+  # Connect offers builds from anyway, so it is left unset.
+  build_number = var.build_number
+
   # "automatic release" is AFTER_APPROVAL; holding it back is MANUAL.
   release_type = var.automatic_release ? "AFTER_APPROVAL" : "MANUAL"
 }

@@ -196,6 +196,57 @@ data "apple_subscription_price_points" "two_territories" {
 	})
 }
 
+// TestAccSubscriptionPricePointEqualizationsDataSource_basic reads the price
+// point Apple considers equivalent to one base point in every other territory.
+// Nothing is priced here either -- the equalization is a read of Apple's own
+// price matrix, and no price record is created.
+func TestAccSubscriptionPricePointEqualizationsDataSource_basic(t *testing.T) {
+	referenceName := "Terraform EQ " + acctest.RandString(6)
+	productID := testAccSubscriptionProductID()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckSubscription(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: testAccCheckDestroyAll(
+			testAccCheckSubscriptionDestroy,
+			testAccCheckSubscriptionGroupDestroy,
+		),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSubscriptionConfig(referenceName, productID, testAccProductName("Pro Monthly"), "ONE_MONTH") + `
+data "apple_subscription_price_points" "base" {
+  subscription_id = apple_subscription.test.id
+  territories     = ["USA"]
+  customer_price  = "9.99"
+}
+
+data "apple_subscription_price_point_equalizations" "all" {
+  price_point_id = data.apple_subscription_price_points.base.price_points[0].id
+}
+
+data "apple_subscription_price_point_equalizations" "narrowed" {
+  price_point_id = data.apple_subscription_price_points.base.price_points[0].id
+  territories    = ["GBR", "EGY"]
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckSubscriptionExists("apple_subscription.test"),
+					resource.TestCheckResourceAttrSet("data.apple_subscription_price_point_equalizations.all", "price_points.0.id"),
+					resource.TestCheckResourceAttrSet("data.apple_subscription_price_point_equalizations.all", "total_count"),
+					// The map is what a for_each over territories consumes, and
+					// it is only populated because the client asks for
+					// include=territory.
+					resource.TestCheckResourceAttrSet("data.apple_subscription_price_point_equalizations.all", "price_point_ids.GBR"),
+					// Apple applies the territory filter, so a narrowed read
+					// returns exactly the territories asked for.
+					resource.TestCheckResourceAttr("data.apple_subscription_price_point_equalizations.narrowed", "total_count", "2"),
+					resource.TestCheckResourceAttrSet("data.apple_subscription_price_point_equalizations.narrowed", "price_point_ids.EGY"),
+				),
+			},
+		},
+	})
+}
+
 func testAccSubscriptionsDataSourceConfig(referenceName, primary, secondary string) string {
 	return testAccSubscriptionConfig(referenceName, primary, testAccProductName("Pro Monthly"), "ONE_MONTH") + fmt.Sprintf(`
 resource "apple_subscription" "second" {

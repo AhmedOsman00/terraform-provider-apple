@@ -159,3 +159,42 @@ func (c *Client) GetSubscriptionPricePoints(subscriptionID string, territories [
 		params,
 	)
 }
+
+// GetSubscriptionPricePointEqualizations retrieves the price point equivalent to
+// one base price point in every other territory.
+//
+// This is the endpoint that makes pricing a subscription worldwide tractable.
+// GetSubscriptionPricePoints answers "what may this subscription cost in these
+// territories", and a caller pricing 175 storefronts through it has to decide
+// what each one costs -- there is no single customerPrice to filter on, because
+// 9.99 in USA is neither 9.99 nor a round number anywhere else. Apple already
+// holds that mapping: given one price point it returns the point it considers
+// equivalent per territory, which is what App Store Connect's own "price
+// matrix" is built from.
+//
+// The returned records are ordinary SubscriptionPricePoints, addressable as the
+// pricePointID of a subscription price, and they belong to the same
+// subscription the base point does -- a price point ID encodes its
+// subscription, so an equalization read from one subscription's point is no
+// more reusable on another than the base point was.
+//
+// include=territory is as necessary here as in the catalogue read: without it
+// Apple reports each point's territory as a link alone, and a price point whose
+// territory is unknown cannot be matched to the storefront it prices. The
+// territory filter is optional and applied server-side; unlike the catalogue
+// read, leaving it off is the ordinary case, because the whole point of this
+// endpoint is one record per territory rather than tens of thousands.
+func (c *Client) GetSubscriptionPricePointEqualizations(pricePointID string, territories []string) ([]models.SubscriptionPricePoint, error) {
+	params := url.Values{}
+	params.Set("include", "territory")
+	if len(territories) > 0 {
+		params.Set("filter[territory]", strings.Join(territories, ","))
+	}
+
+	return getAllPagesQuery[models.SubscriptionPricePoint](
+		c,
+		fmt.Sprintf("/v1/subscriptionPricePoints/%s/equalizations", pricePointID),
+		defaultPageSize,
+		params,
+	)
+}

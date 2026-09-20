@@ -24,6 +24,29 @@ variable "version_string" {
   type        = string
 }
 
+variable "build_number" {
+  description = <<-EOT
+    The build number of the uploaded build to attach -- CFBundleVersion, which
+    a pipeline knows as CURRENT_PROJECT_VERSION.
+
+    This module does not upload builds; the binary must already be in App Store
+    Connect, put there by Xcode, Transporter or fastlane. Apple rejects a build
+    that is still processing, which takes five to thirty minutes after the
+    upload finishes, so a pipeline that uploads and applies in one run should
+    wait in between.
+
+    Left null, whatever build is attached is left alone -- including one
+    attached by hand or by a separate pipeline.
+  EOT
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.build_number == null || can(regex("^\\d+(\\.\\d+)*$", var.build_number))
+    error_message = "build_number must be dot-separated numbers, such as 42 or 1.2.3."
+  }
+}
+
 variable "copyright" {
   description = <<-EOT
     The copyright line shown on the product page -- "2026 AO Studio".

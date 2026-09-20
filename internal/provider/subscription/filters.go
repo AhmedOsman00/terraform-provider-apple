@@ -201,3 +201,36 @@ func FilterSubscriptionPricePoints(points []models.SubscriptionPricePoint, filte
 
 	return filtered
 }
+
+// PricePointIDsByTerritory indexes price points by the territory they price.
+//
+// This is what makes an equalization read usable from a for_each: a map from
+// territory code to price point ID, so a price resource can look its own
+// storefront up instead of filtering the nested list. A point Apple returns
+// without a territory linkage is skipped rather than keyed under the empty
+// string -- an unidentifiable point is not addressable as anything.
+//
+// Apple returns one point per territory here, so a duplicate key should not
+// occur; if one does, the first is kept, because the alternative is a map whose
+// contents depend on response order.
+func PricePointIDsByTerritory(points []models.SubscriptionPricePoint) map[string]string {
+	ids := make(map[string]string, len(points))
+
+	for _, point := range points {
+		if point.Relationships == nil || point.Relationships.Territory == nil {
+			continue
+		}
+
+		territory := point.Relationships.Territory.Data.ID
+		if territory == "" {
+			continue
+		}
+		if _, seen := ids[territory]; seen {
+			continue
+		}
+
+		ids[territory] = point.ID
+	}
+
+	return ids
+}

@@ -1,3 +1,84 @@
+## 0.3.0 (Unreleased)
+
+FEATURES:
+
+* **`apple_subscription_price_point_equalizations` prices a subscription in
+  every territory from one base price.** Apple's
+  `GET /v1/subscriptionPricePoints/{id}/equalizations` returns the price point
+  it considers equivalent to a base point in each other territory — the mapping
+  App Store Connect's own price matrix is built from — and the provider now
+  reads it.
+
+  `apple_subscription_price_points` answers *what may this subscription cost in
+  these territories*, which left a configuration pricing every storefront to
+  decide each one by hand: there is no single `customer_price` to filter on,
+  because `9.99` in the United States is neither `9.99` nor a round number
+  anywhere else. Pick one base price point, pass its ID to the new data source,
+  and `price_point_ids` — a territory code to price point ID map, the same shape
+  as `ids` on `apple_territories` — drives a `for_each` over
+  `apple_subscription_price`:
+
+  ```terraform
+  data "apple_subscription_price_point_equalizations" "base" {
+    price_point_id = data.apple_subscription_price_points.base.price_points[0].id
+  }
+
+  resource "apple_subscription_price" "plan" {
+    for_each = data.apple_subscription_price_point_equalizations.base.price_point_ids
+
+    subscription_id = apple_subscription.pro_monthly.id
+    price_point_id  = each.value
+    territory_id    = each.key
+
+    depends_on = [apple_subscription_availability.pro_monthly]
+  }
+  ```
+
+  `territories` narrows the read server-side; unlike the catalogue read, leaving
+  it unset is the ordinary case, because the endpoint returns one record per
+  territory rather than tens of thousands. `apple_subscription_availability`
+  must still cover every territory the fan-out prices — Apple refuses a price in
+  a territory a subscription is not available in, and names neither in the
+  error — so the `depends_on` above is not optional. `examples/resources/apple_subscription_price`
+  shows the whole shape end to end.
+
+* **`apple_app_store_version` attaches a build, named the way a pipeline names
+  it.** Three new attributes: `build_number` (`CFBundleVersion`, which CI knows
+  as `CURRENT_PROJECT_VERSION`), `pre_release_version`
+  (`CFBundleShortVersionString` / `MARKETING_VERSION`, defaulting to
+  `version_string`) and the computed `build_id`.
+
+  ```terraform
+  resource "apple_app_store_version" "this" {
+    app_id         = data.apple_apps.this.apps[0].id
+    platform       = "IOS"
+    version_string = "1.2.0"
+
+    build_number = "42" # pre_release_version defaults to version_string
+  }
+  ```
+
+  Apple's linkage endpoint takes an opaque build ID that nobody has, so the
+  provider resolves the two numbers to it rather than asking for it — which is
+  one request, because `/v1/builds` filters on `filter[version]` and
+  `filter[preReleaseVersion.version]` server-side. Removing `build_number` from
+  a configuration that had it detaches the build; leaving it unset leaves
+  whatever is attached alone, so a build attached by hand or by a separate
+  pipeline is not torn off by the next apply.
+
+  This provider still does not **upload** builds — that stays with Xcode,
+  Transporter and fastlane, and Apple publishes no endpoint for it. A build is
+  `PROCESSING` for five to thirty minutes after the upload finishes and Apple
+  refuses to attach one until it is `VALID`; the provider reports that state
+  rather than blocking the apply on it, so a pipeline that uploads and applies
+  in one run should wait in between. Export compliance is unaffected:
+  `usesNonExemptEncryption` lives on the build, and a build without it parks the
+  version in `WAITING_FOR_EXPORT_COMPLIANCE` however complete the metadata is.
+
+  `examples/app-listing` takes the build number as a variable, and its
+  `remaining_manual_steps` output drops attaching the build while naming the
+  upload and export compliance explicitly.
+
 ## 0.2.1 (September 17, 2026)
 
 BUG FIXES:

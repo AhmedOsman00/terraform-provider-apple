@@ -40,8 +40,20 @@ will stop a submission:
   does not recur with each release.
 - **Screenshots and app previews.** Media assets are not managed by this
   provider.
-- **The build.** Upload it with Xcode, Transporter or fastlane.
-- **Submitting for review.** App Store Connect only.
+- **The build upload.** Push the binary with Xcode, Transporter or fastlane;
+  Apple publishes no upload endpoint. *Attaching* it is not manual — set
+  `build_number` to the `CURRENT_PROJECT_VERSION` the pipeline just built and
+  this module links it to the version. Apple leaves a build `PROCESSING` for
+  five to thirty minutes after the upload finishes and refuses to attach one
+  until it is `VALID`, so a pipeline that uploads and applies in one run should
+  wait in between rather than expect the apply to.
+- **Export compliance.** Answer it with `ITSAppUsesNonExemptEncryption` in
+  `Info.plist` at build time. It lives on the build rather than the version, and
+  a build without it parks the version in `WAITING_FOR_EXPORT_COMPLIANCE`
+  however complete the metadata is.
+- **Submitting for review.** App Store Connect only. Apple does publish a
+  submission API, but submission is an event rather than a state: a resource for
+  it would cancel a live review on destroy and resubmit on apply.
 
 ## Usage
 

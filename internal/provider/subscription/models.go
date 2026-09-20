@@ -164,6 +164,28 @@ type subscriptionPricePointsDataSourceModel struct {
 	FilteredCount types.Int64 `tfsdk:"filtered_count"`
 }
 
+// subscriptionPricePointEqualizationsDataSourceModel maps the equalization
+// lookup: one base price point in, the equivalent point per territory out.
+type subscriptionPricePointEqualizationsDataSourceModel struct {
+	// Scope
+	PricePointID types.String `tfsdk:"price_point_id"`
+
+	// Filter configuration. Applied by Apple, like the catalogue read -- but
+	// unlike it, omitting this is the ordinary case: the endpoint returns one
+	// record per territory rather than the whole catalogue.
+	Territories []types.String `tfsdk:"territories"`
+
+	// Output. price_point_ids is the same deliberate deviation
+	// apple_territories.ids is, and exists for the same reason: the nested
+	// list is unusable in a for_each over territories without a flatten and a
+	// one-element index expression every caller would have to repeat.
+	PricePoints   []subscriptionPricePointModel `tfsdk:"price_points"`
+	PricePointIDs map[string]types.String       `tfsdk:"price_point_ids"`
+
+	// Computed metadata
+	TotalCount types.Int64 `tfsdk:"total_count"`
+}
+
 // Subscription validators.
 var (
 	// ProductIDValidator validates a subscription product identifier.

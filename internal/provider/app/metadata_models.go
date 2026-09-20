@@ -74,6 +74,35 @@ type appStoreVersionModel struct {
 	CreatedDate         types.String `tfsdk:"created_date"`
 }
 
+// appStoreVersionResourceModel is the version plus the build attached to it.
+//
+// The build lives only on the resource. A listing cannot report it without one
+// request per version -- Apple publishes no way to read the attached build of
+// many versions at once -- and the two numbers that name a build are inputs
+// rather than anything Apple reports on a version, so the data source keeps the
+// narrower model it always had.
+type appStoreVersionResourceModel struct {
+	appStoreVersionModel
+
+	BuildNumber       types.String `tfsdk:"build_number"`
+	PreReleaseVersion types.String `tfsdk:"pre_release_version"`
+	BuildID           types.String `tfsdk:"build_id"`
+}
+
+// trainVersion is the marketing version of the build train this version wants,
+// which defaults to the version's own version string.
+//
+// Apple only offers a version the builds whose CFBundleShortVersionString
+// matches it, so the two are the same value in every ordinary configuration and
+// pre_release_version exists to be left unset.
+func (m *appStoreVersionResourceModel) trainVersion() string {
+	if !m.PreReleaseVersion.IsNull() && !m.PreReleaseVersion.IsUnknown() {
+		return m.PreReleaseVersion.ValueString()
+	}
+
+	return m.VersionString.ValueString()
+}
+
 // appStoreVersionLocalizationModel maps a version's localized product page.
 //
 // Keywords is a list here and a comma-separated string on the wire: Apple has
@@ -442,6 +471,22 @@ func GetVersionStringValidator() []validator.String {
 		stringvalidator.RegexMatches(
 			regexp.MustCompile(`^\d+(\.\d+){0,2}$`),
 			"Version string must be up to three dot-separated numbers, such as 1.0 or 2.14.3",
+		),
+	}
+}
+
+// GetBuildNumberValidator returns validators for a build number.
+//
+// This is CFBundleVersion, which Apple requires to be dot-separated integers --
+// the count is not capped here, because rejecting a build number Apple already
+// accepted at upload would leave a configuration with no way to name its own
+// build. It catches the shape that is actually wrong: a "v" prefix, a git SHA,
+// or the marketing version pasted in by mistake.
+func GetBuildNumberValidator() []validator.String {
+	return []validator.String{
+		stringvalidator.RegexMatches(
+			regexp.MustCompile(`^\d+(\.\d+)*$`),
+			"Build number must be dot-separated numbers, such as 42 or 1.2.3",
 		),
 	}
 }

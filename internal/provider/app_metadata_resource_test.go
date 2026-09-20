@@ -64,6 +64,33 @@ func testAccPreCheckAppPricing(t *testing.T) {
 	}
 }
 
+// testAccBuildEnvVars name a build that has already been uploaded to the app
+// under test.
+//
+// Attaching a build cannot be exercised without one, and this provider does not
+// upload builds -- only Xcode, Transporter and fastlane do, and Apple leaves a
+// build PROCESSING for five to thirty minutes afterwards. So unlike the rest of
+// the suite this test cannot manufacture its own fixture, and skips until
+// somebody points it at a real build. The train defaults to the build's own
+// version string, which is what the resource does.
+const (
+	testAccBuildNumberEnvVar = "APPLE_TEST_BUILD_NUMBER"
+	testAccBuildTrainEnvVar  = "APPLE_TEST_BUILD_PRE_RELEASE_VERSION"
+)
+
+// testAccPreCheckBuild skips unless an uploaded build is named.
+func testAccPreCheckBuild(t *testing.T) {
+	t.Helper()
+	testAccPreCheckSubscription(t)
+
+	if os.Getenv(testAccBuildNumberEnvVar) == "" || os.Getenv(testAccBuildTrainEnvVar) == "" {
+		t.Skipf("skipping build attachment acceptance test: set %s and %s to a build already uploaded "+
+			"to the app named by %s. This provider does not upload builds, and Apple rejects one that "+
+			"is still processing.",
+			testAccBuildNumberEnvVar, testAccBuildTrainEnvVar, testAccAppIDEnvVar)
+	}
+}
+
 // testAccVersionString returns a version string unique to this run.
 //
 // An app holds only one editable version per platform at a time, so a fixed
@@ -314,6 +341,9 @@ func TestAccAppStoreVersionResource_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("apple_app_store_version.test", "release_type", "MANUAL"),
 					resource.TestCheckResourceAttr("apple_app_store_version.test", "platform", "IOS"),
 					resource.TestCheckResourceAttrSet("apple_app_store_version.test", "app_version_state"),
+					// A version with no build_number attaches nothing and
+					// reports no build ID.
+					resource.TestCheckNoResourceAttr("apple_app_store_version.test", "build_id"),
 				),
 			},
 			// release_type is the attribute an "automatic release" setting maps
@@ -323,6 +353,10 @@ func TestAccAppStoreVersionResource_basic(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("apple_app_store_version.test", "copyright", "2026 Renamed"),
 					resource.TestCheckResourceAttr("apple_app_store_version.test", "release_type", "AFTER_APPROVAL"),
+					// An update that does not touch the build coordinates must
+					// carry the computed build ID forward untouched -- producing
+					// a different one is an inconsistent result.
+					resource.TestCheckNoResourceAttr("apple_app_store_version.test", "build_id"),
 				),
 			},
 			{
@@ -332,6 +366,50 @@ func TestAccAppStoreVersionResource_basic(t *testing.T) {
 				// Apple normalizes the timestamp to UTC whatever offset was
 				// sent, so Read never refreshes it -- see applyAppStoreVersion.
 				ImportStateVerifyIgnore: []string{"earliest_release_date"},
+			},
+		},
+	})
+}
+
+// TestAccAppStoreVersionResource_build attaches a build by its number, then
+// detaches it by removing the number from the configuration.
+//
+// The detach step is the one that needs the nullable relationship: omitting the
+// member leaves the build in place, so a build_number removed from a
+// configuration would otherwise never come off.
+// Unlike every other version test, the version string is not randomised: Apple
+// only accepts a build whose train matches the version string, so the version
+// has to be named after the build. An interrupted run therefore leaves a
+// version that must be deleted in App Store Connect before this passes again.
+func TestAccAppStoreVersionResource_build(t *testing.T) {
+	buildNumber := os.Getenv(testAccBuildNumberEnvVar)
+	train := os.Getenv(testAccBuildTrainEnvVar)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckBuild(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAppStoreVersionDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAppStoreVersionBuildConfig(train, buildNumber),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckAppStoreVersionExists("apple_app_store_version.test"),
+					resource.TestCheckResourceAttr("apple_app_store_version.test", "build_number", buildNumber),
+					// pre_release_version is left unset and defaults to
+					// version_string, which is the path every real
+					// configuration takes.
+					resource.TestCheckNoResourceAttr("apple_app_store_version.test", "pre_release_version"),
+					// The opaque ID nobody has, resolved from the two numbers
+					// everybody does.
+					resource.TestCheckResourceAttrSet("apple_app_store_version.test", "build_id"),
+				),
+			},
+			{
+				Config: testAccAppStoreVersionConfig(train, "2026 Terraform", "MANUAL"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("apple_app_store_version.test", "build_number"),
+					resource.TestCheckNoResourceAttr("apple_app_store_version.test", "build_id"),
+				),
 			},
 		},
 	})
@@ -443,6 +521,22 @@ resource "apple_app_store_version" "test" {
   release_type   = %[4]q
 }
 `, testAccAppID(), versionString, copyright, releaseType)
+}
+
+func testAccAppStoreVersionBuildConfig(versionString, buildNumber string) string {
+	return fmt.Sprintf(`
+resource "apple_app_store_version" "test" {
+  app_id         = %[1]q
+  platform       = "IOS"
+  version_string = %[2]q
+  copyright      = "2026 Terraform"
+  release_type   = "MANUAL"
+
+  # pre_release_version is deliberately unset: it defaults to version_string,
+  # which is the only train Apple offers this version builds from.
+  build_number = %[3]q
+}
+`, testAccAppID(), versionString, buildNumber)
 }
 
 func testAccAppStoreVersionLocalizationConfig(versionString, promo, keywords string) string {

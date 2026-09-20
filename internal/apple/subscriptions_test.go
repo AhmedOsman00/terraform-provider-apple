@@ -78,6 +78,78 @@ func TestGetSubscriptionPricePointsOmitsEmptyTerritoryFilter(t *testing.T) {
 	}
 }
 
+// TestGetSubscriptionPricePointEqualizationsRequestsEqualizationsPath covers the
+// endpoint and the include. The equalization read is what prices a subscription
+// in every territory from one base point, and a returned point whose territory
+// was not populated cannot be matched to the storefront it prices.
+func TestGetSubscriptionPricePointEqualizationsRequestsEqualizationsPath(t *testing.T) {
+	var gotPath string
+	var gotQuery url.Values
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotQuery = r.URL.Query()
+		fmt.Fprint(w, `{"data":[
+			{"type":"subscriptionPricePoints","id":"eq-gbr",
+				"attributes":{"customerPrice":"8.99","proceeds":"6.29"},
+				"relationships":{"territory":{"data":{"type":"territories","id":"GBR"}}}},
+			{"type":"subscriptionPricePoints","id":"eq-egy",
+				"attributes":{"customerPrice":"199.99","proceeds":"139.99"},
+				"relationships":{"territory":{"data":{"type":"territories","id":"EGY"}}}}]}`)
+	}))
+	defer srv.Close()
+
+	points, err := newTestClient(srv).GetSubscriptionPricePointEqualizations("base-usa", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if want := "/v1/subscriptionPricePoints/base-usa/equalizations"; gotPath != want {
+		t.Errorf("path = %q, want %q", gotPath, want)
+	}
+	if got := gotQuery.Get("include"); got != "territory" {
+		t.Errorf("include = %q, want %q", got, "territory")
+	}
+	if _, present := gotQuery["filter[territory]"]; present {
+		t.Error("filter[territory] was sent for an unfiltered request")
+	}
+
+	if len(points) != 2 {
+		t.Fatalf("got %d equalized price points, want 2", len(points))
+	}
+	if points[0].Relationships == nil || points[0].Relationships.Territory == nil {
+		t.Fatal("territory relationship was not decoded")
+	}
+	if got := points[0].Relationships.Territory.Data.ID; got != "GBR" {
+		t.Errorf("territory = %q, want %q", got, "GBR")
+	}
+	if got := points[1].Attributes.CustomerPrice; got != "199.99" {
+		t.Errorf("customer price = %q, want %q", got, "199.99")
+	}
+}
+
+// TestGetSubscriptionPricePointEqualizationsSendsTerritoryFilter checks that a
+// narrowed read passes the filter to Apple rather than fetching every territory
+// and discarding most of them.
+func TestGetSubscriptionPricePointEqualizationsSendsTerritoryFilter(t *testing.T) {
+	var gotQuery url.Values
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query()
+		fmt.Fprint(w, `{"data":[]}`)
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(srv).GetSubscriptionPricePointEqualizations("base-usa", []string{"GBR", "EGY"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := gotQuery.Get("filter[territory]"); got != "GBR,EGY" {
+		t.Errorf("filter[territory] = %q, want %q", got, "GBR,EGY")
+	}
+}
+
 // TestPaginationCarriesQueryParametersAcrossPages covers the interaction
 // between getAllPagesQuery and the "next" link: Apple's link already carries
 // the parameters forward, so they must not be re-appended and duplicated.

@@ -6,6 +6,11 @@ platform       = "IOS"
 version_string = "1.0"
 copyright      = "2026 AO Studio"
 
+# The build to attach, by build number. Upload the binary first -- this module
+# does not, and Apple leaves a build PROCESSING for five to thirty minutes
+# afterwards. Leave it unset to leave whatever build is attached alone.
+build_number = "42"
+
 # false holds an approved version until it is released by hand.
 automatic_release = false
 

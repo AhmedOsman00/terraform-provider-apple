@@ -298,6 +298,7 @@ func (p *appleProvider) DataSources(_ context.Context) []func() datasource.DataS
 		subscription.NewSubscriptionGroupsDataSource,
 		subscription.NewSubscriptionsDataSource,
 		subscription.NewSubscriptionPricePointsDataSource,
+		subscription.NewSubscriptionPricePointEqualizationsDataSource,
 		inapppurchase.NewInAppPurchasesDataSource,
 		inapppurchase.NewInAppPurchasePricePointsDataSource,
 		territory.NewTerritoriesDataSource,

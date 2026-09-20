@@ -227,6 +227,7 @@ convention differs here.
 | `TestAccSubscriptionGroupsDataSource_basic` | Net zero | One group, read back through two data sources. | A group appears and is deleted. |
 | `TestAccSubscriptionsDataSource_basic` | Net zero | A group plus two subscriptions at group levels 1 and 2, read back through five data sources. | Two subscriptions appear in one group, then all are deleted. |
 | `TestAccSubscriptionPricePointsDataSource_basic` | Net zero | A group plus one subscription; reads Apple's price catalogue for USA and for USA+GBR. | A subscription appears and is deleted. The catalogue is read-only. |
+| `TestAccSubscriptionPricePointEqualizationsDataSource_basic` | Net zero | A group plus one subscription; reads the USA 9.99 price point, then the points Apple equalizes from it — once for every territory and once narrowed to GBR+EGY. | A subscription appears and is deleted. Nothing is priced: the equalization is a read of Apple's price matrix, not a price record. |
 
 Three API shapes explain most failures here. Apple publishes **no top-level
 collection** for subscription groups, subscriptions or localizations — `GET
@@ -323,6 +324,18 @@ storefronts sell it, and Apple publishes no `DELETE` for either record. They ski
 unless `APPLE_TEST_ALLOW_APP_PRICING` is set. Never point them at a live app: on
 one, they would change the price customers pay and remove storefronts from sale.
 
+**`TestAccAppStoreVersionResource_build` needs a build that already exists.** The
+provider does not upload builds — only Xcode, Transporter and fastlane do — so
+unlike the rest of the suite this test cannot manufacture its own fixture. It
+skips unless `APPLE_TEST_BUILD_NUMBER` and
+`APPLE_TEST_BUILD_PRE_RELEASE_VERSION` name a build already uploaded to the app
+under test and finished processing; Apple rejects a build that is still
+`PROCESSING`, which lasts five to thirty minutes after the upload. Its version
+string is **not randomised**, because Apple only accepts a build whose train
+matches the version string — so the version is named after the build, and an
+interrupted run leaves one to delete in App Store Connect before it passes
+again. It attaches and then detaches; the build itself is never modified.
+
 | Test | Residue | Creates at Apple | What you see in the portal |
 |---|---|---|---|
 | `TestAccAppSettingsResource_contentRights` | **Leaves the declaration set** | Nothing. Patches the app record's content rights declaration, then flips it to `USES_THIRD_PARTY_CONTENT`, then imports. | App Information > Content Rights changes twice and stays at the second value. |
@@ -330,6 +343,7 @@ one, they would change the price customers pay and remove storefronts from sale.
 | `TestAccAppInfoLocalizationResource_basic` | **Leaves the name and subtitle set** | An `en-US` app info localization if one did not exist. Sets the name to `TF Acceptance App` once and varies the subtitle. | The app's displayed name and subtitle change. The name is fixed, so a second run does not rename it again. |
 | `TestAccAgeRatingDeclarationResource_basic` | **Leaves the answers set** | Nothing. Answers the questionnaire, then raises cartoon violence to `INFREQUENT_OR_MILD`, then imports. | App Information > Age Rating changes, and Apple recomputes the rating from it. |
 | `TestAccAppStoreVersionResource_basic` | Net zero | One iOS version at `99.x.y`; updates its copyright and release type; imports. | A version appears under the app, then is deleted. |
+| `TestAccAppStoreVersionResource_build` | Net zero — opt-in | One iOS version named after the build's train; attaches the build named by `APPLE_TEST_BUILD_NUMBER`, then detaches it by removing the attribute. | A version appears with a build attached, loses it, then is deleted. The build itself is untouched. |
 | `TestAccAppStoreVersionLocalizationResource_basic` | Net zero | A version plus its `en-US` product page; changes the keyword list from three to two. | A version with a description and keywords appears, then is deleted. |
 | `TestAccAppStoreVersionLocalizationResource_keywordsTooLong` | Plan-only | Nothing. Twelve keywords that join past 100 characters are refused at plan time. | No change. |
 | `TestAccAppStoreReviewDetailResource_basic` | Net zero | A version plus its review contact and notes; updates the notes; imports. | App Review Information appears under the version, then goes with it. |
@@ -510,7 +524,20 @@ TF_ACC=1 go test -v ./internal/provider/ -timeout 30m -run 'TestAccDeviceResourc
 export APPLE_TEST_ALLOW_APP_PRICING=1
 TF_ACC=1 go test -v ./internal/provider/ -timeout 30m \
   -run 'TestAccAppPriceScheduleResource|TestAccAppAvailabilityResource'
+
+# 5. Only when a build has already been uploaded to the test app and has
+#    finished processing. Name the build the way the pipeline that built it
+#    does: CURRENT_PROJECT_VERSION and MARKETING_VERSION.
+export APPLE_TEST_BUILD_NUMBER=42
+export APPLE_TEST_BUILD_PRE_RELEASE_VERSION=1.2.0
+TF_ACC=1 go test -v ./internal/provider/ -timeout 30m \
+  -run 'TestAccAppStoreVersionResource_build'
 ```
+
+Step 5 is skipped rather than failed when those two variables are absent,
+because nothing in the suite can produce their fixture: Apple publishes no
+build-upload endpoint, so the binary has to arrive through Xcode, Transporter or
+fastlane first.
 
 Step 4 is opt-in past credentials for a reason: those two tests are the only
 ones in the suite that change what an app costs and where it sells, and neither

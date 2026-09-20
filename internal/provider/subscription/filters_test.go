@@ -354,3 +354,74 @@ func TestFilterSubscriptionPricePoints(t *testing.T) {
 		})
 	}
 }
+
+// territoryPoint builds a price point carrying a territory linkage, the shape
+// an equalization read returns.
+func territoryPoint(id, territory string) models.SubscriptionPricePoint {
+	return models.SubscriptionPricePoint{
+		ID: id,
+		Relationships: &models.SubscriptionPricePointRelationships{
+			Territory: &models.ResourceIdentifier{
+				Data: models.ResourceData{Type: "territories", ID: territory},
+			},
+		},
+	}
+}
+
+func TestPricePointIDsByTerritory(t *testing.T) {
+	tests := []struct {
+		name   string
+		points []models.SubscriptionPricePoint
+		want   map[string]string
+	}{
+		{
+			name:   "no points is an empty map, not nil",
+			points: nil,
+			want:   map[string]string{},
+		},
+		{
+			name: "one entry per territory",
+			points: []models.SubscriptionPricePoint{
+				territoryPoint("eq-gbr", "GBR"),
+				territoryPoint("eq-egy", "EGY"),
+			},
+			want: map[string]string{"GBR": "eq-gbr", "EGY": "eq-egy"},
+		},
+		{
+			name:   "a point with no territory linkage is skipped",
+			points: append(pricePoints(), territoryPoint("eq-gbr", "GBR")),
+			want:   map[string]string{"GBR": "eq-gbr"},
+		},
+		{
+			name: "an empty territory ID is skipped rather than keyed on the empty string",
+			points: []models.SubscriptionPricePoint{
+				territoryPoint("eq-blank", ""),
+				territoryPoint("eq-gbr", "GBR"),
+			},
+			want: map[string]string{"GBR": "eq-gbr"},
+		},
+		{
+			name: "a repeated territory keeps the first, so response order cannot change the result",
+			points: []models.SubscriptionPricePoint{
+				territoryPoint("eq-gbr", "GBR"),
+				territoryPoint("eq-gbr-again", "GBR"),
+			},
+			want: map[string]string{"GBR": "eq-gbr"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := PricePointIDsByTerritory(tt.points)
+
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+			for territory, id := range tt.want {
+				if got[territory] != id {
+					t.Errorf("territory %s = %q, want %q", territory, got[territory], id)
+				}
+			}
+		})
+	}
+}
