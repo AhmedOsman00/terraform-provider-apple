@@ -304,4 +304,8 @@ profiles or they will carry stale entitlements.
 - Key distribution. The module knows nothing about where your private key lives,
   which is what lets it impose no secret-store dependency.
 - App Store Connect app records, TestFlight, and uploads. The module stops at
-  code signing — `xcrun altool` or `fastlane deliver` still handle delivery.
+  code signing — `xcrun altool` or `fastlane deliver` still handle delivery. The
+  provider itself does cover TestFlight tester groups and metadata
+  (`apple_beta_group` and the `apple_beta_*_localization` resources); this
+  module simply does not declare them, the way it does not declare an app
+  listing.

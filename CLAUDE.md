@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Terraform provider (`terraform-provider-apple`, module `github.com/AhmedOsman00/terraform-provider-apple`) for Apple App Store Connect, built on the **Terraform Plugin Framework** (not SDK v2). It is published on the Terraform Registry as `ahmedosman00/apple`. It manages Bundle IDs, Bundle ID capabilities, certificates, devices, merchant IDs, Pass Type IDs, and provisioning profiles, plus auto-renewable subscriptions (groups, group localizations, subscriptions, localizations, prices, availability) and one-time in-app purchases (purchases, localizations, price schedules, availability), plus a read-only `apple_territories` listing of the App Store's storefronts. It also manages an app's own App Store listing: content rights, categories, age rating, the localized name and product page, the release record, App Review information, the price and the storefronts it sells in.
+A Terraform provider (`terraform-provider-apple`, module `github.com/AhmedOsman00/terraform-provider-apple`) for Apple App Store Connect, built on the **Terraform Plugin Framework** (not SDK v2). It is published on the Terraform Registry as `ahmedosman00/apple`. It manages Bundle IDs, Bundle ID capabilities, certificates, devices, merchant IDs, Pass Type IDs, and provisioning profiles, plus auto-renewable subscriptions (groups, group localizations, subscriptions, localizations, prices, availability) and one-time in-app purchases (purchases, localizations, price schedules, availability), plus a read-only `apple_territories` listing of the App Store's storefronts. It also manages an app's own App Store listing: content rights, categories, age rating, the localized name and product page, the release record, App Review information, the price and the storefronts it sells in. TestFlight is covered too: tester groups, the app's TestFlight page text, a build's "What to Test" note, and what the beta reviewers are told.
 
 ## Commands
 
@@ -44,7 +44,7 @@ cannot be used for this: it makes `terraform init` refuse to run.
 
 `tfplugindocs` builds `docs/` from provider/resource/data-source `MarkdownDescription` strings plus the matching files under `examples/`. CI (`.github/workflows/test.yml`) fails the `generate` job if `make generate` produces a diff, so regenerate and commit whenever a schema, example, or guide changes.
 
-`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All forty-seven pages are checked in: `index.md`, twenty-six under `resources/`, eighteen under `data-sources/`, and two under `guides/`.
+`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All fifty-one pages are checked in: `index.md`, thirty under `resources/`, eighteen under `data-sources/`, and two under `guides/`.
 
 Hand-written prose lives in `templates/`, which is the only part of the docs pipeline a human edits directly. `templates/guides/<name>.md.tmpl` renders to `docs/guides/<name>.md`; a `templates/` directory does not suppress the auto-generated resource and data-source pages, which are still built from the schemas into a temporary directory. Two guides exist: `getting-started` (credentials, installing the provider from the Registry and overriding it with a local build, first configuration, import IDs per resource) and `code-signing` (the `fastlane match` replacement, the state-vs-bundle distribution model, adopting a match certificate).
 
@@ -55,7 +55,7 @@ Two layers, strictly separated, plus a standalone CLI:
 ### `internal/apple/` — App Store Connect API client
 
 - `client.go`: `Client` holds the JWT (ES256, `kid` header, 20-minute expiry) built from issuer ID + key ID + PKCS#8 private key. The token is minted once in `NewClient` and is immutable thereafter — a 20-minute life outlives any single Terraform command, so there is deliberately no refresh path and the signing key is not retained. `doRequest` decodes `models.ErrorResponse` into a formatted error, preferring Apple's own message; a 401 is reported as a credentials failure rather than retried, since re-signing with the same key yields an equivalent token.
-- One file per Apple resource (`budleIds.go` — note the typo in the filename — `certificates.go`, `devices.go`, `merchantIds.go`, `passTypeIds.go`, `profiles.go`, `bundleIdCapabilities.go`, `apps.go`, `subscriptionGroups.go`, `subscriptionGroupLocalizations.go`, `subscriptions.go`, `subscriptionLocalizations.go`, `subscriptionPrices.go`, `subscriptionAvailabilities.go`, `inAppPurchases.go`, `inAppPurchaseVersions.go`, `inAppPurchaseLocalizations.go`, `inAppPurchasePrices.go`, `inAppPurchaseAvailabilities.go`, `territories.go`, `appInfos.go`, `appInfoLocalizations.go`, `appStoreVersions.go`, `appStoreVersionLocalizations.go`, `appStoreReviewDetails.go`, `ageRatingDeclarations.go`, `appPrices.go`, `appAvailabilities.go`, `builds.go`). Each exposes plain `Get*/Create*/Update*/Delete*` methods on `*Client` returning `models.*` structs. No Terraform types here.
+- One file per Apple resource (`budleIds.go` — note the typo in the filename — `certificates.go`, `devices.go`, `merchantIds.go`, `passTypeIds.go`, `profiles.go`, `bundleIdCapabilities.go`, `apps.go`, `subscriptionGroups.go`, `subscriptionGroupLocalizations.go`, `subscriptions.go`, `subscriptionLocalizations.go`, `subscriptionPrices.go`, `subscriptionAvailabilities.go`, `inAppPurchases.go`, `inAppPurchaseVersions.go`, `inAppPurchaseLocalizations.go`, `inAppPurchasePrices.go`, `inAppPurchaseAvailabilities.go`, `territories.go`, `appInfos.go`, `appInfoLocalizations.go`, `appStoreVersions.go`, `appStoreVersionLocalizations.go`, `appStoreReviewDetails.go`, `ageRatingDeclarations.go`, `appPrices.go`, `appAvailabilities.go`, `builds.go`, `betaGroups.go`, `betaAppLocalizations.go`, `betaBuildLocalizations.go`, `betaAppReviewDetails.go`). Each exposes plain `Get*/Create*/Update*/Delete*` methods on `*Client` returning `models.*` structs. No Terraform types here.
 - `models/`: JSON wire types. All responses go through the generics in `common.go`: `Response[T]`, `ListResponse[T]`, `Request[T]`.
 - `pagination.go`: `getAllPages[T]` walks every page of a collection, following the absolute `links.next` URL until it is empty and refusing links that point off-host. All seven `Get*s()` functions go through it — reading only the first page silently truncates results. A `pageSize` of `noPageSize` (0) omits the `limit` parameter entirely, which the `bundleIdCapabilities` relationship requires: it rejects `limit` with a 400. `getAllPagesQuery` is the same walk with extra query parameters applied to the first request only — Apple's `links.next` already carries them forward, so re-appending would duplicate them. The subscription and in-app purchase collections need it: a price is unreadable without its price point included, and either price point catalogue is unusable without `filter[territory]`.
 - Apple's API has no server-side filtering here — "get by identifier/name" helpers (e.g. `GetPassTypeIDByIdentifier`, `GetProfileByName`) list a full collection and scan client-side, so they depend on pagination being complete. The App Store Connect endpoints are the exception: `/v1/apps` supports `filter[bundleId]`, the price point catalogue supports `filter[territory]`, and `/v1/builds` supports `filter[version]` (the build number), `filter[preReleaseVersion.version]` (its train) and `filter[preReleaseVersion.platform]` — all used server-side because the collections are too large to pull whole. `GetBuilds` is the one by-identifier helper in the provider that is a single request rather than a full-collection scan, and it deliberately omits a `processingState` filter: see `apple_app_store_version` below.
@@ -68,7 +68,7 @@ The optional `scope` attribute restricts the JWT to named operations. It must be
 
 Env vars: `APPLE_APP_STORE_CONNECT_ISSUER_ID`, `APPLE_APP_STORE_CONNECT_API_KEY`, `APPLE_APP_STORE_CONNECT_PRIVATE_KEY`.
 
-Each domain lives in its own package (`bundle`, `certificate`, `device`, `merchant`, `passtypeid`, `profile`, `subscription`, `inapppurchase`, `app`) following a consistent four-file convention:
+Each domain lives in its own package (`bundle`, `certificate`, `device`, `merchant`, `passtypeid`, `profile`, `subscription`, `inapppurchase`, `app`, `beta`) following a consistent four-file convention:
 
 | File | Contents |
 |---|---|
@@ -149,6 +149,32 @@ manual answer does not recur with each release; `examples/app-listing` reports
 it, along with screenshots, the build upload and submission, through the
 `remaining_manual_steps` output. Do not add a resource for it without first
 confirming Apple has published one.
+
+`beta` is TestFlight, and is the fastlane `pilot` replacement the way
+`examples/signing` is `match` and `examples/app-listing` is `deliver`. Four
+resources — `group_resource.go`, `app_localization_resource.go`,
+`build_localization_resource.go` and `app_review_detail_resource.go` — over
+`models.go`, with no data source and no `filters.go`, because nothing here
+lists. **Three things shape it:**
+
+TestFlight metadata splits across two lifetimes the same way App Store metadata
+does, and for the same reason: `apple_beta_app_localization` hangs off the app
+and survives every build, `apple_beta_build_localization` hangs off a build and
+is replaced with it. Do not fold them together; they are two Apple records.
+
+Internal and external groups are **not one flag**. `isInternalGroup` and
+`hasAccessToAllBuilds` are absent from Apple's `BetaGroupUpdateRequest`, so both
+are `RequiresReplace`, and the two kinds accept disjoint attribute sets — only an
+external group can carry a public link. `ValidateConfig` rejects
+`public_link_*` on an internal group at plan time rather than letting Apple
+refuse it with a message that names the attribute and not the reason.
+
+**Membership and build assignment are deliberately absent**, and so is beta
+review submission. The first two are real state and simply are not modelled yet
+(`/v1/betaTesters`, `betaGroups/{id}/relationships/builds`); the third is an
+event, and falls under the same rule `apple_app_store_version` submission does —
+a resource for it would cancel a live review on destroy and resubmit on apply.
+`has_access_to_all_builds` is what a group without build assignment uses.
 
 `inapppurchase` is the same shape for one-time purchases: `localization_*.go`,
 `price_schedule_resource.go`, `availability_resource.go` and
@@ -311,7 +337,7 @@ cross-variable validation.
   `/v1/appPricePoints/{id}/equalizations`) and is not implemented; those
   catalogues share nothing with this one.
 - **`apple_subscription_availability`**: the same singular, `POST`-replaces, no-`PATCH`, no-`DELETE` shape as `apple_in_app_purchase_availability`, and the same consequences — `Update` posts again, `Delete` warns and drops state only, and `ModifyPlan` marks `id` unknown when anything else changes because Apple issues a new record ID on every `POST`. It is a separate Apple resource from the in-app purchase one (`/v1/subscriptionAvailabilities` against `/v1/inAppPurchaseAvailabilities`) and the two share no code, the same way the two price catalogues do not. The record carries only `availableInNewTerritories`; the territory list is a paginated collection under `/v1/subscriptionAvailabilities/{id}/availableTerritories`, so `Read` takes two requests. Import ID is the subscription ID. Its real significance is ordering: it gates pricing, so a subscription cannot leave `MISSING_METADATA` without it. `available_territories` is required, and Apple's default of every territory applies only to a product whose availability has never been set — once this resource exists, selling everywhere means naming everywhere, which is what `data.apple_territories.all.ids` is for.
-- **Customer-facing text is validated in characters, not bytes.** `GetNameValidator` and `GetDescriptionValidator` in `subscription` and `inapppurchase`, and `GetAppNameValidator`, `GetSubtitleValidator`, `GetVersionDescriptionValidator`, `GetPromotionalTextValidator` and `GetWhatsNewValidator` in `app`, all use `stringvalidator.UTF8LengthBetween`, not `LengthBetween`. Apple's 30- and 45-character limits are character counts, while `LengthBetween` counts bytes, which rejected a legal 27-character Arabic description at "49". Any new customer-visible string field must follow this.
+- **Customer-facing text is validated in characters, not bytes.** `GetNameValidator` and `GetDescriptionValidator` in `subscription` and `inapppurchase`, `GetAppNameValidator`, `GetSubtitleValidator`, `GetVersionDescriptionValidator`, `GetPromotionalTextValidator` and `GetWhatsNewValidator` in `app`, and `GetBetaGroupNameValidator`, `GetBetaDescriptionValidator`, `GetWhatsNewValidator` and `GetReviewNotesValidator` in `beta`, all use `stringvalidator.UTF8LengthBetween`, not `LengthBetween`. Apple's 30- and 45-character limits are character counts, while `LengthBetween` counts bytes, which rejected a legal 27-character Arabic description at "49". Any new customer-visible string field must follow this.
 - **`apple_in_app_purchase`**: the one-time purchase side of the App Store — `CONSUMABLE`, `NON_CONSUMABLE`, `NON_RENEWING_SUBSCRIPTION` — on `/v2/inAppPurchases`, and a different Apple resource from `apple_subscription`. `app_id` is worse than write-once: `InAppPurchaseV2` has **no app relationship at all** and no `include` produces one, so the app can never be read back, `Read` keeps the configured value, and `ImportState` accepts only `<app_id>/<in_app_purchase_id>` — confirming ownership by listing the app's collection, which is the only check the API offers. `product_id` and `in_app_purchase_type` are `RequiresReplace` because Apple's update request has neither member, and replacing either is expensive: Apple never releases a product identifier. `Read` never refreshes `app_id`.
 - **`apple_in_app_purchase_localization`**: localizations hang off an **in-app purchase version**, not the purchase. Apple moved them there in App Store Connect API 4.4.1 and deprecated the v1 endpoints that hid it, so the provider writes to `/v2/inAppPurchaseLocalizations` against a version resolved by `EnsureEditableInAppPurchaseVersion`: it picks the highest-numbered version in `PREPARE_FOR_SUBMISSION`, `DEVELOPER_REJECTED` or `REJECTED`, and creates one when every version is in review or approved — which is what App Store Connect's UI does when you edit approved metadata. Versions have no `DELETE`, so one created that way outlives the localization. The resolved version is reported as the computed `version_id`. Unlike a subscription localization there is **no `state`**: `InAppPurchaseLocalizationV2` has none, because the state lives on the version. Import accepts a bare ID — the parent is resolved in two hops, localization → version → purchase — or the composite `<in_app_purchase_id>/<localization_id>`. **Delete tolerates Apple's 409 `Cannot delete the last localization`**: a version must keep at least one, so destroying the only localization warns and drops state rather than erroring — erroring failed the whole destroy and left the purchase behind, and the record goes away with the purchase anyway. `ImportState` sets `review_note` itself instead of going through `applyPurchaseAttributes`, which skips it so that a null in configuration survives a `Read`; an import has no configuration to contradict, and leaving it null dropped a value Apple holds.
 - **`apple_in_app_purchase_price_schedule`**: a purchase has exactly **one** schedule, not a price record per territory the way a subscription does. `POST /v1/inAppPurchasePriceSchedules` replaces it wholesale, and there is no `PATCH` and no `DELETE` — so `Update` posts again (a genuine in-place update, not `RequiresReplace`) and `Delete` warns and drops state only. Both this and `apple_in_app_purchase_availability` need a `ModifyPlan` that marks `id` unknown when anything else changes: Terraform proposes the prior value for a computed attribute, Apple issues a new record ID on every `POST`, and without it every update would be rejected as an inconsistent result. The create request is the only one in the provider using JSON:API's `included` member: the prices do not exist yet, so each is sent inline under a literal placeholder ID (`${price0}`) that the `manualPrices` relationship references, and Apple substitutes real IDs on commit. `baseTerritory` is required — Apple added that after the endpoint shipped. `prices` is a **set**, because Apple returns them unordered, and `Read` matches by `price_point_id` and **keeps the configured dates** for a price already in state: Apple derives an `endDate` for any price a later one supersedes, and adopting it would be a permanent diff. Only `manualPrices` are read; the prices Apple equalizes from the base territory are computed and never the provider's. Import ID is the purchase ID.
@@ -468,6 +494,53 @@ cross-variable validation.
   storefront that has already shipped, and adopting it is a permanent diff.
   Additions are sorted before being appended, so Go's map iteration order does
   not churn the plan.
+- **`apple_beta_group`**: the only TestFlight resource with a real create and a
+  real delete. `is_internal_group` and `has_access_to_all_builds` are
+  `Optional+Computed+RequiresReplace` with `UseStateForUnknown` — absent from
+  Apple's update request, so neither can change in place, and neither carries a
+  Terraform `Default`: a default would make an imported internal group plan a
+  replacement the moment the configuration stayed silent about it. The remaining
+  booleans are `Optional+Computed` and go through `adoptBool`/`adoptInt64` in
+  `applyBetaGroup` rather than being assigned outright, because an attribute
+  Apple omits from a response must neither blank a value the plan holds (an
+  inconsistent result) nor stay unknown. Import accepts a bare Apple ID —
+  `GET /v1/betaGroups/{id}` accepts `include=app`, which
+  `apple_subscription_group`'s does not — or `<app_id>/<group_name>`; names are
+  unique within an app, which is what makes the second form work and what
+  `Create` maps Apple's duplicate error onto.
+- **`apple_beta_app_localization`**: the app's TestFlight page text, one record
+  per locale, surviving every build. `Create` **reads first and patches when a
+  record exists**, the way `apple_app_store_review_detail` does: Apple writes one
+  for the app's primary locale itself, so a plain `POST` would 409 on exactly the
+  locale a configuration starts with. `locale` is `RequiresReplace` — it
+  identifies the record and is absent from the update request. `Delete` tolerates
+  Apple's refusal to remove the last one. Note that `privacy_policy_url` here is
+  the **TestFlight** link, not the App Store one on
+  `apple_app_info_localization`, and neither is the App Privacy questionnaire.
+- **`apple_beta_build_localization`**: the per-build "What to Test" note, and the
+  one resource in the provider with **no bare-ID import form**. It hangs off a
+  build, so it hits the same opaque-ID problem `apple_app_store_version` solved
+  and solves it the same way: `build_number` + `pre_release_version` (+ optional
+  `platform`) resolved through `GetBuildByNumber`, which is one request because
+  `/v1/builds` filters server-side. `pre_release_version` is **required** here,
+  unlike on `apple_app_store_version`, because there is no `version_string` to
+  default it to. `Read` never refreshes the build coordinates — they are inputs,
+  and Apple reports the train as a relationship rather than a value. Import is
+  `<app_id>/<pre_release_version>/<build_number>/<locale>`, or the same with
+  `<platform>` second. Like the app localization, `Create` adopts rather than
+  posting blindly: Apple writes a note for the primary locale when a build
+  finishes processing.
+- **`apple_beta_app_review_detail`**: **adopted, never created.** Apple publishes
+  no `POST /v1/betaAppReviewDetails` — the record comes into existence with the
+  app — so `Create` is a `PATCH` and `Delete` warns and drops state, the shape
+  `apple_app_settings` and `apple_app_info` are in. Do not add a create path.
+  It is a different Apple record from `apple_app_store_review_detail` and the two
+  do not substitute for each other: this one is per app and gates external
+  TestFlight distribution, that one is per version and gates the App Store
+  listing. `Read` never refreshes `demo_account_password`, for the reason the App
+  Store one does not: Apple returns it masked on some accounts and omitted on
+  others. It is `Sensitive` and still in state in plain text, and the schema says
+  so. Import ID is the app ID.
 - **`apple_profile`**: every configurable attribute is `RequiresReplace`, `name` included — Apple rejects `PATCH /v1/profiles` with 403 `does not allow 'UPDATE'`, so a rename is a reissue and `Update` exists only to report that it was reached. Profile content/UUID/state/dates are Apple-computed. `CreateProfile` retries a 5xx up to three times: `POST /v1/profiles` intermittently answers 500 for a well-formed request that succeeds on the next attempt. It looks the name up before each retry and adopts an already-issued profile, so a 500 that arrives after Apple committed the write does not duplicate it.
 
 ## Local testing
@@ -484,10 +557,10 @@ Pushing a `v*` tag runs `.github/workflows/release.yml`: GoReleaser cross-compil
 
 Two tiers:
 
-- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`.
+- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`.
 - **Acceptance** (`internal/provider/*_test.go`, package `provider`): `terraform-plugin-testing` against the real API. `testAccPreCheck` skips when credentials are absent.
 
-All twenty-six resources now have acceptance coverage. `internal/provider/app/schema_test.go` is a second, cheaper net under the app listing resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
+All thirty resources now have acceptance coverage. `internal/provider/app/schema_test.go` and `internal/provider/beta/schema_test.go` are a second, cheaper net under the app listing and TestFlight resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
 
 Two things constrain what the acceptance tier is allowed to do:
 
@@ -511,6 +584,21 @@ Two things constrain what the acceptance tier is allowed to do:
   back what was there. They skip unless `APPLE_TEST_ALLOW_APP_PRICING` is set —
   credentials plus a test app are deliberately not enough. Never point them at a
   live app.
+- **The TestFlight tests never open a public link.** `beta_resource_test.go`
+  creates real beta groups and deletes them, which is neutral — a group with no
+  testers and no public link invites nobody. Enabling `public_link_enabled`
+  would issue a URL anyone can join the beta through, which is not something a
+  test should put into the world, so the one configuration that would be
+  rejected for it is covered by a `PlanOnly` `ExpectError` instead. Group names
+  are randomised, because Apple enforces them unique within an app.
+  `testAccBetaLocale` is `de-DE` rather than `en-US` on purpose: Apple writes a
+  localization for the app's primary locale itself and refuses to delete the
+  last one, so a test on the primary locale would adopt a record it could not
+  then remove. `TestAccBetaAppReviewDetailResource_basic` adopts a record that
+  cannot be deleted at all, so its contact details stay on the app afterwards
+  and `testAccCheckAppStillExists` is its `CheckDestroy`.
+  `TestAccBetaBuildLocalizationResource_basic` needs an uploaded build and skips
+  behind `testAccPreCheckBuild` like the build attachment test does.
 - **Certificates consume a slot while they exist.** `certificate_resource_test.go` and both profile test files issue one and revoke it on destroy, so a completed run is neutral; an interrupted run leaves a certificate to revoke by hand. `IOS_DEVELOPMENT` is preferred over a distribution type where the profile type allows it.
 
 Identifiers are fixed rather than randomised, matching the existing tests, so an interrupted run leaves a Bundle ID, Merchant ID or profile that must be deleted in the portal before the test passes again.

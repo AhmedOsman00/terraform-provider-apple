@@ -305,6 +305,10 @@ them. Anything whose parent cannot be read back takes a composite ID:
 | `apple_app_store_review_detail` | `<app_store_version_id>` |
 | `apple_app_price_schedule` | `<app_id>` |
 | `apple_app_availability` | `<app_id>` |
+| `apple_beta_group` | Apple ID, or `<app_id>/<group_name>` |
+| `apple_beta_app_localization` | Apple ID, or `<app_id>/<locale>` |
+| `apple_beta_build_localization` | `<app_id>/<pre_release_version>/<build_number>/<locale>`, or the same with `<platform>` second |
+| `apple_beta_app_review_detail` | `<app_id>` |
 | `apple_subscription_group` | `<app_id>/<group_id>` |
 | `apple_subscription_group_localization` | Apple ID, or `<group_id>/<localization_id>` |
 | `apple_subscription` | Apple ID |
@@ -365,6 +369,22 @@ holds only one editable version per platform at a time, so `apple_app_store_vers
 cannot create a second, and Apple answers the attempt with a 409. Find it with
 the `apple_app_store_versions` data source filtered to
 `app_version_state = "PREPARE_FOR_SUBMISSION"`.
+
+The TestFlight resources mostly follow the App Store ones. `apple_beta_group`
+and `apple_beta_app_localization` both accept a bare Apple ID, because Apple
+reports the owning app on each; `apple_beta_app_review_detail` imports by app
+ID, since an app has exactly one and there is no collection to find it in.
+
+`apple_beta_build_localization` is the only resource in the provider with **no
+bare-ID form at all**. The record names its build by Apple's opaque build ID,
+and the build number and its train cannot be recovered from that without two
+further requests — while whoever is importing already has both:
+
+```bash
+terraform import apple_beta_group.qa "6478123456/QA"
+terraform import apple_beta_app_review_detail.app 6478123456
+terraform import 'apple_beta_build_localization.notes["en-US"]' "6478123456/1.4.0/42/en-US"
+```
 
 !> **Do not import `apple_certificate` if you are still using the certificate.**
 `csr_content` forces replacement and Apple does not reliably return the CSR a

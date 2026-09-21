@@ -37,9 +37,9 @@ Assuming every test passes and every destroy completes:
 |---|---|---|
 | **Permanent** | 2 | Device registrations that can never be removed — one iOS, one Mac. Terraform disables them; they still occupy slots until the membership year renews. |
 | **Transient peak** | 2 | Certificates alive at once, at most. Tests run sequentially and each revokes what it issued. |
-| **Net zero** | 13 | Resource kinds fully cleaned up: Bundle IDs, capabilities, Merchant IDs, Pass Type IDs, profiles, subscription groups, subscriptions, localizations, prices, in-app purchases, their localizations, price schedules and availability. |
+| **Net zero** | 16 | Resource kinds fully cleaned up: Bundle IDs, capabilities, Merchant IDs, Pass Type IDs, profiles, subscription groups, subscriptions, localizations, prices, in-app purchases, their localizations, price schedules and availability, beta groups and both TestFlight localizations. |
 | **Reserved forever** | ~13 | Subscription and in-app purchase product identifiers, randomised per run. Invisible once deleted, drawn from an unlimited namespace — see [Subscriptions](#subscriptions) and [In-app purchases](#in-app-purchases). |
-| **Touch nothing** | 23 | Tests rejected at plan time or read-only. |
+| **Touch nothing** | 24 | Tests rejected at plan time or read-only. |
 
 ### Certificates come back; devices do not
 
@@ -87,6 +87,10 @@ exception: they work in App Store Connect proper, under the app named by
 | Localizations and prices | App Store Connect → open the subscription |
 | In-app purchases | App Store Connect → the app → Monetization → In-App Purchases |
 | Purchase metadata, price and availability | App Store Connect → open the in-app purchase |
+| Beta groups | App Store Connect → the app → TestFlight → Testers and Groups |
+| TestFlight page text | App Store Connect → the app → TestFlight → Test Information |
+| "What to Test" notes | App Store Connect → the app → TestFlight → open the build |
+| Beta review information | App Store Connect → the app → TestFlight → Test Information → Beta App Review Information |
 
 ## Devices — the only irreversible tests
 
@@ -189,7 +193,7 @@ floor on the count rather than an exact number.
 **These tests need an app that already exists.** Apple's API cannot create an
 App Store Connect app record — its documentation says "Don't use this API to
 create new apps; instead, create new apps on the App Store Connect website" —
-so every `TestAccSubscription*` and `TestAccApps*` test skips itself unless
+so every `TestAccSubscription*`, `TestAccApps*` and `TestAccBeta*` test skips itself unless
 `APPLE_TEST_APP_ID` names one. Set it to Apple's numeric app ID, the one in the
 App Store Connect URL, not the bundle identifier:
 
@@ -368,6 +372,51 @@ distributed, and publishes no way to create a fresh one. If the scratch app has 
 version in review, the four editing tests above fail with *No Editable App Info*
 rather than doing anything harmful. Wait for review to finish.
 
+## TestFlight
+
+**These tests need the same app the subscription and app listing tests do**, and
+skip without `APPLE_TEST_APP_ID` — `testAccPreCheckSubscription` is the check.
+
+They sit between the two halves of this suite. Beta groups are created and
+deleted like a subscription, so a completed run is neutral; the beta review
+detail is adopted like an app info, so what it writes stays on the app.
+
+**No test opens a public TestFlight link.** Enabling `public_link_enabled`
+issues a URL anyone can join the beta through, which is not something a test
+should put into the world. The one configuration that would be rejected for it —
+a public link on an internal group — is checked at plan time and never applied.
+
+**Group names are randomised** (`Terraform External <6 chars>`), because Apple
+enforces the name unique within an app: a fixed name would collide with whatever
+an interrupted run left behind. A group with no testers and no public link
+invites nobody, so an interrupted run leaves something to tidy rather than
+something to worry about.
+
+**The TestFlight text is written in `de-DE`, not `en-US`.** Apple writes a
+localization for the app's primary locale itself and refuses to delete the last
+one an app has, so a test on the primary locale would adopt a record it could
+not then remove.
+
+**`TestAccBetaBuildLocalizationResource_basic` needs a build that already
+exists**, for the same reason `TestAccAppStoreVersionResource_build` does: the
+provider does not upload builds. It skips unless `APPLE_TEST_BUILD_NUMBER` and
+`APPLE_TEST_BUILD_PRE_RELEASE_VERSION` name a build already uploaded to the app
+under test.
+
+| Test | Residue | Creates at Apple | What you see in the portal |
+|---|---|---|---|
+| `TestAccBetaGroupResource_basic` | Net zero | One external beta group with a randomised name and no testers; renames it and turns feedback off; imports by bare ID. | A group appears under TestFlight > Groups, is renamed, then is deleted. |
+| `TestAccBetaGroupResource_internal` | Net zero | One internal beta group with `has_access_to_all_builds`; imports by bare ID. | An internal group appears under TestFlight > Testers, then is deleted. |
+| `TestAccBetaGroupResource_publicLinkOnInternal` | Plan-only | Nothing. A public link on an internal group is refused at plan time. | No change. |
+| `TestAccBetaAppLocalizationResource_basic` | Net zero | A `de-DE` TestFlight page description, feedback email and marketing URL; updates the description; imports. | TestFlight > Test Information gains a German entry, then loses it. |
+| `TestAccBetaBuildLocalizationResource_basic` | Net zero — opt-in | A `de-DE` "What to Test" note on the build named by `APPLE_TEST_BUILD_NUMBER`; updates it; imports by the composite ID. | The build's What to Test gains a German entry, then loses it. The build itself is untouched. |
+| `TestAccBetaAppReviewDetailResource_basic` | **Leaves the beta review contact set** | Nothing. Apple publishes no `POST` and no `DELETE` for the record, so this patches what is already there and `destroy` only drops state. | TestFlight > Test Information > Beta App Review Information shows the test's contact details and notes, permanently. |
+
+An interrupted run leaves at most a beta group or two, deletable in TestFlight >
+Groups, and possibly a `de-DE` entry under Test Information. Neither blocks a
+re-run: group names are randomised, and the localizations are adopted rather
+than created.
+
 ## Merchant IDs
 
 Deletable. Apple rejects duplicates, so leftovers block re-runs.
@@ -471,13 +520,25 @@ App Store Connect → the APPLE_TEST_APP_ID app → the version list
                                              Prepare for Submission. Its
                                              localization and review detail go
                                              with it.
+
+App Store Connect → the APPLE_TEST_APP_ID app → TestFlight → Testers and Groups
+  Any group named "Terraform External /   → delete it. It has no testers and
+  Internal / Renamed / Invalid <random>"     no public link, so deleting it
+                                             invites and uninvites nobody.
+
+App Store Connect → the APPLE_TEST_APP_ID app → TestFlight → Test Information
+  A German (de-DE) entry beginning         → delete it if you want the app's
+  "Terraform acceptance test build"          Test Information tidy. It is
+                                             harmless left in place.
 ```
 
 The app listing tests leave more than that behind, and none of it is cleanup in
 the usual sense — it is the app's own metadata, edited in place. After a run the
 scratch app's content rights declaration, categories, age rating answers,
 localized name and subtitle are whatever the tests last set. There is nothing to
-delete; set them back by hand if you care what the scratch app says.
+delete; set them back by hand if you care what the scratch app says. The beta
+review contact and notes under TestFlight > Test Information are in the same
+position: Apple publishes no `DELETE` for that record either.
 
 App Store Connect leftovers do not block the next run the way the others do:
 group reference names and every product identifier are randomised, so a second
@@ -499,8 +560,8 @@ export APPLE_APP_STORE_CONNECT_ISSUER_ID=...
 export APPLE_APP_STORE_CONNECT_API_KEY=...
 export APPLE_APP_STORE_CONNECT_PRIVATE_KEY="$(cat AuthKey_XXXXXXXXXX.p8)"
 
-# Optional. Without it every TestAccSubscription*, TestAccInAppPurchase* and
-# TestAccApps* test skips itself, because Apple's API cannot create the app
+# Optional. Without it every TestAccSubscription*, TestAccInAppPurchase*, and
+# TestAccApps* and TestAccBeta* test skips itself, because Apple's API cannot create the app
 # record they hang off.
 export APPLE_TEST_APP_ID=6448459855
 

@@ -1,6 +1,63 @@
-## 0.3.0 (Unreleased)
+## 0.3.0 (September 21, 2026)
 
 FEATURES:
+
+* **TestFlight.** Four resources that cover what `fastlane pilot` does, closing
+  the last gap between this provider and the fastlane tools it replaces:
+  `apple_beta_group` (a tester group, internal or external),
+  `apple_beta_app_localization` (the app's TestFlight page text),
+  `apple_beta_build_localization` (one build's "What to Test" note) and
+  `apple_beta_app_review_detail` (what Apple's beta reviewers are told).
+
+  ```terraform
+  resource "apple_beta_group" "qa" {
+    app_id                   = data.apple_apps.this.apps[0].id
+    name                     = "QA"
+    is_internal_group        = true
+    has_access_to_all_builds = true
+  }
+
+  resource "apple_beta_build_localization" "whats_new" {
+    app_id              = data.apple_apps.this.apps[0].id
+    build_number        = "42"
+    pre_release_version = "1.2.0"
+    locale              = "en-US"
+    whats_new           = "Shared budgets, and a rewritten sync engine."
+  }
+  ```
+
+  **Internal and external groups are not one flag with a different label.**
+  `is_internal_group` is absent from Apple's update request, so it is fixed for
+  the life of the group, and the two kinds accept disjoint attribute sets: only
+  an external group can carry a public link, and the provider rejects
+  `public_link_enabled` on an internal one at plan time rather than letting
+  Apple refuse it with a message that names the attribute and not the reason.
+  `has_access_to_all_builds` is fixed the same way.
+
+  TestFlight metadata splits across two lifetimes exactly as App Store metadata
+  does. What describes the app — the description testers read, the feedback
+  address, the marketing and privacy links — is `apple_beta_app_localization`
+  and survives every build. What describes one build is
+  `apple_beta_build_localization` and is replaced with it. That resource names
+  its build by `build_number` and `pre_release_version` rather than by Apple's
+  opaque ID, the same way `apple_app_store_version` does, and resolves the ID
+  itself.
+
+  `apple_beta_app_review_detail` **adopts on create**: Apple publishes no
+  `POST` for the record, which comes into existence with the app, so `Create` is
+  a `PATCH` and `destroy` drops it from state and warns — the shape
+  `apple_app_settings` and `apple_app_info` are already in. It is a different
+  record from `apple_app_store_review_detail` and does not substitute for it:
+  this one is per app and gates external TestFlight distribution, that one is
+  per version and gates the App Store listing.
+
+  Three things are deliberately **not** here. Tester membership and assigning
+  builds to a group are real state and are simply not modelled yet; a group
+  created here starts empty, and `has_access_to_all_builds` is the way to give
+  one every build without them. Submitting a build for beta review is not
+  modelled at all, for the reason App Store submission is not: it is an event
+  rather than a state, and a resource for it would cancel a live review on
+  destroy and resubmit on apply.
 
 * **`apple_subscription_price_point_equalizations` prices a subscription in
   every territory from one base price.** Apple's
@@ -78,6 +135,20 @@ FEATURES:
   `examples/app-listing` takes the build number as a variable, and its
   `remaining_manual_steps` output drops attaching the build while naming the
   upload and export compliance explicitly.
+
+DOCUMENTATION:
+
+* Generated reference pages now cover all thirty resources and eighteen data
+  sources.
+* `docs/guides/getting-started.md` lists the import ID of every TestFlight
+  resource and explains why `apple_beta_build_localization` is the one resource
+  in the provider with no bare-ID import form: it names its build by
+  `build_number` and `pre_release_version`, which cannot be recovered from
+  Apple's opaque build ID without two further requests — and whoever is
+  importing already has both.
+* `docs/guides/code-signing.md` notes that TestFlight is now covered by the
+  provider even though `examples/signing` does not declare it, the way it does
+  not declare an app listing.
 
 ## 0.2.1 (September 17, 2026)
 

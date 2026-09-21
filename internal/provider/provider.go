@@ -11,6 +11,7 @@ import (
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/app"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/beta"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/bundle"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/certificate"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/device"
@@ -324,6 +325,10 @@ func (p *appleProvider) Resources(_ context.Context) []func() resource.Resource 
 		app.NewAppStoreReviewDetailResource,
 		app.NewAppPriceScheduleResource,
 		app.NewAppAvailabilityResource,
+		beta.NewBetaGroupResource,
+		beta.NewBetaAppLocalizationResource,
+		beta.NewBetaBuildLocalizationResource,
+		beta.NewBetaAppReviewDetailResource,
 		subscription.NewSubscriptionGroupResource,
 		subscription.NewSubscriptionGroupLocalizationResource,
 		subscription.NewSubscriptionResource,
