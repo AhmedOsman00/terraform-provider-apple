@@ -725,3 +725,186 @@ func testAccIsNotFound(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "not found") || strings.Contains(msg, "404")
 }
+
+// TestAccSubscriptionPriceScheduleResource_basic covers the bulk price write.
+//
+// The point of the resource is that pricing N territories is one request rather
+// than N, so the configuration goes through the equalization data source the way
+// a real one does: one price point looked up by customer price, the rest derived
+// from it. Prices are not deletable in their own right -- Apple removes only
+// future price changes -- so the destroy check is the subscription's, which
+// takes its prices with it.
+func TestAccSubscriptionPriceScheduleResource_basic(t *testing.T) {
+	referenceName := "Terraform Schedule " + acctest.RandString(6)
+	productID := testAccSubscriptionProductID()
+	name := testAccProductName("Pro Schedule")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckSubscription(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: testAccCheckDestroyAll(
+			testAccCheckSubscriptionDestroy,
+			testAccCheckSubscriptionGroupDestroy,
+		),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSubscriptionPriceScheduleConfig(referenceName, productID, name, false),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckSubscriptionExists("apple_subscription.test"),
+					// id mirrors subscription_id: a subscription has no price
+					// schedule record of its own at Apple.
+					resource.TestCheckResourceAttrPair(
+						"apple_subscription_price_schedule.test", "id",
+						"apple_subscription.test", "id"),
+					resource.TestCheckResourceAttr("apple_subscription_price_schedule.test", "prices.#", "2"),
+					// The equalization lookup must have yielded a GBR point, or
+					// the second price could not have been written at all.
+					resource.TestCheckResourceAttrSet(
+						"data.apple_subscription_price_point_equalizations.test", "price_point_ids.GBR"),
+					// Both prices reached Apple in a single PATCH.
+					testAccCheckSubscriptionPriceCount("apple_subscription_price_schedule.test", 2),
+				),
+			},
+			// Import verifies against Apple rather than against the
+			// configuration: Apple reports a territory and a plan type on every
+			// price whether or not one was configured, so an imported set is
+			// richer than the one that was written and ImportStateVerify would
+			// read that as a mismatch.
+			{
+				ResourceName:      "apple_subscription_price_schedule.test",
+				ImportState:       true,
+				ImportStateIdFunc: testAccSubscriptionParentID("apple_subscription_price_schedule.test"),
+				ImportStateCheck:  testAccCheckImportedPriceCount(2),
+			},
+			// Adding a price rewrites the whole set in place: the schedule is
+			// replaced wholesale on every write, so a scheduled increase is an
+			// entry in the same resource rather than a resource of its own.
+			{
+				Config: testAccSubscriptionPriceScheduleConfig(referenceName, productID, name, true),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("apple_subscription_price_schedule.test", "prices.#", "3"),
+					testAccCheckSubscriptionPriceCount("apple_subscription_price_schedule.test", 3),
+				),
+			},
+		},
+	})
+}
+
+// testAccSubscriptionPriceScheduleConfig prices a subscription in two
+// territories from one looked-up price point, optionally adding a future
+// increase in the base territory.
+func testAccSubscriptionPriceScheduleConfig(referenceName, productID, name string, withIncrease bool) string {
+	increase := ""
+	if withIncrease {
+		increase = `,
+    {
+      territory_id           = "USA"
+      price_point_id         = data.apple_subscription_price_points.increase.price_points[0].id
+      start_date             = "2030-01-01"
+      preserve_current_price = true
+    }`
+	}
+
+	return testAccSubscriptionConfig(referenceName, productID, name, "ONE_MONTH") + fmt.Sprintf(`
+data "apple_subscription_price_points" "test" {
+  subscription_id = apple_subscription.test.id
+  territories     = ["USA"]
+  customer_price  = "0.99"
+  limit           = 1
+}
+
+data "apple_subscription_price_points" "increase" {
+  subscription_id = apple_subscription.test.id
+  territories     = ["USA"]
+  customer_price  = "1.99"
+  limit           = 1
+}
+
+# What 0.99 in the United States is worth elsewhere. This is the lookup that
+# makes pricing every storefront from one number possible, and the reason the
+# schedule resource exists: the fan-out is a set, not a resource per territory.
+data "apple_subscription_price_point_equalizations" "test" {
+  price_point_id = data.apple_subscription_price_points.test.price_points[0].id
+  territories    = ["GBR"]
+}
+
+resource "apple_subscription_availability" "test" {
+  subscription_id       = apple_subscription.test.id
+  available_territories = ["USA", "GBR"]
+}
+
+resource "apple_subscription_price_schedule" "test" {
+  subscription_id = apple_subscription.test.id
+
+  prices = [
+    {
+      territory_id   = "USA"
+      price_point_id = data.apple_subscription_price_points.test.price_points[0].id
+    },
+    {
+      territory_id   = "GBR"
+      price_point_id = data.apple_subscription_price_point_equalizations.test.price_point_ids["GBR"]
+    }%[1]s
+  ]
+
+  # A subscription cannot be priced in a territory it is not available in, and
+  # Apple's rejection names neither availability nor the territory. Nothing in
+  # a price references the availability, so the ordering has to be declared.
+  depends_on = [apple_subscription_availability.test]
+}
+`, increase)
+}
+
+// testAccCheckSubscriptionPriceCount asks Apple how many prices the
+// subscription actually carries.
+//
+// A check that only inspects Terraform state would pass on a PATCH that Apple
+// accepted but committed partially, which is the failure mode a bulk write has
+// and a per-territory one does not.
+func testAccCheckSubscriptionPriceCount(resourceName string, want int) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, err := testAccStateResource(s, resourceName)
+		if err != nil {
+			return err
+		}
+
+		client, err := testAccAPIClient()
+		if err != nil {
+			return fmt.Errorf("could not build API client: %w", err)
+		}
+
+		subscriptionID := rs.Attributes["subscription_id"]
+		prices, err := client.GetSubscriptionPrices(subscriptionID)
+		if err != nil {
+			return fmt.Errorf("reading prices of subscription %s: %w", subscriptionID, err)
+		}
+
+		if len(prices) != want {
+			return fmt.Errorf("subscription %s has %d prices at Apple, want %d",
+				subscriptionID, len(prices), want)
+		}
+
+		return nil
+	}
+}
+
+// testAccCheckImportedPriceCount asserts the shape of an imported schedule.
+func testAccCheckImportedPriceCount(want int) resource.ImportStateCheckFunc {
+	return func(states []*terraform.InstanceState) error {
+		if len(states) != 1 {
+			return fmt.Errorf("imported %d instances, want 1", len(states))
+		}
+
+		got := states[0].Attributes["prices.#"]
+		if got != fmt.Sprint(want) {
+			return fmt.Errorf("imported schedule has %q prices, want %d", got, want)
+		}
+
+		if states[0].Attributes["subscription_id"] != states[0].ID {
+			return fmt.Errorf("imported subscription_id %q does not match the ID %q",
+				states[0].Attributes["subscription_id"], states[0].ID)
+		}
+
+		return nil
+	}
+}

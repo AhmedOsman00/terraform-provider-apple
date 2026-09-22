@@ -5,18 +5,22 @@ subcategory: ""
 description: |-
   Reads the price point equivalent to one base price point in every other territory.
   This is how a subscription gets priced everywhere it sells. apple_subscription_price_points answers what may this subscription cost in these territories, which leaves the caller to decide a price per storefront: there is no single customer_price to filter on, because 9.99 in the United States is neither 9.99 nor a round number anywhere else. Apple already holds that mapping — it is what App Store Connect's own price matrix is built from — and this data source reads it.
-  Pick one base price point with apple_subscription_price_points, pass its ID here, and use price_point_ids to create one apple_subscription_price per territory:
+  Pick one base price point with apple_subscription_price_points, pass its ID here, and feed price_point_ids to an apple_subscription_price_schedule, which writes every territory in a single request:
   
-  resource "apple_subscription_price" "plan" {
-    for_each = data.apple_subscription_price_point_equalizations.base.price_point_ids
-  
+  resource "apple_subscription_price_schedule" "plan" {
     subscription_id = apple_subscription.pro_monthly.id
-    price_point_id  = each.value
-    territory_id    = each.key
+  
+    prices = [
+      for territory, price_point in data.apple_subscription_price_point_equalizations.base.price_point_ids : {
+        territory_id   = territory
+        price_point_id = price_point
+      }
+    ]
   
     depends_on = [apple_subscription_availability.pro_monthly]
   }
   
+  The same map also works as a for_each over apple_subscription_price, one resource per territory — but that is one POST /v1/subscriptionPrices per storefront on apply, and a listing of the subscription's whole price collection per storefront on refresh.
   The returned points belong to the same subscription the base point does. A price point ID encodes its subscription, so an equalization read from one subscription is no more reusable on another than the base point was — read this once per subscription.
   A subscription still cannot be priced in a territory it is not available in, and Apple's refusal names neither. Keep the depends_on above, and make sure apple_subscription_availability covers every territory this fans out to.
 ---
@@ -27,19 +31,24 @@ Reads the price point equivalent to one base price point in every other territor
 
 This is how a subscription gets priced everywhere it sells. `apple_subscription_price_points` answers *what may this subscription cost in these territories*, which leaves the caller to decide a price per storefront: there is no single `customer_price` to filter on, because `9.99` in the United States is neither `9.99` nor a round number anywhere else. Apple already holds that mapping — it is what App Store Connect's own price matrix is built from — and this data source reads it.
 
-Pick one base price point with `apple_subscription_price_points`, pass its ID here, and use `price_point_ids` to create one `apple_subscription_price` per territory:
+Pick one base price point with `apple_subscription_price_points`, pass its ID here, and feed `price_point_ids` to an `apple_subscription_price_schedule`, which writes every territory in a single request:
 
 ```terraform
-resource "apple_subscription_price" "plan" {
-  for_each = data.apple_subscription_price_point_equalizations.base.price_point_ids
-
+resource "apple_subscription_price_schedule" "plan" {
   subscription_id = apple_subscription.pro_monthly.id
-  price_point_id  = each.value
-  territory_id    = each.key
+
+  prices = [
+    for territory, price_point in data.apple_subscription_price_point_equalizations.base.price_point_ids : {
+      territory_id   = territory
+      price_point_id = price_point
+    }
+  ]
 
   depends_on = [apple_subscription_availability.pro_monthly]
 }
 ```
+
+The same map also works as a `for_each` over `apple_subscription_price`, one resource per territory — but that is one `POST /v1/subscriptionPrices` per storefront on apply, and a listing of the subscription's whole price collection per storefront on refresh.
 
 The returned points belong to the same subscription the base point does. A price point ID encodes its subscription, so an equalization read from one subscription is no more reusable on another than the base point was — read this once per subscription.
 
@@ -115,7 +124,7 @@ output "prices" {
 
 ### Read-Only
 
-- `price_point_ids` (Map of String) Territory code to price point ID, ready to be used as a `for_each` over `apple_subscription_price`. This is the same shape as `ids` on `apple_territories` and exists for the same reason: reaching these IDs through `price_points` means a `flatten` and a one-element index expression in every configuration that prices more than one storefront.
+- `price_point_ids` (Map of String) Territory code to price point ID, ready to be projected into the `prices` of an `apple_subscription_price_schedule` or used as a `for_each` over `apple_subscription_price`. This is the same shape as `ids` on `apple_territories` and exists for the same reason: reaching these IDs through `price_points` means a `flatten` and a one-element index expression in every configuration that prices more than one storefront.
 
 Whether Apple includes the base point's own territory here is Apple's call, so a configuration that must price the base territory too should `merge` the base price point in rather than assume.
 - `price_points` (Attributes List) The equalized price points, one per territory. Read these to see what Apple's equalization actually charges before applying it; `price_point_ids` is what a configuration normally consumes. (see [below for nested schema](#nestedatt--price_points))
@@ -127,7 +136,7 @@ Whether Apple includes the base point's own territory here is Apple's call, so a
 Read-Only:
 
 - `customer_price` (String) What the customer pays, in the territory's currency.
-- `id` (String) The price point ID, to be passed to `apple_subscription_price`.
+- `id` (String) The price point ID, to be passed to `apple_subscription_price_schedule` or `apple_subscription_price`.
 - `proceeds` (String) What the developer receives, in the territory's currency.
 - `proceeds_year_2` (String) What the developer receives from the second year onward, when Apple's reduced commission for long-term subscribers applies.
 - `territory_id` (String) The three-letter Apple territory code this price point belongs to.

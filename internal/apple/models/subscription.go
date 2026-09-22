@@ -369,6 +369,60 @@ type SubscriptionPriceCreateRelationships struct {
 	Territory              *ResourceIdentifier `json:"territory,omitempty"`
 }
 
+// SubscriptionPricesUpdateRequest sets a subscription's whole manual price set
+// in one request.
+//
+// Apple publishes no PATCH for subscriptionPrices and no bulk endpoint under
+// them, so the bulk write hangs off the subscription instead:
+// SubscriptionUpdateRequest carries a "prices" relationship alongside
+// introductoryOffers and promotionalOffers, and an "included" member that
+// accepts SubscriptionPriceInlineCreate. The prices do not exist yet, so each
+// travels inline under a placeholder ID of the form "${price0}" that the
+// relationship references, and Apple substitutes real IDs as it commits -- the
+// same JSON:API shape InAppPurchasePriceScheduleCreateRequest and
+// AppPriceScheduleCreateRequest use.
+//
+// This is a separate type from SubscriptionUpdateRequest rather than a field on
+// it, because that one sends a non-optional attributes member. An empty
+// "attributes":{} is what App Store Connect answers with 409 "An error occurred
+// while processing the pricing information" -- the same trap
+// CreateSubscriptionPrice guards against.
+type SubscriptionPricesUpdateRequest struct {
+	Data     SubscriptionPricesUpdateData    `json:"data"`
+	Included []SubscriptionPriceInlineCreate `json:"included,omitempty"`
+}
+
+type SubscriptionPricesUpdateData struct {
+	Type          string                                `json:"type"`
+	ID            string                                `json:"id"`
+	Relationships SubscriptionPricesUpdateRelationships `json:"relationships"`
+}
+
+type SubscriptionPricesUpdateRelationships struct {
+	Prices ResourceIdentifiers `json:"prices"`
+}
+
+// SubscriptionPriceInlineCreate is one price inside the "included" array.
+type SubscriptionPriceInlineCreate struct {
+	Type          string                                     `json:"type"`
+	ID            string                                     `json:"id"`
+	Attributes    *SubscriptionPriceCreateAttributes         `json:"attributes,omitempty"`
+	Relationships SubscriptionPriceInlineCreateRelationships `json:"relationships"`
+}
+
+// SubscriptionPriceInlineCreateRelationships names the price point and repeats
+// the subscription, which JSON:API requires of an inline resource even though
+// the enclosing request already identifies it.
+//
+// The territory is optional -- a price point ID encodes the territory it prices
+// -- but is sent for every price the equalization fan-out produces, because that
+// is the one case where naming it makes the request self-describing.
+type SubscriptionPriceInlineCreateRelationships struct {
+	Subscription           ResourceIdentifier  `json:"subscription"`
+	SubscriptionPricePoint ResourceIdentifier  `json:"subscriptionPricePoint"`
+	Territory              *ResourceIdentifier `json:"territory,omitempty"`
+}
+
 // --- Subscription price points ---
 
 // SubscriptionPricePoint is Apple's catalogue of permitted prices.

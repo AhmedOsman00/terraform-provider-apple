@@ -224,6 +224,7 @@ convention differs here.
 | `TestAccSubscriptionGroupLocalizationResource_requiresReplace` | Net zero | A group plus a group localization, replaced by one for a different locale (`en-US` → `en-GB`). | One localization appears, is destroyed and replaced by another under a second locale. |
 | `TestAccSubscriptionResource_basic` | Net zero | A group plus one subscription; renames it and changes its period from `ONE_MONTH` to `ONE_YEAR`; imports by bare ID. | A subscription appears inside the group showing *Missing Metadata*, its name and duration change, then both are deleted. |
 | `TestAccSubscriptionResource_completesMetadata` | Net zero | A group, a subscription, an `en-US` localization, a USA availability, and a USA price read from the price point catalogue. Imports all three children. | A subscription that leaves *Missing Metadata* once its name and price are set. All of it is then deleted. |
+| `TestAccSubscriptionPriceScheduleResource_basic` | Net zero | A group, a subscription, a USA+GBR availability, and a price schedule carrying a USA price plus the GBR point Apple equalizes from it — written in a single `PATCH`. Imports by the subscription ID, then adds a future-dated USA increase. | A subscription priced in two storefronts at once, then in three. All of it is then deleted. |
 | `TestAccSubscriptionResource_requiresReplace` | Net zero | A group plus a subscription, replaced by one with a different product ID. **Consumes two identifiers rather than one.** | One subscription appears, then is destroyed and replaced by another. |
 | `TestAccSubscriptionResource_validation` | Plan-only | Nothing. | No change. |
 | `TestAccAppsDataSource_basic` | Read-only | Nothing — apps cannot be created by the API. | No change. |
@@ -246,6 +247,18 @@ A price point ID encodes the subscription it belongs to, so one read from a
 different subscription is rejected. That is why
 `TestAccSubscriptionResource_completesMetadata` reads the catalogue through a
 data source in the same configuration rather than hardcoding an ID.
+
+`TestAccSubscriptionPriceScheduleResource_basic` is the bulk path and checks two
+things state alone cannot. `testAccCheckSubscriptionPriceCount` asks Apple how
+many prices the subscription actually carries, because a `PATCH` Apple accepted
+but committed partially is a failure mode the per-territory resource does not
+have. And its import step uses `ImportStateCheck` rather than
+`ImportStateVerify`: Apple reports a territory and a plan type on every price
+whether or not one was configured, so an imported set is richer than the one
+that was written and `ImportStateVerify` would read that as a mismatch. Its
+update step **adds** a price rather than removing one — removal runs into Apple's
+rule that only future price changes can be deleted, which a test cannot
+usefully assert against a price that went live the moment it was written.
 
 **A subscription cannot be priced before it is available.** Apple rejects
 `POST /v1/subscriptionPrices` with a 409 reading only "an error occurred while

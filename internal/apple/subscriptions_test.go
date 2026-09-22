@@ -483,3 +483,172 @@ func TestCreateSubscriptionGroupLocalizationOmitsUnsetCustomAppName(t *testing.T
 		t.Errorf("subscriptionGroup relationship = %v, want type subscriptionGroups id grp1", groupData)
 	}
 }
+
+// TestSetSubscriptionPricesRequestShape pins the bulk price write.
+//
+// This is the request that replaces one POST /v1/subscriptionPrices per
+// territory with a single call, and almost every part of it is load-bearing in
+// a way Apple's errors do not explain: the method and path are the
+// subscription's rather than the price collection's, the placeholder IDs in
+// "included" have to be the same strings the "prices" relationship references,
+// and an empty attributes member is answered with a 409 about "processing the
+// pricing information" that names neither the member nor the price.
+func TestSetSubscriptionPricesRequestShape(t *testing.T) {
+	var (
+		body   map[string]any
+		method string
+		path   string
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path = r.Method, r.URL.Path
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding request body: %s", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":{"type":"subscriptions","id":"sub-1","attributes":{}}}`)
+	}))
+	defer srv.Close()
+
+	startDate := "2027-01-01"
+	preserve := true
+	planType := models.SubscriptionPlanType("MONTHLY")
+
+	if _, err := newTestClient(srv).SetSubscriptionPrices("sub-1", []SubscriptionManualPrice{
+		{PricePointID: "point-usa", TerritoryID: "USA"},
+		{
+			PricePointID:         "point-gbr",
+			TerritoryID:          "GBR",
+			StartDate:            &startDate,
+			PreserveCurrentPrice: &preserve,
+			PlanType:             &planType,
+		},
+	}, nil); err != nil {
+		t.Fatalf("SetSubscriptionPrices: %s", err)
+	}
+
+	if method != "PATCH" {
+		t.Errorf("method = %q, want PATCH", method)
+	}
+	if path != "/v1/subscriptions/sub-1" {
+		t.Errorf("path = %q, want /v1/subscriptions/sub-1", path)
+	}
+
+	data, ok := body["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("request has no data member: %v", body)
+	}
+	if data["type"] != "subscriptions" || data["id"] != "sub-1" {
+		t.Errorf("data identifies %v/%v, want subscriptions/sub-1", data["type"], data["id"])
+	}
+
+	relationships, _ := data["relationships"].(map[string]any)
+	pricesRel, _ := relationships["prices"].(map[string]any)
+	linkage, ok := pricesRel["data"].([]any)
+	if !ok {
+		t.Fatalf("prices relationship is not a to-many linkage: %v", relationships["prices"])
+	}
+	if len(linkage) != 2 {
+		t.Fatalf("got %d linkages, want 2", len(linkage))
+	}
+
+	included, ok := body["included"].([]any)
+	if !ok || len(included) != 2 {
+		t.Fatalf("got %v included members, want 2", body["included"])
+	}
+
+	// Every linkage has to resolve to an included member, or Apple commits a
+	// relationship to a price that was never sent.
+	byID := make(map[string]map[string]any, len(included))
+	for _, member := range included {
+		entry, _ := member.(map[string]any)
+		if entry["type"] != "subscriptionPrices" {
+			t.Errorf("included member type = %v, want subscriptionPrices", entry["type"])
+		}
+		byID[fmt.Sprint(entry["id"])] = entry
+	}
+	for i, member := range linkage {
+		entry, _ := member.(map[string]any)
+		if entry["type"] != "subscriptionPrices" {
+			t.Errorf("linkage %d type = %v, want subscriptionPrices", i, entry["type"])
+		}
+		want := fmt.Sprintf("${price%d}", i)
+		if entry["id"] != want {
+			t.Errorf("linkage %d id = %v, want %q", i, entry["id"], want)
+		}
+		if _, ok := byID[want]; !ok {
+			t.Errorf("linkage %d references %q, which is not in included", i, want)
+		}
+	}
+
+	// A price with nothing set sends no attributes member at all.
+	first := byID["${price0}"]
+	if _, present := first["attributes"]; present {
+		t.Errorf("attributes member sent for a price with nothing set: %v", first["attributes"])
+	}
+	firstRels, _ := first["relationships"].(map[string]any)
+	for name, wantType := range map[string]string{
+		"subscription":           "subscriptions",
+		"subscriptionPricePoint": "subscriptionPricePoints",
+		"territory":              "territories",
+	} {
+		rel, ok := firstRels[name].(map[string]any)
+		if !ok {
+			t.Errorf("inline price is missing the %s relationship", name)
+			continue
+		}
+		relData, _ := rel["data"].(map[string]any)
+		if relData["type"] != wantType {
+			t.Errorf("%s type = %v, want %q", name, relData["type"], wantType)
+		}
+	}
+
+	// A price that sets something carries all of it.
+	second := byID["${price1}"]
+	attrs, ok := second["attributes"].(map[string]any)
+	if !ok {
+		t.Fatalf("attributes dropped for a price that sets them: %v", second)
+	}
+	if attrs["startDate"] != startDate {
+		t.Errorf("startDate = %v, want %q", attrs["startDate"], startDate)
+	}
+	if attrs["preserveCurrentPrice"] != true {
+		t.Errorf("preserveCurrentPrice = %v, want true", attrs["preserveCurrentPrice"])
+	}
+	if attrs["planType"] != "MONTHLY" {
+		t.Errorf("planType = %v, want MONTHLY", attrs["planType"])
+	}
+}
+
+// TestSetSubscriptionPricesOmitsUnsetTerritory checks that a price relying on
+// the territory its price point encodes sends no territory relationship, rather
+// than an empty one. ResourceIdentifier marshals an unset value as
+// {"type":"","id":""}, which Apple rejects.
+func TestSetSubscriptionPricesOmitsUnsetTerritory(t *testing.T) {
+	var body map[string]any
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding request body: %s", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":{"type":"subscriptions","id":"sub-1","attributes":{}}}`)
+	}))
+	defer srv.Close()
+
+	if _, err := newTestClient(srv).SetSubscriptionPrices("sub-1", []SubscriptionManualPrice{
+		{PricePointID: "point-usa"},
+	}, nil); err != nil {
+		t.Fatalf("SetSubscriptionPrices: %s", err)
+	}
+
+	included, _ := body["included"].([]any)
+	if len(included) != 1 {
+		t.Fatalf("got %d included members, want 1", len(included))
+	}
+	entry, _ := included[0].(map[string]any)
+	relationships, _ := entry["relationships"].(map[string]any)
+	if _, present := relationships["territory"]; present {
+		t.Errorf("territory relationship sent for a price that named none: %v", relationships["territory"])
+	}
+}

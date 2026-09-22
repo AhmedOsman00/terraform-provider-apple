@@ -80,6 +80,28 @@ type subscriptionPriceModel struct {
 	Preserved            types.Bool   `tfsdk:"preserved"`
 }
 
+// subscriptionPriceScheduleModel maps the bulk price schedule: every manual
+// price of one subscription, written in a single request.
+type subscriptionPriceScheduleModel struct {
+	ID             types.String                     `tfsdk:"id"`
+	SubscriptionID types.String                     `tfsdk:"subscription_id"`
+	Prices         []subscriptionSchedulePriceModel `tfsdk:"prices"`
+}
+
+// subscriptionSchedulePriceModel is one price inside that schedule.
+//
+// It carries no id and no "preserved": both are computed, and a computed
+// attribute inside a set makes the element itself unknown at plan time, which
+// leaves Terraform unable to match a planned element against the one in state.
+// The per-territory apple_subscription_price resource reports them instead.
+type subscriptionSchedulePriceModel struct {
+	PricePointID         types.String `tfsdk:"price_point_id"`
+	TerritoryID          types.String `tfsdk:"territory_id"`
+	StartDate            types.String `tfsdk:"start_date"`
+	PreserveCurrentPrice types.Bool   `tfsdk:"preserve_current_price"`
+	PlanType             types.String `tfsdk:"plan_type"`
+}
+
 // subscriptionPricePointModel maps one entry of Apple's price catalogue.
 type subscriptionPricePointModel struct {
 	ID            types.String `tfsdk:"id"`

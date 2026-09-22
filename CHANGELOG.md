@@ -1,3 +1,52 @@
+## Unreleased
+
+FEATURES:
+
+* **`apple_subscription_price_schedule`.** Prices an auto-renewable subscription
+  in every territory in a single request, instead of one resource and one
+  `POST /v1/subscriptionPrices` per storefront.
+
+  ```terraform
+  data "apple_subscription_price_point_equalizations" "annual" {
+    price_point_id = data.apple_subscription_price_points.base.price_points[0].id
+  }
+
+  resource "apple_subscription_price_schedule" "annual" {
+    subscription_id = apple_subscription.pro_annual.id
+
+    prices = [
+      for territory, price_point in data.apple_subscription_price_point_equalizations.annual.price_point_ids : {
+        territory_id   = territory
+        price_point_id = price_point
+      }
+    ]
+
+    depends_on = [apple_subscription_availability.pro_annual]
+  }
+  ```
+
+  **The bulk form is not on `subscriptionPrices`.** That endpoint really does
+  take one price point in one territory, which is why Apple's own guidance tells
+  callers to automate the loop. The bulk write hangs off the subscription
+  instead: `SubscriptionUpdateRequest` carries a `prices` relationship and an
+  `included` member accepting `SubscriptionPriceInlineCreate`, so the whole set
+  travels inline in one `PATCH /v1/subscriptions/{id}` — the same JSON:API shape
+  `apple_in_app_purchase_price_schedule` and `apple_app_price_schedule` already
+  used.
+
+  Fanning out across the App Store's 175 storefronts was previously 175
+  resources and 175 calls on apply, plus a refresh that listed the
+  subscription's whole price collection once *per resource*, because Apple
+  publishes no `GET` for a single price. It is now one call and one listing.
+
+  `apple_subscription_price` is unchanged and still right for a single territory
+  or a one-off scheduled change. Do not point both at the same subscription:
+  every write of the schedule replaces the subscription's manual price set.
+
+  The same prerequisites apply as before — an `apple_subscription_availability`
+  has to exist first, and Apple's refusal names neither it nor a territory — and
+  Apple additionally refuses the write while the subscription is in review.
+
 ## 0.3.0 (September 21, 2026)
 
 FEATURES:

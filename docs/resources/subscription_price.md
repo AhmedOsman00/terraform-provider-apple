@@ -6,6 +6,7 @@ description: |-
   Schedules a price for an auto-renewable subscription in one territory.
   A price is never expressed as a number. Apple publishes a catalogue of price points, each fixing a customer price and the developer proceeds for one territory, and a price references one of them — look one up with the apple_subscription_price_points data source. A subscription stays in MISSING_METADATA until it has at least one price.
   Every attribute forces replacement, because Apple publishes no PATCH for subscriptionPrices: changing a price means creating a new record and deleting the old one, which is exactly what Terraform does here.
+  ~> Use apple_subscription_price_schedule to price more than a handful of territories. This resource is one POST /v1/subscriptionPrices per territory, so a fan-out across the App Store's 175 storefronts is 175 resources and 175 API calls — plus a refresh that lists the subscription's whole price collection once per resource, because Apple publishes no GET for a single price. The schedule resource sends the same set in one request. Do not point both at the same subscription: every write of the schedule replaces the subscription's manual price set.
 ---
 
 # apple_subscription_price (Resource)
@@ -15,6 +16,8 @@ Schedules a price for an auto-renewable subscription in one territory.
 A price is never expressed as a number. Apple publishes a catalogue of price points, each fixing a customer price and the developer proceeds for one territory, and a price references one of them — look one up with the `apple_subscription_price_points` data source. A subscription stays in `MISSING_METADATA` until it has at least one price.
 
 Every attribute forces replacement, because Apple publishes no `PATCH` for `subscriptionPrices`: changing a price means creating a new record and deleting the old one, which is exactly what Terraform does here.
+
+~> **Use `apple_subscription_price_schedule` to price more than a handful of territories.** This resource is one `POST /v1/subscriptionPrices` per territory, so a fan-out across the App Store's 175 storefronts is 175 resources and 175 API calls — plus a refresh that lists the subscription's whole price collection once per resource, because Apple publishes no `GET` for a single price. The schedule resource sends the same set in one request. Do not point both at the same subscription: every write of the schedule replaces the subscription's manual price set.
 
 ## Example Usage
 

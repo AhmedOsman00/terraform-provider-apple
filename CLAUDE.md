@@ -44,7 +44,7 @@ cannot be used for this: it makes `terraform init` refuse to run.
 
 `tfplugindocs` builds `docs/` from provider/resource/data-source `MarkdownDescription` strings plus the matching files under `examples/`. CI (`.github/workflows/test.yml`) fails the `generate` job if `make generate` produces a diff, so regenerate and commit whenever a schema, example, or guide changes.
 
-`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All fifty-one pages are checked in: `index.md`, thirty under `resources/`, eighteen under `data-sources/`, and two under `guides/`.
+`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All fifty-two pages are checked in: `index.md`, thirty-one under `resources/`, eighteen under `data-sources/`, and two under `guides/`.
 
 Hand-written prose lives in `templates/`, which is the only part of the docs pipeline a human edits directly. `templates/guides/<name>.md.tmpl` renders to `docs/guides/<name>.md`; a `templates/` directory does not suppress the auto-generated resource and data-source pages, which are still built from the schemas into a temporary directory. Two guides exist: `getting-started` (credentials, installing the provider from the Registry and overriding it with a local build, first configuration, import IDs per resource) and `code-signing` (the `fastlane match` replacement, the state-vs-bundle distribution model, adopting a match certificate).
 
@@ -79,9 +79,10 @@ Each domain lives in its own package (`bundle`, `certificate`, `device`, `mercha
 
 `bundle` additionally carries `capability_*.go` for the `apple_bundle_id_capability` resource/data source, where `capability_models.go` holds `SettingsFromAPI`/`SettingsToAPI` and `OptionsFromAPI`/`OptionsToAPI` to convert nested capability settings between API structs and `types.List`.
 
-`subscription` carries six resources rather than one, so it prefixes by kind
+`subscription` carries seven resources rather than one, so it prefixes by kind
 the way `bundle` does: `group_*.go` (which covers both the group and its
-localization), `localization_*.go`, `price_*.go`, `availability_resource.go`,
+localization), `localization_*.go`, `price_resource.go`,
+`price_schedule_resource.go`, `availability_resource.go`,
 `price_point_data_source.go` and `price_point_equalizations_data_source.go`
 alongside the unprefixed `resource.go` / `data_source.go` for
 `apple_subscription` itself.
@@ -312,6 +313,52 @@ cross-variable validation.
 - **`apple_subscription_price`**: every attribute is `RequiresReplace` and `Update` exists only to report that it was reached, because Apple publishes no `PATCH /v1/subscriptionPrices` — a price change is a new record plus a deletion. There is also no `GET` for a single price, so `Read` lists the subscription's price collection and scans it, the same shape `apple_bundle_id_capability` is forced into; import is therefore composite. A price is never a number: `price_point_id` references Apple's catalogue, read through `apple_subscription_price_points`, and a price point ID encodes the subscription it belongs to, so it cannot be reused across subscriptions. `preserve_current_price` is an instruction Apple does not report back — only its outcome, through the computed `preserved` — so import leaves it null and `ImportStateVerifyIgnore` covers it.
   **A price requires an `apple_subscription_availability` to exist first**, and nothing about the failure says so: Apple answers `POST /v1/subscriptionPrices` with a 409 `There is a problem with the request entity - An error occurred while processing the pricing information`, naming neither availability nor the territory. That message cost a full afternoon of eliminating hypotheses — the price point, an empty `attributes` member, a missing `territory` relationship, and app-level pricing and availability were all ruled out by experiment before the subscription's own availability turned out to be the prerequisite. `Create` therefore special-cases the string `processing the pricing information` and names the missing availability in the diagnostic; do not fold that case back into the default branch. Nothing in a price references an availability, so a configuration has to declare `depends_on` to get the ordering — both the example and the acceptance test do.
   Two things follow from a price that actually exists, both of which only became reachable once availability unblocked creation. **`territory_id` is `Optional+Computed`, not merely Optional:** Apple reports the territory of every price whether or not one was sent, so a plain Optional attribute had `Read` writing `USA` into state against a configuration holding null — and because the attribute is `RequiresReplace`, the next plan destroyed the price to remove it. Making it computed then exposed the other half: Apple omits the territory from the create response — only a read carries one, since the read asks for `include=territory` and a `POST` takes no `include` — so `Create` re-reads the price to resolve the unknown, and falls back to null rather than leaving an unknown the framework would reject. **`Delete` tolerates Apple's 409 `Only future price changes can be deleted`:** a live price is not a record that can be withdrawn, it is what the subscription currently costs, and the only way past it is a later price that supersedes it. Warn and drop state, the way `apple_device` does; deleting the subscription removes its prices anyway.
+- **`apple_subscription_price_schedule`**: the bulk counterpart to
+  `apple_subscription_price`, and the resource the equalization fan-out is
+  actually for. `POST /v1/subscriptionPrices` takes one price point in one
+  territory, so pricing all 175 storefronts through the singular resource is 175
+  resources and 175 requests on apply — and, because Apple publishes no `GET`
+  for a single price, a refresh that lists the subscription's whole price
+  collection once *per resource*. Apple's own forum guidance says to automate
+  the loop, which is why it reads as though no bulk form exists. **It does, and
+  it is not on `subscriptionPrices`:** `SubscriptionUpdateRequest` carries a
+  `prices` relationship (alongside `introductoryOffers` and
+  `promotionalOffers`) and an `included` member accepting
+  `SubscriptionPriceInlineCreate`, so the write is one
+  `PATCH /v1/subscriptions/{id}` with each price inline under a `${price0}`
+  placeholder — the same JSON:API shape
+  `apple_in_app_purchase_price_schedule` and `apple_app_price_schedule` use.
+  Five things follow:
+  - It is a **separate request type** from `SubscriptionUpdateRequest`, not a
+    field on it, because that one sends a non-optional `attributes` member. An
+    empty `"attributes":{}` is what Apple answers with the 409 about
+    "processing the pricing information" — the same trap
+    `CreateSubscriptionPrice` guards against, now factored into
+    `priceAttributesOrNil`.
+  - There is **no schedule record at Apple**. Unlike an in-app purchase, a
+    subscription has no `iapPriceSchedule` equivalent: the prices are the
+    subscription's. So `id` mirrors `subscription_id`, the import ID is the
+    subscription ID, and none of the `ModifyPlan`-marks-`id`-unknown machinery
+    the other two price schedules need applies here.
+  - The nested price carries **no computed attributes** — no per-price `id`, no
+    `preserved`. A computed attribute inside a set makes the element unknown at
+    plan time, which leaves Terraform unable to match a planned element against
+    the one in state. `territory_id` is therefore plain `Optional` here, where
+    on `apple_subscription_price` it had to become `Optional+Computed`; the
+    same problem is solved by `reconcileSchedulePrices` not refreshing a price
+    already in state, the way `apple_in_app_purchase_price_schedule` keeps
+    configured dates.
+  - A write **replaces the subscription's manual price set**, so do not point
+    this and `apple_subscription_price` at the same subscription — a price only
+    the other resource knows about would come off behind its back. Removal is
+    still subject to Apple's rule that only future price changes can be
+    deleted.
+  - The same prerequisites as the singular resource: an
+    `apple_subscription_availability` has to exist first and the 409 names
+    neither it nor a territory, so the `processing the pricing information`
+    special case is carried over. Apple additionally refuses the write while
+    the subscription is in review.
+
 - **`apple_subscription_price_point_equalizations`**: the data source that makes
   pricing every territory possible, and the reason `apple_subscription_price_points`
   alone is not enough. The catalogue read answers *what may this subscription
@@ -560,7 +607,7 @@ Two tiers:
 - **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`.
 - **Acceptance** (`internal/provider/*_test.go`, package `provider`): `terraform-plugin-testing` against the real API. `testAccPreCheck` skips when credentials are absent.
 
-All thirty resources now have acceptance coverage. `internal/provider/app/schema_test.go` and `internal/provider/beta/schema_test.go` are a second, cheaper net under the app listing and TestFlight resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
+All thirty-one resources now have acceptance coverage. `internal/provider/app/schema_test.go` and `internal/provider/beta/schema_test.go` are a second, cheaper net under the app listing and TestFlight resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
 
 Two things constrain what the acceptance tier is allowed to do:
 

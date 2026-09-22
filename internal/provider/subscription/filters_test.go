@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func state(s models.SubscriptionState) *models.SubscriptionState { return &s }
@@ -423,5 +425,123 @@ func TestPricePointIDsByTerritory(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// reportedPrice builds one price as Apple returns it from
+// GET /v1/subscriptions/{id}/prices with include=territory,subscriptionPricePoint.
+func reportedPrice(id, pointID, territory string, startDate *string, planType *models.SubscriptionPlanType) models.SubscriptionPrice {
+	return models.SubscriptionPrice{
+		Type: "subscriptionPrices",
+		ID:   id,
+		Attributes: models.SubscriptionPriceAttributes{
+			StartDate: startDate,
+			PlanType:  planType,
+		},
+		Relationships: &models.SubscriptionPriceRelationships{
+			Territory: &models.ResourceIdentifier{
+				Data: models.ResourceData{Type: "territories", ID: territory},
+			},
+			SubscriptionPricePoint: &models.ResourceIdentifier{
+				Data: models.ResourceData{Type: "subscriptionPricePoints", ID: pointID},
+			},
+		},
+	}
+}
+
+// TestReconcileSchedulePricesKeepsConfiguredValues covers the reason this
+// function exists: Apple reports a territory and a plan type on every price
+// whether or not one was sent, so adopting what it returns would show as a
+// permanent diff against a configuration that set neither.
+func TestReconcileSchedulePricesKeepsConfiguredValues(t *testing.T) {
+	configured := []subscriptionSchedulePriceModel{
+		{PricePointID: types.StringValue("point-usa")},
+	}
+
+	monthly := models.SubscriptionPlanType("MONTHLY")
+	reconciled := reconcileSchedulePrices(configured, []models.SubscriptionPrice{
+		reportedPrice("price-1", "point-usa", "USA", nil, &monthly),
+	})
+
+	if len(reconciled) != 1 {
+		t.Fatalf("got %d prices, want 1", len(reconciled))
+	}
+	if !reconciled[0].TerritoryID.IsNull() {
+		t.Errorf("territory_id = %v, want null: the configuration named none", reconciled[0].TerritoryID)
+	}
+	if !reconciled[0].PlanType.IsNull() {
+		t.Errorf("plan_type = %v, want null: the configuration named none", reconciled[0].PlanType)
+	}
+}
+
+// TestReconcileSchedulePricesDropsPricesAppleNoLongerReports checks that a
+// price deleted outside Terraform surfaces as drift rather than persisting.
+func TestReconcileSchedulePricesDropsPricesAppleNoLongerReports(t *testing.T) {
+	configured := []subscriptionSchedulePriceModel{
+		{PricePointID: types.StringValue("point-usa")},
+		{PricePointID: types.StringValue("point-gbr")},
+	}
+
+	reconciled := reconcileSchedulePrices(configured, []models.SubscriptionPrice{
+		reportedPrice("price-1", "point-usa", "USA", nil, nil),
+	})
+
+	if len(reconciled) != 1 {
+		t.Fatalf("got %d prices, want 1", len(reconciled))
+	}
+	if got := reconciled[0].PricePointID.ValueString(); got != "point-usa" {
+		t.Errorf("surviving price point = %q, want point-usa", got)
+	}
+}
+
+// TestReconcileSchedulePricesAdoptsUnknownPrices checks that a price added in
+// App Store Connect appears with Apple's own values, so it shows up as drift
+// instead of being silently discarded on the next plan.
+func TestReconcileSchedulePricesAdoptsUnknownPrices(t *testing.T) {
+	startDate := "2027-01-01"
+	upfront := models.SubscriptionPlanType("UPFRONT")
+
+	reconciled := reconcileSchedulePrices(nil, []models.SubscriptionPrice{
+		reportedPrice("price-2", "point-gbr", "GBR", &startDate, &upfront),
+	})
+
+	if len(reconciled) != 1 {
+		t.Fatalf("got %d prices, want 1", len(reconciled))
+	}
+	adopted := reconciled[0]
+	if got := adopted.PricePointID.ValueString(); got != "point-gbr" {
+		t.Errorf("price_point_id = %q, want point-gbr", got)
+	}
+	if got := adopted.TerritoryID.ValueString(); got != "GBR" {
+		t.Errorf("territory_id = %q, want GBR", got)
+	}
+	if got := adopted.StartDate.ValueString(); got != startDate {
+		t.Errorf("start_date = %q, want %q", got, startDate)
+	}
+	if got := adopted.PlanType.ValueString(); got != "UPFRONT" {
+		t.Errorf("plan_type = %q, want UPFRONT", got)
+	}
+	// preserveCurrentPrice is an instruction Apple never reports back.
+	if !adopted.PreserveCurrentPrice.IsNull() {
+		t.Errorf("preserve_current_price = %v, want null", adopted.PreserveCurrentPrice)
+	}
+}
+
+// TestReconcileSchedulePricesSkipsPricesWithoutAPricePoint checks the read that
+// forgot include=subscriptionPricePoint: a price whose point is unknown cannot
+// be matched against configuration, and must not be keyed under the empty
+// string.
+func TestReconcileSchedulePricesSkipsPricesWithoutAPricePoint(t *testing.T) {
+	reconciled := reconcileSchedulePrices(nil, []models.SubscriptionPrice{
+		{Type: "subscriptionPrices", ID: "price-3"},
+		{
+			Type:          "subscriptionPrices",
+			ID:            "price-4",
+			Relationships: &models.SubscriptionPriceRelationships{},
+		},
+	})
+
+	if len(reconciled) != 0 {
+		t.Fatalf("got %d prices, want 0: neither reported a price point", len(reconciled))
 	}
 }

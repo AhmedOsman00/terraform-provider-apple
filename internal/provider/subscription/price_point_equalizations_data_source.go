@@ -43,19 +43,26 @@ func (d *subscriptionPricePointEqualizationsDataSource) Schema(_ context.Context
 			"`9.99` in the United States is neither `9.99` nor a round number anywhere else. Apple already " +
 			"holds that mapping — it is what App Store Connect's own price matrix is built from — and this " +
 			"data source reads it.\n\n" +
-			"Pick one base price point with `apple_subscription_price_points`, pass its ID here, and use " +
-			"`price_point_ids` to create one `apple_subscription_price` per territory:\n\n" +
+			"Pick one base price point with `apple_subscription_price_points`, pass its ID here, and feed " +
+			"`price_point_ids` to an `apple_subscription_price_schedule`, which writes every territory in " +
+			"a single request:\n\n" +
 			"```terraform\n" +
-			"resource \"apple_subscription_price\" \"plan\" {\n" +
-			"  for_each = data.apple_subscription_price_point_equalizations.base.price_point_ids\n" +
-			"\n" +
+			"resource \"apple_subscription_price_schedule\" \"plan\" {\n" +
 			"  subscription_id = apple_subscription.pro_monthly.id\n" +
-			"  price_point_id  = each.value\n" +
-			"  territory_id    = each.key\n" +
+			"\n" +
+			"  prices = [\n" +
+			"    for territory, price_point in data.apple_subscription_price_point_equalizations.base.price_point_ids : {\n" +
+			"      territory_id   = territory\n" +
+			"      price_point_id = price_point\n" +
+			"    }\n" +
+			"  ]\n" +
 			"\n" +
 			"  depends_on = [apple_subscription_availability.pro_monthly]\n" +
 			"}\n" +
 			"```\n\n" +
+			"The same map also works as a `for_each` over `apple_subscription_price`, one resource per " +
+			"territory — but that is one `POST /v1/subscriptionPrices` per storefront on apply, and a " +
+			"listing of the subscription's whole price collection per storefront on refresh.\n\n" +
 			"The returned points belong to the same subscription the base point does. A price point ID " +
 			"encodes its subscription, so an equalization read from one subscription is no more reusable " +
 			"on another than the base point was — read this once per subscription.\n\n" +
@@ -81,8 +88,9 @@ func (d *subscriptionPricePointEqualizationsDataSource) Schema(_ context.Context
 				ElementType: types.StringType,
 			},
 			"price_point_ids": schema.MapAttribute{
-				MarkdownDescription: "Territory code to price point ID, ready to be used as a `for_each` " +
-					"over `apple_subscription_price`. This is the same shape as `ids` on " +
+				MarkdownDescription: "Territory code to price point ID, ready to be projected into the " +
+					"`prices` of an `apple_subscription_price_schedule` or used as a `for_each` over " +
+					"`apple_subscription_price`. This is the same shape as `ids` on " +
 					"`apple_territories` and exists for the same reason: reaching these IDs through " +
 					"`price_points` means a `flatten` and a one-element index expression in every " +
 					"configuration that prices more than one storefront.\n\n" +
@@ -100,8 +108,9 @@ func (d *subscriptionPricePointEqualizationsDataSource) Schema(_ context.Context
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
-							MarkdownDescription: "The price point ID, to be passed to `apple_subscription_price`.",
-							Computed:            true,
+							MarkdownDescription: "The price point ID, to be passed to " +
+								"`apple_subscription_price_schedule` or `apple_subscription_price`.",
+							Computed: true,
 						},
 						"customer_price": schema.StringAttribute{
 							MarkdownDescription: "What the customer pays, in the territory's currency.",
