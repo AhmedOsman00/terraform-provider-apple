@@ -2,6 +2,49 @@
 
 FEATURES:
 
+* **`apple_beta_tester`.** Puts a tester in a TestFlight group — the membership
+  0.3.0 said was not modelled yet, and the last thing an `apple_beta_group`
+  needed before it distributed anything.
+
+  ```terraform
+  resource "apple_beta_tester" "early_access" {
+    for_each = toset(["ada@example.com", "grace@example.com"])
+
+    group_id = apple_beta_group.early_access.id
+    email    = each.value
+  }
+  ```
+
+  !> **Applying this sends a real TestFlight invitation** to every address it
+  names. Point it only at people you are entitled to invite.
+
+  **A tester record is the account's, not the group's.** Apple holds one record
+  per email address across every app and group, so putting the same person in
+  three groups is three resources carrying the same `id`, and whichever applies
+  first is the one that creates the record — the others link it. Nothing
+  connects those resources, so Terraform applies them at once; the provider
+  retries a create Apple refuses as a duplicate as the link it would have made a
+  moment later, which is what saves every such configuration a `depends_on`.
+
+  **Destroying one removes the membership, not the person.** Apple's
+  `DELETE /v1/betaTesters/{id}` would take the tester out of every app in the
+  account, so the provider withdraws the group linkage instead and leaves the
+  record, and every other group, alone.
+
+  Apple publishes no update for a beta tester, so every attribute forces
+  replacement. `first_name` and `last_name` are sent only when the provider
+  creates the record: point one at an address your account already holds and the
+  provider warns that Apple kept the name it has, rather than writing a name
+  into state that Apple never applied.
+
+  Import is `<group_id>/<email>`, with no bare-ID form — a tester's Apple ID
+  names the person rather than the membership, and the same ID belongs to every
+  group that person is in.
+
+  Assigning individual builds to a group is still not modelled;
+  `has_access_to_all_builds` on `apple_beta_group` remains the way to give one
+  every build.
+
 * **`apple_subscription_price_schedule`.** Prices an auto-renewable subscription
   in every territory in a single request, instead of one resource and one
   `POST /v1/subscriptionPrices` per storefront.

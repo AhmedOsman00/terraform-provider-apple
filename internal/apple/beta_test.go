@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
@@ -178,5 +179,188 @@ func TestGetBetaBuildLocalizationByLocaleMatchesExactly(t *testing.T) {
 
 	if _, err := newTestClient(srv).GetBetaBuildLocalizationByLocale("b1", "ar-SA"); err == nil {
 		t.Error("expected an error for a locale the build has no note in")
+	}
+}
+
+// TestCreateBetaTesterSendsGroupRelationship covers the create request shape.
+//
+// The group relationship is what makes a tester reach an app and what makes
+// Apple send the invitation; a body that lost it would create a tester attached
+// to nothing and report success.
+func TestCreateBetaTesterSendsGroupRelationship(t *testing.T) {
+	var gotBody []byte
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":{"type":"betaTesters","id":"t1","attributes":{
+			"email":"tester@example.com","firstName":"Ada","inviteType":"EMAIL"}}}`)
+	}))
+	defer srv.Close()
+
+	first := "Ada"
+	tester, err := newTestClient(srv).CreateBetaTester("g1", models.BetaTesterCreateAttributes{
+		Email:     "tester@example.com",
+		FirstName: &first,
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var sent models.Request[models.BetaTesterCreateRequest]
+	if err := json.Unmarshal(gotBody, &sent); err != nil {
+		t.Fatalf("request body is not the expected shape: %v", err)
+	}
+
+	if sent.Data.Type != "betaTesters" {
+		t.Errorf("type = %q, want betaTesters", sent.Data.Type)
+	}
+	if sent.Data.Attributes.Email != "tester@example.com" {
+		t.Errorf("email = %q, want tester@example.com", sent.Data.Attributes.Email)
+	}
+	if sent.Data.Attributes.LastName != nil {
+		t.Errorf("lastName = %v, want it omitted", *sent.Data.Attributes.LastName)
+	}
+	if groups := sent.Data.Relationships.BetaGroups.Data; len(groups) != 1 ||
+		groups[0].Type != "betaGroups" || groups[0].ID != "g1" {
+		t.Errorf("betaGroups relationship = %+v, want the one group g1", groups)
+	}
+
+	if tester.ID != "t1" {
+		t.Errorf("tester ID = %q, want t1", tester.ID)
+	}
+	if tester.Attributes.InviteType == nil || *tester.Attributes.InviteType != "EMAIL" {
+		t.Error("inviteType was not decoded from the response")
+	}
+}
+
+// TestBetaTesterLinkageUsesTheGroupRelationship covers adding and removing a
+// membership.
+//
+// Both go to the group's relationships endpoint with the same body and differ
+// only by method: a DELETE sent to /v1/betaTesters/{id} instead would remove the
+// person from every app in the account.
+func TestBetaTesterLinkageUsesTheGroupRelationship(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		call   func(*Client) error
+		method string
+	}{
+		{
+			name:   "add",
+			call:   func(c *Client) error { return c.AddBetaTesterToGroup("g1", "t1", nil) },
+			method: "POST",
+		},
+		{
+			name:   "remove",
+			call:   func(c *Client) error { return c.RemoveBetaTesterFromGroup("g1", "t1", nil) },
+			method: "DELETE",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var (
+				gotMethod string
+				gotPath   string
+				gotBody   []byte
+			)
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotMethod, gotPath = r.Method, r.URL.Path
+				gotBody, _ = io.ReadAll(r.Body)
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			defer srv.Close()
+
+			if err := testCase.call(newTestClient(srv)); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if gotMethod != testCase.method {
+				t.Errorf("method = %q, want %q", gotMethod, testCase.method)
+			}
+			if want := "/v1/betaGroups/g1/relationships/betaTesters"; gotPath != want {
+				t.Errorf("path = %q, want %q", gotPath, want)
+			}
+
+			var sent models.BetaTesterLinkageRequest
+			if err := json.Unmarshal(gotBody, &sent); err != nil {
+				t.Fatalf("request body is not the expected shape: %v", err)
+			}
+			if len(sent.Data) != 1 || sent.Data[0].Type != "betaTesters" || sent.Data[0].ID != "t1" {
+				t.Errorf("body data = %+v, want the one tester t1", sent.Data)
+			}
+		})
+	}
+}
+
+// TestGetBetaGroupTesterByEmailAsksTheGroupsCollection pins the membership
+// lookup.
+//
+// The question is membership rather than existence, so the collection asked has
+// to be the group's own -- a tester who exists in the account and is not in this
+// group must come back as not found. filter[email] narrows the request where
+// Apple honours it, and the match is made again in memory so that a filter Apple
+// ignores costs pages rather than correctness.
+func TestGetBetaGroupTesterByEmailAsksTheGroupsCollection(t *testing.T) {
+	var (
+		gotPath  string
+		gotQuery string
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotQuery = r.URL.Path, r.URL.Query().Get("filter[email]")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[
+			{"type":"betaTesters","id":"t1","attributes":{"email":"someone@example.com"}},
+			{"type":"betaTesters","id":"t2","attributes":{"email":"Tester@Example.com"}}]}`)
+	}))
+	defer srv.Close()
+
+	// Apple preserves the case an address was created with and matches without
+	// it, so the scan does too.
+	tester, err := newTestClient(srv).GetBetaGroupTesterByEmail("g1", "tester@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tester.ID != "t2" {
+		t.Errorf("tester ID = %q, want t2", tester.ID)
+	}
+
+	if want := "/v1/betaGroups/g1/betaTesters"; gotPath != want {
+		t.Errorf("path = %q, want %q", gotPath, want)
+	}
+	if gotQuery != "tester@example.com" {
+		t.Errorf("filter[email] = %q, want tester@example.com", gotQuery)
+	}
+
+	_, err = newTestClient(srv).GetBetaGroupTesterByEmail("g1", "nobody@example.com")
+	if err == nil {
+		t.Fatal("expected an error for an address the group does not hold")
+	}
+	// The resource reads this as "removed from the group" rather than as a
+	// failure, which it recognises by the words.
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("error = %q, want it to report not found", err.Error())
+	}
+}
+
+// TestGetBetaTesterByEmailReportsAMissAsNotFound pins the account-wide lookup
+// that decides whether a tester is created or merely added to a group.
+func TestGetBetaTesterByEmailReportsAMissAsNotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/betaTesters" {
+			t.Errorf("path = %q, want /v1/betaTesters", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[]}`)
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(srv).GetBetaTesterByEmail("tester@example.com")
+	if err == nil {
+		t.Fatal("expected an error for an address the account does not hold")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("error = %q, want it to report not found", err.Error())
 	}
 }

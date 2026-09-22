@@ -32,6 +32,12 @@ import (
 //   - apple_beta_build_localization needs a build that has already been
 //     uploaded, so it skips behind testAccPreCheckBuild like the build
 //     attachment test does.
+//   - apple_beta_tester puts a real person in a real group, which sends a real
+//     TestFlight invitation -- so it skips unless APPLE_TEST_BETA_TESTER_EMAIL
+//     names an address the runner is entitled to invite. Destroy removes the
+//     membership, not the tester record: that stays in the account's tester
+//     list afterwards, because Apple's delete would remove the person from
+//     every app in the account.
 //   - apple_beta_app_review_detail adopts a record Apple created with the app.
 //     There is nothing to delete, so testAccCheckAppStillExists is the only
 //     honest CheckDestroy and the contact details stay on the app afterwards.
@@ -183,6 +189,105 @@ resource "apple_beta_group" "invalid" {
   public_link_enabled = true
 }
 `, testAccAppID(), name)
+}
+
+// --- apple_beta_tester --------------------------------------------------------
+
+// testAccBetaTesterEmailEnvVar names the address these tests invite.
+//
+// There is no safe default. Creating a membership makes Apple email the
+// address a TestFlight invitation, so an address the runner does not control is
+// a stranger receiving mail from somebody else's test -- credentials and a test
+// app are deliberately not enough, the way the app pricing tests are guarded
+// past them too.
+const testAccBetaTesterEmailEnvVar = "APPLE_TEST_BETA_TESTER_EMAIL"
+
+func testAccBetaTesterEmail() string {
+	return os.Getenv(testAccBetaTesterEmailEnvVar)
+}
+
+func testAccPreCheckBetaTester(t *testing.T) {
+	t.Helper()
+	testAccPreCheckSubscription(t)
+
+	if testAccBetaTesterEmail() == "" {
+		t.Skipf("skipping beta tester acceptance test: set %s to an email address you are entitled to "+
+			"invite. Applying this test sends that address a real TestFlight invitation, and the tester "+
+			"record it creates stays in the App Store Connect account afterwards.",
+			testAccBetaTesterEmailEnvVar)
+	}
+}
+
+// TestAccBetaTesterResource_basic covers the whole membership lifecycle.
+//
+// The group is external: an internal one would need the address to belong to a
+// user of the team running the test, which nothing can arrange from here.
+func TestAccBetaTesterResource_basic(t *testing.T) {
+	name := testAccBetaGroupName("Terraform Testers")
+	email := testAccBetaTesterEmail()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckBetaTester(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckDestroyAll(testAccCheckBetaTesterDestroy, testAccCheckBetaGroupDestroy),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBetaTesterConfig(name, email),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckBetaTesterExists("apple_beta_tester.test"),
+					resource.TestCheckResourceAttr("apple_beta_tester.test", "email", email),
+					resource.TestCheckResourceAttrPair(
+						"apple_beta_tester.test", "group_id", "apple_beta_group.testers", "id"),
+					resource.TestCheckResourceAttrSet("apple_beta_tester.test", "id"),
+					resource.TestCheckResourceAttrSet("apple_beta_tester.test", "invite_type"),
+				),
+			},
+			// Membership imports as "<group_id>/<email>" and has no bare-ID
+			// form: an Apple tester ID names the person, and the same ID
+			// belongs to every group they are in.
+			//
+			// first_name and last_name are ignored on verify because they are
+			// write-once inputs -- Apple reports them, but an import that
+			// adopted them would plan a replacement it could not apply.
+			{
+				ResourceName:            "apple_beta_tester.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateIdFunc:       testAccBetaTesterImportID("apple_beta_tester.test"),
+				ImportStateVerifyIgnore: []string{"first_name", "last_name"},
+			},
+		},
+	})
+}
+
+func testAccBetaTesterConfig(groupName, email string) string {
+	return fmt.Sprintf(`
+resource "apple_beta_group" "testers" {
+  app_id            = %[1]q
+  name              = %[2]q
+  is_internal_group = false
+}
+
+resource "apple_beta_tester" "test" {
+  group_id   = apple_beta_group.testers.id
+  email      = %[3]q
+  first_name = "Terraform"
+  last_name  = "Acceptance"
+}
+`, testAccAppID(), groupName, email)
+}
+
+// testAccBetaTesterImportID builds the composite ID from the applied state,
+// since the group's Apple ID is not known until the group exists.
+func testAccBetaTesterImportID(name string) resource.ImportStateIdFunc {
+	return func(state *terraform.State) (string, error) {
+		rs, ok := state.RootModule().Resources[name]
+		if !ok {
+			return "", fmt.Errorf("resource %s not found in state", name)
+		}
+
+		return fmt.Sprintf("%s/%s", rs.Primary.Attributes["group_id"], rs.Primary.Attributes["email"]), nil
+	}
 }
 
 // --- apple_beta_app_localization ----------------------------------------------
@@ -462,6 +567,64 @@ func testAccCheckBetaBuildLocalizationDestroy(state *terraform.State) error {
 		if _, err := client.GetBetaBuildLocalizationByLocale(buildID, testAccBetaLocale); err == nil {
 			return fmt.Errorf("beta build localization for %s still exists on build %s after destroy",
 				testAccBetaLocale, buildID)
+		}
+	}
+
+	return nil
+}
+
+// testAccCheckBetaTesterExists asks Apple whether the group actually holds the
+// tester, which is the only thing state cannot answer: the ID in state is the
+// tester record's and exists whether or not the membership does.
+func testAccCheckBetaTesterExists(name string) resource.TestCheckFunc {
+	return func(state *terraform.State) error {
+		rs, ok := state.RootModule().Resources[name]
+		if !ok {
+			return fmt.Errorf("resource %s not found in state", name)
+		}
+
+		client, err := testAccAPIClient()
+		if err != nil {
+			return err
+		}
+
+		groupID := rs.Primary.Attributes["group_id"]
+		email := rs.Primary.Attributes["email"]
+
+		tester, err := client.GetBetaGroupTesterByEmail(groupID, email)
+		if err != nil {
+			return fmt.Errorf("beta tester %s not in beta group %s at Apple: %w", email, groupID, err)
+		}
+
+		if tester.ID != rs.Primary.ID {
+			return fmt.Errorf("beta tester %s has ID %s at Apple, %s in state", email, tester.ID, rs.Primary.ID)
+		}
+
+		return nil
+	}
+}
+
+// testAccCheckBetaTesterDestroy asserts the membership is gone.
+//
+// Not the tester record, which this provider never deletes: Apple's delete
+// removes the person from every app in the account, so the record stays behind
+// and only the group membership is withdrawn.
+func testAccCheckBetaTesterDestroy(state *terraform.State) error {
+	client, err := testAccAPIClient()
+	if err != nil {
+		return err
+	}
+
+	for _, rs := range state.RootModule().Resources {
+		if rs.Type != "apple_beta_tester" {
+			continue
+		}
+
+		groupID := rs.Primary.Attributes["group_id"]
+		email := rs.Primary.Attributes["email"]
+
+		if _, err := client.GetBetaGroupTesterByEmail(groupID, email); err == nil {
+			return fmt.Errorf("beta tester %s is still in beta group %s after destroy", email, groupID)
 		}
 	}
 

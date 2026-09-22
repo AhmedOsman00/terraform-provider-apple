@@ -56,9 +56,9 @@ func (r *betaGroupResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"has approved one. Only an external group can be opened to a public link.\n\n" +
 			"Because the two are not the same thing, the public-link attributes are rejected on an " +
 			"internal group rather than quietly ignored.\n\n" +
-			"~> **This resource does not manage membership.** Adding testers and assigning builds to a " +
-			"group are separate operations and are not modelled yet; a group created here starts empty. " +
-			"Set `has_access_to_all_builds` to let it see every build automatically.",
+			"~> **A group created here starts empty.** Put testers in it with `apple_beta_tester`, one " +
+			"resource per person. Assigning individual builds to a group is still not modelled — set " +
+			"`has_access_to_all_builds` to let it see every build automatically.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -103,7 +103,8 @@ func (r *betaGroupResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 					"than only the builds assigned to it. Absent from Apple's update request, so changing " +
 					"it replaces the group.\n\n" +
 					"Since this provider does not assign builds to groups, a group without this sees " +
-					"nothing until a build is assigned to it by hand or by another tool.",
+					"nothing until a build is assigned to it by hand or by another tool — its testers " +
+					"included.",
 				Optional: true,
 				Computed: true,
 				PlanModifiers: []planmodifier.Bool{

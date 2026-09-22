@@ -326,6 +326,7 @@ func (p *appleProvider) Resources(_ context.Context) []func() resource.Resource 
 		app.NewAppPriceScheduleResource,
 		app.NewAppAvailabilityResource,
 		beta.NewBetaGroupResource,
+		beta.NewBetaTesterResource,
 		beta.NewBetaAppLocalizationResource,
 		beta.NewBetaBuildLocalizationResource,
 		beta.NewBetaAppReviewDetailResource,

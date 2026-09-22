@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Terraform provider (`terraform-provider-apple`, module `github.com/AhmedOsman00/terraform-provider-apple`) for Apple App Store Connect, built on the **Terraform Plugin Framework** (not SDK v2). It is published on the Terraform Registry as `ahmedosman00/apple`. It manages Bundle IDs, Bundle ID capabilities, certificates, devices, merchant IDs, Pass Type IDs, and provisioning profiles, plus auto-renewable subscriptions (groups, group localizations, subscriptions, localizations, prices, availability) and one-time in-app purchases (purchases, localizations, price schedules, availability), plus a read-only `apple_territories` listing of the App Store's storefronts. It also manages an app's own App Store listing: content rights, categories, age rating, the localized name and product page, the release record, App Review information, the price and the storefronts it sells in. TestFlight is covered too: tester groups, the app's TestFlight page text, a build's "What to Test" note, and what the beta reviewers are told.
+A Terraform provider (`terraform-provider-apple`, module `github.com/AhmedOsman00/terraform-provider-apple`) for Apple App Store Connect, built on the **Terraform Plugin Framework** (not SDK v2). It is published on the Terraform Registry as `ahmedosman00/apple`. It manages Bundle IDs, Bundle ID capabilities, certificates, devices, merchant IDs, Pass Type IDs, and provisioning profiles, plus auto-renewable subscriptions (groups, group localizations, subscriptions, localizations, prices, availability) and one-time in-app purchases (purchases, localizations, price schedules, availability), plus a read-only `apple_territories` listing of the App Store's storefronts. It also manages an app's own App Store listing: content rights, categories, age rating, the localized name and product page, the release record, App Review information, the price and the storefronts it sells in. TestFlight is covered too: tester groups, who is in them, the app's TestFlight page text, a build's "What to Test" note, and what the beta reviewers are told.
 
 ## Commands
 
@@ -44,7 +44,7 @@ cannot be used for this: it makes `terraform init` refuse to run.
 
 `tfplugindocs` builds `docs/` from provider/resource/data-source `MarkdownDescription` strings plus the matching files under `examples/`. CI (`.github/workflows/test.yml`) fails the `generate` job if `make generate` produces a diff, so regenerate and commit whenever a schema, example, or guide changes.
 
-`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All fifty-two pages are checked in: `index.md`, thirty-one under `resources/`, eighteen under `data-sources/`, and two under `guides/`.
+`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All fifty-three pages are checked in: `index.md`, thirty-two under `resources/`, eighteen under `data-sources/`, and two under `guides/`.
 
 Hand-written prose lives in `templates/`, which is the only part of the docs pipeline a human edits directly. `templates/guides/<name>.md.tmpl` renders to `docs/guides/<name>.md`; a `templates/` directory does not suppress the auto-generated resource and data-source pages, which are still built from the schemas into a temporary directory. Two guides exist: `getting-started` (credentials, installing the provider from the Registry and overriding it with a local build, first configuration, import IDs per resource) and `code-signing` (the `fastlane match` replacement, the state-vs-bundle distribution model, adopting a match certificate).
 
@@ -152,11 +152,11 @@ it, along with screenshots, the build upload and submission, through the
 confirming Apple has published one.
 
 `beta` is TestFlight, and is the fastlane `pilot` replacement the way
-`examples/signing` is `match` and `examples/app-listing` is `deliver`. Four
-resources — `group_resource.go`, `app_localization_resource.go`,
-`build_localization_resource.go` and `app_review_detail_resource.go` — over
-`models.go`, with no data source and no `filters.go`, because nothing here
-lists. **Three things shape it:**
+`examples/signing` is `match` and `examples/app-listing` is `deliver`. Five
+resources — `group_resource.go`, `tester_resource.go`,
+`app_localization_resource.go`, `build_localization_resource.go` and
+`app_review_detail_resource.go` — over `models.go`, with no data source and no
+`filters.go`, because nothing here lists. **Four things shape it:**
 
 TestFlight metadata splits across two lifetimes the same way App Store metadata
 does, and for the same reason: `apple_beta_app_localization` hangs off the app
@@ -170,11 +170,19 @@ external group can carry a public link. `ValidateConfig` rejects
 `public_link_*` on an internal group at plan time rather than letting Apple
 refuse it with a message that names the attribute and not the reason.
 
-**Membership and build assignment are deliberately absent**, and so is beta
-review submission. The first two are real state and simply are not modelled yet
-(`/v1/betaTesters`, `betaGroups/{id}/relationships/builds`); the third is an
-event, and falls under the same rule `apple_app_store_version` submission does —
-a resource for it would cancel a live review on destroy and resubmit on apply.
+Membership is a **linkage, not a record**. `apple_beta_tester` is one tester in
+one group, and the Apple record behind it belongs to the account rather than to
+the group — one per email address, shared by every group and app it is in. So
+`Delete` withdraws the membership through
+`DELETE /v1/betaGroups/{id}/relationships/betaTesters` and never
+`DELETE /v1/betaTesters/{id}`, which would remove the person from every app in
+the account.
+
+**Build assignment is still absent**, and so is beta review submission. The
+first is real state and simply is not modelled yet
+(`betaGroups/{id}/relationships/builds`); the second is an event, and falls
+under the same rule `apple_app_store_version` submission does — a resource for
+it would cancel a live review on destroy and resubmit on apply.
 `has_access_to_all_builds` is what a group without build assignment uses.
 
 `inapppurchase` is the same shape for one-time purchases: `localization_*.go`,
@@ -555,6 +563,38 @@ cross-variable validation.
   `apple_subscription_group`'s does not — or `<app_id>/<group_name>`; names are
   unique within an app, which is what makes the second form work and what
   `Create` maps Apple's duplicate error onto.
+- **`apple_beta_tester`**: one tester in one group, and the only resource here
+  whose Apple record is **not what it manages**. A beta tester is one record per
+  email address for the whole account, shared by every group and app it belongs
+  to, so `id` is that record's — two resources naming the same address carry the
+  same `id` — and what each resource owns is the linkage. Four things follow:
+  - `Create` **asks the account first**. A tester who already exists cannot be
+    POSTed again, so the existing record is linked with
+    `POST /v1/betaGroups/{id}/relationships/betaTesters` instead; a tester who is
+    already in the group is an error naming the import ID, because adopting a
+    membership silently would let a later destroy remove somebody a
+    configuration never added. A `DUPLICATE` from the create is retried as that
+    same link: two resources putting one person in two groups have nothing
+    connecting them, so Terraform applies them at once and one loses the race —
+    handling it here saves every such configuration a `depends_on`.
+  - `Read` asks the **group's** collection (`GET /v1/betaGroups/{id}/betaTesters`
+    with `filter[email]`), never the account-wide one. The question is
+    membership: a tester who exists but has been taken out of the group has to
+    read as gone, and a collection already scoped to the group cannot answer
+    otherwise. The email match is made again in memory, so a filter Apple ignores
+    costs pages rather than correctness.
+  - Every attribute is `RequiresReplace` and `Update` exists only to report that
+    it was reached, the way `apple_profile`'s does — Apple publishes no
+    `PATCH /v1/betaTesters`. `first_name` and `last_name` are therefore sent only
+    when the provider creates the record, are never refreshed, and `Create`
+    **warns** when an adopted tester holds a different name rather than writing
+    one Apple did not apply.
+  - `Delete` removes the linkage, **not** `DELETE /v1/betaTesters/{id}`, which
+    would remove the person from every app in the account. Import is
+    `<group_id>/<email>` with no bare-ID form: an Apple tester ID names the
+    person, not the membership, and the same ID belongs to every group they are
+    in — the second resource in the provider with no bare form, for a different
+    reason than `apple_beta_build_localization`.
 - **`apple_beta_app_localization`**: the app's TestFlight page text, one record
   per locale, surviving every build. `Create` **reads first and patches when a
   record exists**, the way `apple_app_store_review_detail` does: Apple writes one
@@ -607,7 +647,7 @@ Two tiers:
 - **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`.
 - **Acceptance** (`internal/provider/*_test.go`, package `provider`): `terraform-plugin-testing` against the real API. `testAccPreCheck` skips when credentials are absent.
 
-All thirty-one resources now have acceptance coverage. `internal/provider/app/schema_test.go` and `internal/provider/beta/schema_test.go` are a second, cheaper net under the app listing and TestFlight resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
+All thirty-two resources now have acceptance coverage. `internal/provider/app/schema_test.go` and `internal/provider/beta/schema_test.go` are a second, cheaper net under the app listing and TestFlight resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
 
 Two things constrain what the acceptance tier is allowed to do:
 
@@ -631,6 +671,13 @@ Two things constrain what the acceptance tier is allowed to do:
   back what was there. They skip unless `APPLE_TEST_ALLOW_APP_PRICING` is set —
   credentials plus a test app are deliberately not enough. Never point them at a
   live app.
+- **The TestFlight tester test emails a real person.** Creating a membership
+  makes Apple send a TestFlight invitation, so `TestAccBetaTesterResource_basic`
+  skips unless `APPLE_TEST_BETA_TESTER_EMAIL` names an address the runner is
+  entitled to invite — credentials and a test app are deliberately not enough,
+  the same guard the app pricing tests are behind. Destroy removes the
+  membership, so the tester record stays in the account afterwards: the provider
+  never deletes one.
 - **The TestFlight tests never open a public link.** `beta_resource_test.go`
   creates real beta groups and deletes them, which is neutral — a group with no
   testers and no public link invites nobody. Enabling `public_link_enabled`

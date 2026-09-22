@@ -231,3 +231,69 @@ type BetaAppReviewDetailUpdateRequest struct {
 	ID         string                        `json:"id"`
 	Attributes BetaAppReviewDetailAttributes `json:"attributes"`
 }
+
+// BetaTester is one person who can install TestFlight builds.
+//
+// The record is the team's, not the app's: a tester is identified by email
+// address across the whole App Store Connect account, and reaches an app by
+// belonging to one of its beta groups. Apple publishes no PATCH for it, so
+// every attribute here is fixed once the record exists -- a tester who already
+// exists keeps the name they were created with, whatever a later request sends.
+type BetaTester struct {
+	Type          string                   `json:"type"`
+	ID            string                   `json:"id"`
+	Attributes    BetaTesterAttributes     `json:"attributes"`
+	Relationships *BetaTesterRelationships `json:"relationships,omitempty"`
+	Links         *ResourceLinks           `json:"links,omitempty"`
+}
+
+// BetaTesterAttributes reports what Apple holds about a tester.
+//
+// inviteType is Apple's: EMAIL for a tester added by address, PUBLIC_LINK for
+// one who joined through a group's public TestFlight link.
+type BetaTesterAttributes struct {
+	FirstName  *string `json:"firstName,omitempty"`
+	LastName   *string `json:"lastName,omitempty"`
+	Email      *string `json:"email,omitempty"`
+	InviteType *string `json:"inviteType,omitempty"`
+}
+
+type BetaTesterRelationships struct {
+	Apps       *ResourceIdentifiers `json:"apps,omitempty"`
+	BetaGroups *ResourceIdentifiers `json:"betaGroups,omitempty"`
+	Builds     *ResourceIdentifiers `json:"builds,omitempty"`
+}
+
+type BetaTesterCreateRequest struct {
+	Type          string                        `json:"type"`
+	Attributes    BetaTesterCreateAttributes    `json:"attributes"`
+	Relationships BetaTesterCreateRelationships `json:"relationships"`
+}
+
+// BetaTesterCreateAttributes is the only place a tester's name can be set.
+// Apple has no update request for the record at all.
+type BetaTesterCreateAttributes struct {
+	Email     string  `json:"email"`
+	FirstName *string `json:"firstName,omitempty"`
+	LastName  *string `json:"lastName,omitempty"`
+}
+
+// BetaTesterCreateRelationships carries the groups the new tester joins.
+//
+// Creating a tester with no group leaves them attached to nothing, so this is
+// how a tester reaches an app -- and sending a group here is what makes Apple
+// issue the TestFlight invitation.
+type BetaTesterCreateRelationships struct {
+	BetaGroups ResourceIdentifiers `json:"betaGroups"`
+}
+
+// BetaTesterLinkageRequest is the body of the group membership endpoints:
+// POST adds the listed testers to a group, DELETE removes them from it.
+//
+// Removing a linkage is not the same as deleting the tester. The record stays
+// in the account's tester list and in every other group it belongs to, which is
+// why this provider removes membership rather than calling
+// DELETE /v1/betaTesters/{id}.
+type BetaTesterLinkageRequest struct {
+	Data []ResourceData `json:"data"`
+}

@@ -38,6 +38,7 @@ Assuming every test passes and every destroy completes:
 | **Permanent** | 2 | Device registrations that can never be removed — one iOS, one Mac. Terraform disables them; they still occupy slots until the membership year renews. |
 | **Transient peak** | 2 | Certificates alive at once, at most. Tests run sequentially and each revokes what it issued. |
 | **Net zero** | 16 | Resource kinds fully cleaned up: Bundle IDs, capabilities, Merchant IDs, Pass Type IDs, profiles, subscription groups, subscriptions, localizations, prices, in-app purchases, their localizations, price schedules and availability, beta groups and both TestFlight localizations. |
+| **Opt-in residue** | 1 | A beta tester record in the account, if `APPLE_TEST_BETA_TESTER_EMAIL` is set. The membership is removed; the record is not — see [TestFlight](#testflight). |
 | **Reserved forever** | ~13 | Subscription and in-app purchase product identifiers, randomised per run. Invisible once deleted, drawn from an unlimited namespace — see [Subscriptions](#subscriptions) and [In-app purchases](#in-app-purchases). |
 | **Touch nothing** | 24 | Tests rejected at plan time or read-only. |
 
@@ -416,11 +417,21 @@ provider does not upload builds. It skips unless `APPLE_TEST_BUILD_NUMBER` and
 `APPLE_TEST_BUILD_PRE_RELEASE_VERSION` name a build already uploaded to the app
 under test.
 
+**`TestAccBetaTesterResource_basic` emails a real person**, which is why it is
+guarded past credentials like the app pricing tests. Creating a membership makes
+Apple send a TestFlight invitation, so there is no safe default address: the test
+skips unless `APPLE_TEST_BETA_TESTER_EMAIL` names one the runner is entitled to
+invite — your own address is the obvious choice. Destroy removes the tester from
+the group, not from the account: Apple's `DELETE /v1/betaTesters/{id}` would
+remove the person from every app in the team, so the provider never calls it and
+the record stays under TestFlight > Testers afterwards.
+
 | Test | Residue | Creates at Apple | What you see in the portal |
 |---|---|---|---|
 | `TestAccBetaGroupResource_basic` | Net zero | One external beta group with a randomised name and no testers; renames it and turns feedback off; imports by bare ID. | A group appears under TestFlight > Groups, is renamed, then is deleted. |
 | `TestAccBetaGroupResource_internal` | Net zero | One internal beta group with `has_access_to_all_builds`; imports by bare ID. | An internal group appears under TestFlight > Testers, then is deleted. |
 | `TestAccBetaGroupResource_publicLinkOnInternal` | Plan-only | Nothing. A public link on an internal group is refused at plan time. | No change. |
+| `TestAccBetaTesterResource_basic` | **Leaves the tester record** — opt-in | One external group with a randomised name, plus a membership for `APPLE_TEST_BETA_TESTER_EMAIL`; imports by `<group_id>/<email>`. Apple emails that address an invitation. | A tester appears in the group under TestFlight > Testers and Groups, then the group and the membership go — the tester stays in the account's tester list. |
 | `TestAccBetaAppLocalizationResource_basic` | Net zero | A `de-DE` TestFlight page description, feedback email and marketing URL; updates the description; imports. | TestFlight > Test Information gains a German entry, then loses it. |
 | `TestAccBetaBuildLocalizationResource_basic` | Net zero — opt-in | A `de-DE` "What to Test" note on the build named by `APPLE_TEST_BUILD_NUMBER`; updates it; imports by the composite ID. | The build's What to Test gains a German entry, then loses it. The build itself is untouched. |
 | `TestAccBetaAppReviewDetailResource_basic` | **Leaves the beta review contact set** | Nothing. Apple publishes no `POST` and no `DELETE` for the record, so this patches what is already there and `destroy` only drops state. | TestFlight > Test Information > Beta App Review Information shows the test's contact details and notes, permanently. |
@@ -543,6 +554,13 @@ App Store Connect → the APPLE_TEST_APP_ID app → TestFlight → Test Informat
   A German (de-DE) entry beginning         → delete it if you want the app's
   "Terraform acceptance test build"          Test Information tidy. It is
                                              harmless left in place.
+
+App Store Connect → Users and Access → TestFlight → Testers
+  The address named by                     → remove it if you want the tester
+  APPLE_TEST_BETA_TESTER_EMAIL, if that      list tidy. The provider never
+  test ran                                   deletes a tester record, because
+                                             Apple's delete removes the person
+                                             from every app in the team.
 ```
 
 The app listing tests leave more than that behind, and none of it is cleanup in
@@ -606,7 +624,18 @@ export APPLE_TEST_BUILD_NUMBER=42
 export APPLE_TEST_BUILD_PRE_RELEASE_VERSION=1.2.0
 TF_ACC=1 go test -v ./internal/provider/ -timeout 30m \
   -run 'TestAccAppStoreVersionResource_build'
+
+# 6. Only with an address you are entitled to invite — applying it sends a
+#    real TestFlight invitation, and the tester record stays in the account
+#    afterwards.
+export APPLE_TEST_BETA_TESTER_EMAIL=you@example.com
+TF_ACC=1 go test -v ./internal/provider/ -timeout 30m \
+  -run 'TestAccBetaTesterResource'
 ```
+
+Step 6 is the only test in the suite that sends mail to a person, which is why
+credentials and a test app are not enough to run it. Without
+`APPLE_TEST_BETA_TESTER_EMAIL` it skips, so step 2 stays safe.
 
 Step 5 is skipped rather than failed when those two variables are absent,
 because nothing in the suite can produce their fixture: Apple publishes no

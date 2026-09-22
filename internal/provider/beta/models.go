@@ -66,6 +66,21 @@ type betaBuildLocalizationModel struct {
 	WhatsNew          types.String `tfsdk:"whats_new"`
 }
 
+// betaTesterModel maps one tester's membership of one TestFlight group.
+//
+// The Apple record behind id is the account's rather than the group's -- one
+// tester record per email address, shared by every group it belongs to -- so a
+// tester in three groups is three of these resources carrying the same id. What
+// each resource owns is the membership, which is what Delete withdraws.
+type betaTesterModel struct {
+	ID         types.String `tfsdk:"id"`
+	GroupID    types.String `tfsdk:"group_id"`
+	Email      types.String `tfsdk:"email"`
+	FirstName  types.String `tfsdk:"first_name"`
+	LastName   types.String `tfsdk:"last_name"`
+	InviteType types.String `tfsdk:"invite_type"`
+}
+
 // betaAppReviewDetailModel maps what the beta reviewers are told about an app.
 type betaAppReviewDetailModel struct {
 	ID                  types.String `tfsdk:"id"`
@@ -118,6 +133,18 @@ var (
 // Apple enforces the name unique within an app. The ceiling is generous rather
 // than exact: the useful check is that a name was actually given.
 func GetBetaGroupNameValidator() []validator.String {
+	return []validator.String{
+		stringvalidator.UTF8LengthBetween(1, 255),
+	}
+}
+
+// GetBetaTesterNameValidator returns validators for a tester's first or last
+// name.
+//
+// Counted in characters rather than bytes, like every other name this provider
+// sends to Apple. The ceiling is generous rather than exact: the useful check is
+// that an empty string is not sent as a name.
+func GetBetaTesterNameValidator() []validator.String {
 	return []validator.String{
 		stringvalidator.UTF8LengthBetween(1, 255),
 	}
