@@ -1,6 +1,65 @@
-## Unreleased
+## 0.4.0 (September 22, 2026)
 
 FEATURES:
+
+* **`apple_user`, `apple_user_invitation` and `apple_users`.** Manages who is on
+  your App Store Connect team and what they can do — the Users and Access page,
+  as configuration.
+
+  ```terraform
+  resource "apple_user_invitation" "new_hire" {
+    email      = "ada@example.com"
+    first_name = "Ada"
+    last_name  = "Lovelace"
+    roles      = ["DEVELOPER"]
+
+    provisioning_allowed = true
+  }
+
+  resource "apple_user" "release_manager" {
+    username = "grace@example.com"
+    roles    = ["APP_MANAGER", "ACCESS_TO_REPORTS"]
+  }
+  ```
+
+  !> **Applying an invitation sends a real email**, and **destroying an
+  `apple_user` removes that person from the team** — Apple revokes their access
+  to every app, and the API cannot put it back: they have to be invited again
+  and accept again.
+
+  **These are two Apple records with two lifetimes, and the split is not
+  optional.** A `UserInvitation` is an offer; Apple destroys it the moment
+  somebody accepts and issues a `User` in its place, with a different
+  identifier. So an invitation that stops being readable has been accepted,
+  cancelled, or has lapsed, and the 404 alone cannot say which. `Read` asks the
+  team's member list before it drops anything: an accepted invitation sets the
+  computed `accepted` and `user_id` and **stays in state** rather than being
+  planned for recreation, which Apple would refuse for somebody already on the
+  team. One that was cancelled or expired leaves state and is sent again on the
+  next apply.
+
+  **`apple_user` adopts; it cannot create.** Apple publishes no endpoint that
+  adds a member directly, so pointing it at an address that is not already on
+  the team is an error naming `apple_user_invitation`. It is the resource that
+  changes roles afterwards: Apple has no `PATCH` for an invitation, so every
+  attribute there forces replacement, and replacing an accepted one is not a
+  thing that can happen.
+
+  `visible_apps` is read back **only when the configuration sets it**. Apple
+  answers the same collection with every app on the team for a member who can
+  see all of them, so adopting it unasked would write your whole catalogue into
+  state — the rule `apple_app_store_version` follows for a build it does not
+  manage.
+
+  `ACCOUNT_HOLDER` is rejected at plan time. Apple reports it for the person who
+  owns the membership and refuses every request that grants it, so a
+  configuration carrying it could never apply. The account holder cannot be
+  managed by this provider at all.
+
+  Both resources import by the address as readily as by Apple's ID — `/v1/users`
+  has no single-record read, so the provider scans the collection either way.
+  Managing the team needs an App Store Connect API key with the **Admin** role;
+  an App Manager key can read the collection and not write to it.
 
 * **`apple_beta_tester`.** Puts a tester in a TestFlight group — the membership
   0.3.0 said was not modelled yet, and the last thing an `apple_beta_group`

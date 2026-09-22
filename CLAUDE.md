@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Terraform provider (`terraform-provider-apple`, module `github.com/AhmedOsman00/terraform-provider-apple`) for Apple App Store Connect, built on the **Terraform Plugin Framework** (not SDK v2). It is published on the Terraform Registry as `ahmedosman00/apple`. It manages Bundle IDs, Bundle ID capabilities, certificates, devices, merchant IDs, Pass Type IDs, and provisioning profiles, plus auto-renewable subscriptions (groups, group localizations, subscriptions, localizations, prices, availability) and one-time in-app purchases (purchases, localizations, price schedules, availability), plus a read-only `apple_territories` listing of the App Store's storefronts. It also manages an app's own App Store listing: content rights, categories, age rating, the localized name and product page, the release record, App Review information, the price and the storefronts it sells in. TestFlight is covered too: tester groups, who is in them, the app's TestFlight page text, a build's "What to Test" note, and what the beta reviewers are told.
+A Terraform provider (`terraform-provider-apple`, module `github.com/AhmedOsman00/terraform-provider-apple`) for Apple App Store Connect, built on the **Terraform Plugin Framework** (not SDK v2). It is published on the Terraform Registry as `ahmedosman00/apple`. It manages Bundle IDs, Bundle ID capabilities, certificates, devices, merchant IDs, Pass Type IDs, and provisioning profiles, plus auto-renewable subscriptions (groups, group localizations, subscriptions, localizations, prices, availability) and one-time in-app purchases (purchases, localizations, price schedules, availability), plus a read-only `apple_territories` listing of the App Store's storefronts. It also manages an app's own App Store listing: content rights, categories, age rating, the localized name and product page, the release record, App Review information, the price and the storefronts it sells in. TestFlight is covered too: tester groups, who is in them, the app's TestFlight page text, a build's "What to Test" note, and what the beta reviewers are told. The team itself is the last layer: who is under Users and Access, what they may do, and the invitations that put them there.
 
 ## Commands
 
@@ -44,7 +44,7 @@ cannot be used for this: it makes `terraform init` refuse to run.
 
 `tfplugindocs` builds `docs/` from provider/resource/data-source `MarkdownDescription` strings plus the matching files under `examples/`. CI (`.github/workflows/test.yml`) fails the `generate` job if `make generate` produces a diff, so regenerate and commit whenever a schema, example, or guide changes.
 
-`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All fifty-three pages are checked in: `index.md`, thirty-two under `resources/`, eighteen under `data-sources/`, and two under `guides/`.
+`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All fifty-six pages are checked in: `index.md`, thirty-four under `resources/`, nineteen under `data-sources/`, and two under `guides/`.
 
 Hand-written prose lives in `templates/`, which is the only part of the docs pipeline a human edits directly. `templates/guides/<name>.md.tmpl` renders to `docs/guides/<name>.md`; a `templates/` directory does not suppress the auto-generated resource and data-source pages, which are still built from the schemas into a temporary directory. Two guides exist: `getting-started` (credentials, installing the provider from the Registry and overriding it with a local build, first configuration, import IDs per resource) and `code-signing` (the `fastlane match` replacement, the state-vs-bundle distribution model, adopting a match certificate).
 
@@ -55,7 +55,7 @@ Two layers, strictly separated, plus a standalone CLI:
 ### `internal/apple/` — App Store Connect API client
 
 - `client.go`: `Client` holds the JWT (ES256, `kid` header, 20-minute expiry) built from issuer ID + key ID + PKCS#8 private key. The token is minted once in `NewClient` and is immutable thereafter — a 20-minute life outlives any single Terraform command, so there is deliberately no refresh path and the signing key is not retained. `doRequest` decodes `models.ErrorResponse` into a formatted error, preferring Apple's own message; a 401 is reported as a credentials failure rather than retried, since re-signing with the same key yields an equivalent token.
-- One file per Apple resource (`budleIds.go` — note the typo in the filename — `certificates.go`, `devices.go`, `merchantIds.go`, `passTypeIds.go`, `profiles.go`, `bundleIdCapabilities.go`, `apps.go`, `subscriptionGroups.go`, `subscriptionGroupLocalizations.go`, `subscriptions.go`, `subscriptionLocalizations.go`, `subscriptionPrices.go`, `subscriptionAvailabilities.go`, `inAppPurchases.go`, `inAppPurchaseVersions.go`, `inAppPurchaseLocalizations.go`, `inAppPurchasePrices.go`, `inAppPurchaseAvailabilities.go`, `territories.go`, `appInfos.go`, `appInfoLocalizations.go`, `appStoreVersions.go`, `appStoreVersionLocalizations.go`, `appStoreReviewDetails.go`, `ageRatingDeclarations.go`, `appPrices.go`, `appAvailabilities.go`, `builds.go`, `betaGroups.go`, `betaAppLocalizations.go`, `betaBuildLocalizations.go`, `betaAppReviewDetails.go`). Each exposes plain `Get*/Create*/Update*/Delete*` methods on `*Client` returning `models.*` structs. No Terraform types here.
+- One file per Apple resource (`budleIds.go` — note the typo in the filename — `certificates.go`, `devices.go`, `merchantIds.go`, `passTypeIds.go`, `profiles.go`, `bundleIdCapabilities.go`, `apps.go`, `subscriptionGroups.go`, `subscriptionGroupLocalizations.go`, `subscriptions.go`, `subscriptionLocalizations.go`, `subscriptionPrices.go`, `subscriptionAvailabilities.go`, `inAppPurchases.go`, `inAppPurchaseVersions.go`, `inAppPurchaseLocalizations.go`, `inAppPurchasePrices.go`, `inAppPurchaseAvailabilities.go`, `territories.go`, `appInfos.go`, `appInfoLocalizations.go`, `appStoreVersions.go`, `appStoreVersionLocalizations.go`, `appStoreReviewDetails.go`, `ageRatingDeclarations.go`, `appPrices.go`, `appAvailabilities.go`, `builds.go`, `betaGroups.go`, `betaAppLocalizations.go`, `betaBuildLocalizations.go`, `betaAppReviewDetails.go`, `users.go`, `userInvitations.go`). Each exposes plain `Get*/Create*/Update*/Delete*` methods on `*Client` returning `models.*` structs. No Terraform types here.
 - `models/`: JSON wire types. All responses go through the generics in `common.go`: `Response[T]`, `ListResponse[T]`, `Request[T]`.
 - `pagination.go`: `getAllPages[T]` walks every page of a collection, following the absolute `links.next` URL until it is empty and refusing links that point off-host. All seven `Get*s()` functions go through it — reading only the first page silently truncates results. A `pageSize` of `noPageSize` (0) omits the `limit` parameter entirely, which the `bundleIdCapabilities` relationship requires: it rejects `limit` with a 400. `getAllPagesQuery` is the same walk with extra query parameters applied to the first request only — Apple's `links.next` already carries them forward, so re-appending would duplicate them. The subscription and in-app purchase collections need it: a price is unreadable without its price point included, and either price point catalogue is unusable without `filter[territory]`.
 - Apple's API has no server-side filtering here — "get by identifier/name" helpers (e.g. `GetPassTypeIDByIdentifier`, `GetProfileByName`) list a full collection and scan client-side, so they depend on pagination being complete. The App Store Connect endpoints are the exception: `/v1/apps` supports `filter[bundleId]`, the price point catalogue supports `filter[territory]`, and `/v1/builds` supports `filter[version]` (the build number), `filter[preReleaseVersion.version]` (its train) and `filter[preReleaseVersion.platform]` — all used server-side because the collections are too large to pull whole. `GetBuilds` is the one by-identifier helper in the provider that is a single request rather than a full-collection scan, and it deliberately omits a `processingState` filter: see `apple_app_store_version` below.
@@ -68,7 +68,7 @@ The optional `scope` attribute restricts the JWT to named operations. It must be
 
 Env vars: `APPLE_APP_STORE_CONNECT_ISSUER_ID`, `APPLE_APP_STORE_CONNECT_API_KEY`, `APPLE_APP_STORE_CONNECT_PRIVATE_KEY`.
 
-Each domain lives in its own package (`bundle`, `certificate`, `device`, `merchant`, `passtypeid`, `profile`, `subscription`, `inapppurchase`, `app`, `beta`) following a consistent four-file convention:
+Each domain lives in its own package (`bundle`, `certificate`, `device`, `merchant`, `passtypeid`, `profile`, `subscription`, `inapppurchase`, `app`, `beta`, `user`) following a consistent four-file convention:
 
 | File | Contents |
 |---|---|
@@ -184,6 +184,47 @@ first is real state and simply is not modelled yet
 under the same rule `apple_app_store_version` submission does — a resource for
 it would cancel a live review on destroy and resubmit on apply.
 `has_access_to_all_builds` is what a group without build assignment uses.
+
+`user` is Users and Access, and the only part of the provider that manages the
+**team** rather than anything the team ships — `resource.go`,
+`invitation_resource.go`, `data_source.go`, `filters.go` and `models.go`, with
+no app ID anywhere in it. **Four things shape it:**
+
+Membership splits across two Apple records with two lifetimes, the way App Store
+and TestFlight metadata do, and for a sharper reason: a `UserInvitation` is an
+offer, and Apple **destroys it the moment it is accepted**, issuing a `User`
+with a different ID in its place. So an invitation that 404s has been accepted,
+cancelled or has lapsed, and the 404 cannot say which. `Read` asks
+`GetUserByUsername` before dropping anything: a member who now exists sets the
+computed `accepted` and `user_id` and **keeps state as-is** — the
+"keep state, do not report a deletion" rule the app info resources follow —
+because planning a recreation would have Terraform re-invite somebody Apple says
+is already on the team. Nothing else is refreshed in that branch: every
+attribute of an invitation is `RequiresReplace`, so adopting a role changed
+since through `apple_user` would plan exactly that recreation.
+
+`apple_user` **adopts and never creates**, like `apple_app_settings` — Apple
+publishes no `POST /v1/users` — but unlike every other adopting resource here it
+has a **real `Delete`**, and that delete removes a person from the team. That
+asymmetry is deliberate: leaving them in place would be the wrong answer to a
+configuration that no longer names them. Do not turn it into a warn-and-drop.
+
+Apple publishes **no `GET /v1/users/{id}`** either. The collection is the only
+read, so `GetUser` scans it the way the Developer Portal by-identifier helpers
+do, and both resources accept an email address as an import ID as readily as
+Apple's own — nobody has the opaque one, and the request is the same either way.
+`filter[username]` and `filter[email]` are sent where they exist, and the match
+is made again in memory, so a filter Apple ignores costs a larger page rather
+than the wrong person.
+
+`visible_apps` is a **paginated collection, not a field**, so reading it is a
+second request — and for a member whose `allAppsVisible` is true Apple answers
+it with every app on the team. Both resources therefore refresh it **only when
+state holds a list**, and the data source asks only for members reported as
+restricted. Adopting it unasked would write the whole catalogue into state and
+show a diff for something nobody configured. `ACCOUNT_HOLDER` is rejected in
+`ValidateConfig` rather than at apply: Apple reports the role and refuses every
+request that grants it, so a configuration carrying it could never apply.
 
 `inapppurchase` is the same shape for one-time purchases: `localization_*.go`,
 `price_schedule_resource.go`, `availability_resource.go` and
@@ -628,6 +669,8 @@ cross-variable validation.
   Store one does not: Apple returns it masked on some accounts and omitted on
   others. It is `Sensitive` and still in state in plain text, and the schema says
   so. Import ID is the app ID.
+- **`apple_user`**: adopted on create like `apple_app_settings`, and the only adopting resource in the provider with a **real delete** — `DELETE /v1/users/{id}` takes the person off the team and revokes their access to every app, which the API cannot undo. `Create` is a lookup that must succeed plus the same `PATCH` `Update` sends; an address that is not already a member is an error naming `apple_user_invitation`, because Apple publishes no way to add one. `username` is `RequiresReplace` and belongs to the person's Apple Account rather than to the team, which is also why `first_name` and `last_name` are **computed**: Apple's update request carries neither. Roles are a `types.Set` sorted before being sent, so two configurations naming the same roles produce the same body. `Read` looks the member up by Apple's ID rather than by username — a person who left and rejoined is not the same record — and refreshes `visible_apps` only when state holds one; see the `user` package notes above for why. `ACCOUNT_HOLDER` is refused in `ValidateConfig`, and Apple's refusal of a write naming the account holder is mapped to a diagnostic that says to transfer the membership rather than retry.
+- **`apple_user_invitation`**: the only way to add a member, and a record Apple **destroys on acceptance**. Every configurable attribute is `RequiresReplace` (there is no `PATCH /v1/userInvitations`) and `Update` exists only to report that it was reached, the shape `apple_profile` and `apple_beta_tester` are in. `first_name` and `last_name` are **required here and nowhere else** — Apple rejects the create without them — which is what makes them computed on `apple_user`. The 404-means-three-things problem is handled in `Read` (see above) and again in `Delete`: an invitation already accepted cannot be cancelled, so `Delete` warns, drops state and names `apple_user` rather than deleting the member, which would turn removing a stale invitation from a configuration into removing a colleague. An invitation lapses after 72 hours, reported through the computed `expiration_date`.
 - **`apple_profile`**: every configurable attribute is `RequiresReplace`, `name` included — Apple rejects `PATCH /v1/profiles` with 403 `does not allow 'UPDATE'`, so a rename is a reissue and `Update` exists only to report that it was reached. Profile content/UUID/state/dates are Apple-computed. `CreateProfile` retries a 5xx up to three times: `POST /v1/profiles` intermittently answers 500 for a well-formed request that succeeds on the next attempt. It looks the name up before each retry and adopts an already-issued profile, so a 500 that arrives after Apple committed the write does not duplicate it.
 
 ## Local testing
@@ -644,10 +687,10 @@ Pushing a `v*` tag runs `.github/workflows/release.yml`: GoReleaser cross-compil
 
 Two tiers:
 
-- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`.
+- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`.
 - **Acceptance** (`internal/provider/*_test.go`, package `provider`): `terraform-plugin-testing` against the real API. `testAccPreCheck` skips when credentials are absent.
 
-All thirty-two resources now have acceptance coverage. `internal/provider/app/schema_test.go` and `internal/provider/beta/schema_test.go` are a second, cheaper net under the app listing and TestFlight resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
+All thirty-four resources now have acceptance coverage. `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go` and `internal/provider/user/schema_test.go` are a second, cheaper net under the app listing, TestFlight and team membership resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
 
 Two things constrain what the acceptance tier is allowed to do:
 
@@ -693,6 +736,7 @@ Two things constrain what the acceptance tier is allowed to do:
   and `testAccCheckAppStillExists` is its `CheckDestroy`.
   `TestAccBetaBuildLocalizationResource_basic` needs an uploaded build and skips
   behind `testAccPreCheckBuild` like the build attachment test does.
+- **The team membership tests are the only ones that can remove a person.** `TestAccUserInvitationResource_basic` emails a real address, so it skips unless `APPLE_TEST_USER_INVITE_EMAIL` names one the runner is entitled to invite — the same guard the TestFlight tester test is behind. `TestAccUserResource_basic` goes further: its destroy removes the member from the team for good, so it needs `APPLE_TEST_USER_EMAIL` **and** `APPLE_TEST_ALLOW_USER_REMOVAL`, because naming somebody is not on its own a statement that losing them is acceptable. Neither needs `APPLE_TEST_APP_ID` — they write to the team rather than to an app — and both need an API key with the **Admin** role, which the rest of the suite does not. The roles the tests grant stop at `APP_MANAGER`: a test that granted `ADMIN` would leave a window an interrupted run could not close. `TestAccUsersDataSource_*`, `TestAccUserResource_notOnTheTeam` and the two plan-only refusal tests write nothing and run on credentials alone.
 - **Certificates consume a slot while they exist.** `certificate_resource_test.go` and both profile test files issue one and revoke it on destroy, so a completed run is neutral; an interrupted run leaves a certificate to revoke by hand. `IOS_DEVELOPMENT` is preferred over a distribution type where the profile type allows it.
 
 Identifiers are fixed rather than randomised, matching the existing tests, so an interrupted run leaves a Bundle ID, Merchant ID or profile that must be deleted in the portal before the test passes again.
@@ -705,6 +749,6 @@ One trap it records: Bundle ID identifiers cannot contain the underscore the pla
 
 Acceptance tests live in their own workflow, `.github/workflows/acceptance.yml`, and run **only on `workflow_dispatch`**: they create billable resources in a real Apple team, use fixed identifiers that collide if two runs overlap, and leave material to clean up by hand when interrupted. Its inputs are the Terraform version (one per run, not a matrix), a `-run` pattern, and an `include_device_tests` boolean that defaults to false — `TestAccDeviceResource*` registers two UDIDs permanently and passes once per team, ever. The job fails fast if the three `APPLE_APP_STORE_CONNECT_*` secrets are absent, because a suite that skips itself would otherwise report green on a run somebody triggered deliberately, and it sets `cancel-in-progress: false` so a queued run never kills one mid-apply.
 
-All ten filter packages have table-driven tests (`internal/provider/*/filters_test.go`) covering filtering, sorting, limiting, and the malformed-pattern errors; the app listing filters and helpers are in `internal/provider/app/metadata_filters_test.go` alongside them, which also covers the keyword join/split round trip and the two reconcile functions that keep configured dates against Apple's derived ones. Resource CRUD paths are still only reachable through the acceptance tier.
+All eleven filter packages have table-driven tests (`internal/provider/*/filters_test.go`) covering filtering, sorting, limiting, and the malformed-pattern errors; the app listing filters and helpers are in `internal/provider/app/metadata_filters_test.go` alongside them, which also covers the keyword join/split round trip and the two reconcile functions that keep configured dates against Apple's derived ones. Resource CRUD paths are still only reachable through the acceptance tier.
 
-Two behaviours worth knowing when writing filter tests, because they differ per package: `bundle` and `certificate` match `name_pattern` as a **glob** (`filepath.Match`, whole-string), while `device`, `merchant`, `passtypeid`, `profile`, `subscription`, `inapppurchase`, and `app` match it as a **regex** (substring unless anchored). `merchant`'s display-name pattern is additionally case-insensitive.
+Two behaviours worth knowing when writing filter tests, because they differ per package: `bundle` and `certificate` match `name_pattern` as a **glob** (`filepath.Match`, whole-string), while `device`, `merchant`, `passtypeid`, `profile`, `subscription`, `inapppurchase`, `app`, and `user` match it as a **regex** (substring unless anchored). `merchant`'s display-name pattern is additionally case-insensitive, and every `user` pattern is.

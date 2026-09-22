@@ -5,7 +5,10 @@ API. This file records what each one creates in your Apple Developer account,
 where it shows up in the portal, and what it leaves behind.
 
 Read [Devices](#devices--the-only-irreversible-tests) before you export
-credentials. It is the only section describing changes you cannot undo.
+credentials, and [Team members](#team-members-users-and-access) if you set the
+variables that unlock it. Those are the two sections describing changes you
+cannot undo — a device slot that never comes back, and a person removed from the
+team who has to be invited again.
 
 The credential-free tests (`internal/apple`, the `filters_test.go` files,
 `capability_models_test.go`, `renewal_test.go`, `models_test.go`) never reach
@@ -39,8 +42,9 @@ Assuming every test passes and every destroy completes:
 | **Transient peak** | 2 | Certificates alive at once, at most. Tests run sequentially and each revokes what it issued. |
 | **Net zero** | 16 | Resource kinds fully cleaned up: Bundle IDs, capabilities, Merchant IDs, Pass Type IDs, profiles, subscription groups, subscriptions, localizations, prices, in-app purchases, their localizations, price schedules and availability, beta groups and both TestFlight localizations. |
 | **Opt-in residue** | 1 | A beta tester record in the account, if `APPLE_TEST_BETA_TESTER_EMAIL` is set. The membership is removed; the record is not — see [TestFlight](#testflight). |
+| **Opt-in removal** | 1 | A team member removed from Users and Access, if `APPLE_TEST_USER_EMAIL` and `APPLE_TEST_ALLOW_USER_REMOVAL` are both set. They have to be invited again — see [Team members](#team-members-users-and-access). |
 | **Reserved forever** | ~13 | Subscription and in-app purchase product identifiers, randomised per run. Invisible once deleted, drawn from an unlimited namespace — see [Subscriptions](#subscriptions) and [In-app purchases](#in-app-purchases). |
-| **Touch nothing** | 24 | Tests rejected at plan time or read-only. |
+| **Touch nothing** | 29 | Tests rejected at plan time or read-only. |
 
 ### Certificates come back; devices do not
 
@@ -72,7 +76,9 @@ not a soft delete.
 Most of it lands under **Certificates, Identifiers & Profiles** on
 developer.apple.com. The subscription and in-app purchase tests are the
 exception: they work in App Store Connect proper, under the app named by
-`APPLE_TEST_APP_ID`. Neither tier creates apps, builds or submissions.
+`APPLE_TEST_APP_ID`. The team membership tests are a second exception, and work
+on the team itself rather than on any app. Neither tier creates apps, builds or
+submissions.
 
 | Resource | Portal location |
 |---|---|
@@ -92,6 +98,7 @@ exception: they work in App Store Connect proper, under the app named by
 | TestFlight page text | App Store Connect → the app → TestFlight → Test Information |
 | "What to Test" notes | App Store Connect → the app → TestFlight → open the build |
 | Beta review information | App Store Connect → the app → TestFlight → Test Information → Beta App Review Information |
+| Team members and invitations | App Store Connect → Users and Access → Users |
 
 ## Devices — the only irreversible tests
 
@@ -441,6 +448,51 @@ Groups, and possibly a `de-DE` entry under Test Information. Neither blocks a
 re-run: group names are randomised, and the localizations are adopted rather
 than created.
 
+## Team members (Users and Access)
+
+**These are the only tests in the suite that can take somebody's access away**,
+and both write to the team rather than to an app, so `APPLE_TEST_APP_ID` is
+irrelevant to them. They need an App Store Connect API key with the **Admin**
+role: an App Manager key can read `/v1/users` and not write to it, so every
+write here fails with a 403 on a key that runs the rest of the suite.
+
+**`TestAccUserInvitationResource_basic` emails a real person**, the way the
+TestFlight tester test does, and is guarded the same way: it skips unless
+`APPLE_TEST_USER_INVITE_EMAIL` names an address the runner is entitled to
+invite. Destroy cancels the invitation, so a completed run is neutral; an
+interrupted one leaves a pending invitation under Users and Access, which lapses
+by itself after 72 hours. **Do not let the address accept it mid-run** — an
+accepted invitation cannot be cancelled, the destroy warns instead of erroring,
+and whoever accepted is then a member of the team with the role the test asked
+for.
+
+**`TestAccUserResource_basic` removes a member from the team on destroy**, and
+Apple publishes no way to undo that: the person has to be invited again and
+accept again. It is guarded past credentials twice over — `APPLE_TEST_USER_EMAIL`
+names the member and `APPLE_TEST_ALLOW_USER_REMOVAL` says removing them is
+acceptable — because naming somebody is not on its own a statement that losing
+them is. Point it at an address you control that is on the team for this purpose
+and nothing else. **Never point it at a colleague.** An interrupted run leaves
+that member holding `DEVELOPER` and `APP_MANAGER` with provisioning access,
+which is the last thing the test applied.
+
+The roles the tests grant stop at `APP_MANAGER` on purpose. A test that granted
+`ADMIN` would open a window in which the member could do anything to the team,
+and an interrupted run would leave it open.
+
+| Test | Residue | Creates at Apple | What you see in the portal |
+|---|---|---|---|
+| `TestAccUsersDataSource_basic` | No writes | Nothing. Lists the team and asserts it is not empty. | No change. |
+| `TestAccUsersDataSource_filtered` | No writes | Nothing. Reads the team three times with different filters. | No change. |
+| `TestAccUserResource_notOnTheTeam` | No writes | Nothing. An address that is not a member is refused before any write, because Apple cannot create a user. | No change. |
+| `TestAccUserInvitationResource_accountHolderRole` | Plan-only | Nothing. `ACCOUNT_HOLDER` is refused at plan time. | No change. |
+| `TestAccUserInvitationResource_conflictingVisibility` | Plan-only | Nothing. `all_apps_visible` with `visible_apps` is refused at plan time. | No change. |
+| `TestAccUserInvitationResource_basic` | Net zero — opt-in, **emails a person** | One pending invitation for `APPLE_TEST_USER_INVITE_EMAIL` with the `DEVELOPER` role; imports by the address; cancels it. | Users and Access > Users shows a pending invitation, then loses it. The address receives an invitation email that then stops working. |
+| `TestAccUserResource_basic` | **Removes the member** — doubly opt-in | Nothing new. Changes `APPLE_TEST_USER_EMAIL`'s roles to `DEVELOPER`, then to `DEVELOPER` + `APP_MANAGER` with provisioning allowed; imports by the address; then **deletes them from the team**. | That member's roles change under Users and Access, then the member disappears. |
+
+An interrupted run leaves at most a pending invitation to cancel, or a member
+carrying the roles the last step applied. Neither blocks a re-run.
+
 ## Merchant IDs
 
 Deletable. Apple rejects duplicates, so leftovers block re-runs.
@@ -631,11 +683,27 @@ TF_ACC=1 go test -v ./internal/provider/ -timeout 30m \
 export APPLE_TEST_BETA_TESTER_EMAIL=you@example.com
 TF_ACC=1 go test -v ./internal/provider/ -timeout 30m \
   -run 'TestAccBetaTesterResource'
+
+# 7. Only with an address you are entitled to invite — applying it emails that
+#    address an invitation to join the team. Needs an Admin API key.
+export APPLE_TEST_USER_INVITE_EMAIL=you@example.com
+TF_ACC=1 go test -v ./internal/provider/ -timeout 30m \
+  -run 'TestAccUserInvitationResource'
+
+# 8. Only with a team member you are willing to lose. Destroy removes them from
+#    the team and revokes their access to every app, and the API cannot undo it.
+#    Never point this at a colleague.
+export APPLE_TEST_USER_EMAIL=scratch-member@example.com
+export APPLE_TEST_ALLOW_USER_REMOVAL=1
+TF_ACC=1 go test -v ./internal/provider/ -timeout 30m \
+  -run 'TestAccUserResource_basic'
 ```
 
-Step 6 is the only test in the suite that sends mail to a person, which is why
-credentials and a test app are not enough to run it. Without
-`APPLE_TEST_BETA_TESTER_EMAIL` it skips, so step 2 stays safe.
+Steps 6 and 7 are the two tests that send mail to a person, which is why
+credentials and a test app are not enough to run either. Without
+`APPLE_TEST_BETA_TESTER_EMAIL` and `APPLE_TEST_USER_INVITE_EMAIL` they skip, so
+step 2 stays safe — as does step 8, which needs two variables rather than one
+because it ends by removing somebody from the team.
 
 Step 5 is skipped rather than failed when those two variables are absent,
 because nothing in the suite can produce their fixture: Apple publishes no

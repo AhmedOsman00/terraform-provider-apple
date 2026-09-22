@@ -35,7 +35,9 @@ provider mints from three values.
    **Team Keys** tab.
 2. Select **+** to generate a key. Give it the **App Manager** role. A Developer
    key is scoped to that person's own certificates and profiles, which is not
-   enough to manage a team's signing material.
+   enough to manage a team's signing material. Managing the team itself —
+   `apple_user` and `apple_user_invitation` — needs an **Admin** key instead: an
+   App Manager key can read `/v1/users` and not write to it.
 3. Note the **Issuer ID** shown above the key list. It is a UUID, and it is the
    same for every key on the team.
 4. Note the **Key ID** of the new key. It is 10 uppercase alphanumeric
@@ -321,6 +323,8 @@ them. Anything whose parent cannot be read back takes a composite ID:
 | `apple_in_app_purchase_localization` | Apple ID, or `<in_app_purchase_id>/<localization_id>` |
 | `apple_in_app_purchase_price_schedule` | `<in_app_purchase_id>` |
 | `apple_in_app_purchase_availability` | `<in_app_purchase_id>` |
+| `apple_user` | Apple ID, or the address the member signs in with |
+| `apple_user_invitation` | Apple ID, or the address it was sent to |
 
 ```bash
 terraform import apple_bundle_id.app com.example.myapp
@@ -393,6 +397,20 @@ terraform import 'apple_beta_build_localization.notes["en-US"]' "6478123456/1.4.
 terraform import 'apple_beta_tester.qa["ada@example.com"]' "4f1a9c30-7b52-4e18-9d66-2c8a3f5e1b04/ada@example.com"
 ```
 
+The two team membership resources take the address as readily as Apple's ID,
+because nobody has the ID: `/v1/users` is a collection with no single-record
+read, so the provider is scanning it either way.
+
+```bash
+terraform import apple_user.developer "ada@example.com"
+terraform import apple_user_invitation.new_hire "grace@example.com"
+```
+
+Only a **pending** invitation can be imported. Apple destroys the record the
+moment somebody accepts and issues a team member in its place, so an accepted
+invitation has nothing left to import — bring the member in as an `apple_user`
+instead.
+
 !> **Do not import `apple_certificate` if you are still using the certificate.**
 `csr_content` forces replacement and Apple does not reliably return the CSR a
 certificate was issued from, so an imported certificate is reissued on the next
@@ -406,7 +424,8 @@ Every resource has a matching plural data source (`apple_bundle_ids`,
 `apple_certificates`, `apple_devices`, `apple_merchant_ids`,
 `apple_pass_type_ids`, `apple_profiles`, `apple_bundle_id_capabilities`,
 `apple_apps`, `apple_subscription_groups`, `apple_subscriptions`,
-`apple_in_app_purchases`) for referring to things another state owns.
+`apple_in_app_purchases`, `apple_users`) for referring to things another state
+owns.
 Two data sources have no resource behind them at all: `apple_apps`, because
 Apple's API cannot create an app record, and `apple_territories`, because
 territories are the App Store's rather than the account's.

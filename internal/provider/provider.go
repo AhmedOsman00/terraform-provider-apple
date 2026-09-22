@@ -21,6 +21,7 @@ import (
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/profile"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/subscription"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/territory"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/user"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -303,6 +304,7 @@ func (p *appleProvider) DataSources(_ context.Context) []func() datasource.DataS
 		inapppurchase.NewInAppPurchasesDataSource,
 		inapppurchase.NewInAppPurchasePricePointsDataSource,
 		territory.NewTerritoriesDataSource,
+		user.NewUsersDataSource,
 	}
 }
 
@@ -341,5 +343,7 @@ func (p *appleProvider) Resources(_ context.Context) []func() resource.Resource 
 		inapppurchase.NewInAppPurchaseLocalizationResource,
 		inapppurchase.NewInAppPurchasePriceScheduleResource,
 		inapppurchase.NewInAppPurchaseAvailabilityResource,
+		user.NewUserResource,
+		user.NewUserInvitationResource,
 	}
 }
