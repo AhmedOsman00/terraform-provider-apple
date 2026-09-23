@@ -1,3 +1,18 @@
+## 0.4.1 (September 23, 2026)
+
+BUG FIXES:
+
+* **`apple_beta_tester` no longer fails every apply with "The parameter
+  'filter[email]' can not be used with this request".** Apple accepts
+  `filter[email]` on the account-wide `/v1/betaTesters` and refuses it with a
+  400 on the group's own `/v1/betaGroups/{id}/betaTesters`, which is the
+  collection the resource has to ask: the question is membership, not
+  existence. Every create and every read sent it, so no tester could be added
+  to a group at all. The provider now walks the group's collection and matches
+  the address in memory — which it already did, case-insensitively; the filter
+  was only ever a narrowing. For a large external group this costs pages rather
+  than one request, and Apple offers no server-side membership lookup here.
+
 ## 0.4.0 (September 22, 2026)
 
 FEATURES:

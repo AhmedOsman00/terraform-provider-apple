@@ -298,9 +298,9 @@ func TestBetaTesterLinkageUsesTheGroupRelationship(t *testing.T) {
 //
 // The question is membership rather than existence, so the collection asked has
 // to be the group's own -- a tester who exists in the account and is not in this
-// group must come back as not found. filter[email] narrows the request where
-// Apple honours it, and the match is made again in memory so that a filter Apple
-// ignores costs pages rather than correctness.
+// group must come back as not found. No filter is sent: Apple refuses
+// filter[email] on the relationship endpoint with a 400, so the collection is
+// walked and the match made in memory.
 func TestGetBetaGroupTesterByEmailAsksTheGroupsCollection(t *testing.T) {
 	var (
 		gotPath  string
@@ -329,8 +329,8 @@ func TestGetBetaGroupTesterByEmailAsksTheGroupsCollection(t *testing.T) {
 	if want := "/v1/betaGroups/g1/betaTesters"; gotPath != want {
 		t.Errorf("path = %q, want %q", gotPath, want)
 	}
-	if gotQuery != "tester@example.com" {
-		t.Errorf("filter[email] = %q, want tester@example.com", gotQuery)
+	if gotQuery != "" {
+		t.Errorf("filter[email] = %q, want it not to be sent: Apple rejects it here", gotQuery)
 	}
 
 	_, err = newTestClient(srv).GetBetaGroupTesterByEmail("g1", "nobody@example.com")

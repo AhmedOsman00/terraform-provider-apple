@@ -26,17 +26,15 @@ func (c *Client) GetBetaGroupTesters(groupID string) ([]models.BetaTester, error
 // and is not in this group must come back as not found, and a collection that
 // is already scoped to the group cannot answer that wrongly.
 //
-// filter[email] narrows the request to a single page where Apple honours it --
-// an external group runs to 10,000 testers -- but the match is made again in
-// memory, so a filter Apple ignores costs pages rather than correctness.
-// Addresses are compared case-insensitively: Apple preserves the case a tester
-// was created with and matches without it.
+// The whole collection is walked and the match made in memory, because Apple
+// does not accept filter[email] on the relationship endpoint the way it does on
+// the account-wide one: it answers a 400, "The parameter 'filter[email]' can not
+// be used with this request". An external group runs to 10,000 testers, so this
+// is pages rather than one request -- which is the cost of the only membership
+// answer Apple offers. Addresses are compared case-insensitively: Apple
+// preserves the case a tester was created with and matches without it.
 func (c *Client) GetBetaGroupTesterByEmail(groupID, email string) (*models.BetaTester, error) {
-	params := url.Values{}
-	params.Set("filter[email]", email)
-
-	testers, err := getAllPagesQuery[models.BetaTester](
-		c, fmt.Sprintf("/v1/betaGroups/%s/betaTesters", groupID), defaultPageSize, params)
+	testers, err := c.GetBetaGroupTesters(groupID)
 	if err != nil {
 		return nil, err
 	}

@@ -618,12 +618,14 @@ cross-variable validation.
     same link: two resources putting one person in two groups have nothing
     connecting them, so Terraform applies them at once and one loses the race —
     handling it here saves every such configuration a `depends_on`.
-  - `Read` asks the **group's** collection (`GET /v1/betaGroups/{id}/betaTesters`
-    with `filter[email]`), never the account-wide one. The question is
-    membership: a tester who exists but has been taken out of the group has to
-    read as gone, and a collection already scoped to the group cannot answer
-    otherwise. The email match is made again in memory, so a filter Apple ignores
-    costs pages rather than correctness.
+  - `Read` asks the **group's** collection (`GET /v1/betaGroups/{id}/betaTesters`),
+    never the account-wide one. The question is membership: a tester who exists
+    but has been taken out of the group has to read as gone, and a collection
+    already scoped to the group cannot answer otherwise. **No `filter[email]` is
+    sent here**, unlike on the account-wide `/v1/betaTesters`: Apple refuses it
+    on the relationship endpoint with a 400 — "The parameter 'filter[email]' can
+    not be used with this request" — which failed every create and read. The
+    whole collection is walked and the match made in memory, case-insensitively.
   - Every attribute is `RequiresReplace` and `Update` exists only to report that
     it was reached, the way `apple_profile`'s does — Apple publishes no
     `PATCH /v1/betaTesters`. `first_name` and `last_name` are therefore sent only
