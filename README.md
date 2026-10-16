@@ -25,7 +25,7 @@ signing key, and nothing Terraform stores is secret.
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
 - An Apple Developer Program team, and an App Store Connect API key with the
   **App Manager** role
-- [Go](https://golang.org/doc/install) >= 1.25 — only to build the provider from
+- [Go](https://golang.org/doc/install) >= 1.26.9 — only to build the provider from
   source
 
 ## Installation

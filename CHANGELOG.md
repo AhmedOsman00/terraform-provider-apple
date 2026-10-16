@@ -1,4 +1,4 @@
-## 0.5.0 (Unreleased)
+## 0.5.0 (October 16, 2026)
 
 FEATURES:
 
@@ -41,6 +41,23 @@ NOTES:
   processing result, so an image with the wrong dimensions fails the apply with
   Apple's reason instead of appearing as a broken image later; the rejected
   upload is deleted.
+
+BUG FIXES:
+
+* **Omitting an Optional+Computed attribute no longer forces a replacement.**
+  `RequiresReplace` ran before `UseStateForUnknown` on
+  `apple_beta_group.is_internal_group`,
+  `apple_beta_group.has_access_to_all_builds`,
+  `apple_subscription_price.territory_id`, `apple_subscription_price.plan_type`
+  and `apple_user_invitation.all_apps_visible`. It compared an unknown planned
+  value with state, so renaming a beta group without restating
+  `is_internal_group` planned its destruction. A unit test now checks the order
+  on every resource. Fix and test from MathGaps's fork.
+* **The provider is built with Go 1.26.9, `golang.org/x/net` v0.61.0 and
+  `google.golang.org/grpc` v1.84.0**, clearing the known vulnerabilities that
+  `govulncheck` reported as reachable from the provider: in the standard
+  library's `net/http`, HTTP/2 and `crypto/tls`, in `x/net`'s HTTP/2, and in
+  gRPC (GO-2026-6443). Building from source now needs Go 1.26.9 or later.
 
 ## 0.4.1 (September 23, 2026)
 

@@ -16,7 +16,7 @@ make build
 make test        # no credentials needed
 ```
 
-You need Go >= 1.25, and a `terraform` binary on your PATH for `make generate`
+You need Go >= 1.26.9, and a `terraform` binary on your PATH for `make generate`
 and `make validate-examples`. `golangci-lint` v2.13 or later is needed for
 `make lint` — v9 of the config format is what `.golangci.yml` uses.
 
