@@ -149,6 +149,24 @@ resource "apple_app_store_version_localization" "this" {
   whats_new = each.value.whats_new
 }
 
+# One screenshot set per locale and display type, flattened from the nested
+# map so each set has a stable address: "en-US/APP_IPHONE_67".
+resource "apple_app_screenshot_set" "this" {
+  for_each = merge([
+    for locale, sets in var.screenshots : {
+      for display_type, files in sets : "${locale}/${display_type}" => {
+        locale       = locale
+        display_type = display_type
+        files        = files
+      }
+    }
+  ]...)
+
+  app_store_version_localization_id = apple_app_store_version_localization.this[each.value.locale].id
+  screenshot_display_type           = each.value.display_type
+  screenshots                       = each.value.files
+}
+
 resource "apple_app_store_review_detail" "this" {
   app_store_version_id = apple_app_store_version.this.id
 

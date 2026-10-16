@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/media"
 )
 
 // AppCategoryFilters represents the in-memory filtering configuration for the
@@ -193,4 +194,38 @@ func derefString(s *string) string {
 	}
 
 	return *s
+}
+
+// matchScreenshots decides which of a set's current screenshots satisfy the
+// configured list, position by position.
+//
+// keep[i] is the ID of an existing screenshot whose content is the i-th
+// configured file, or "" when that file has to be uploaded. remove lists every
+// existing screenshot no position claimed -- including duplicates beyond the
+// number configured, and any Apple failed to process, whose checksum
+// media.AssetChecksum reports as "". Matching is by content alone, so
+// reordering files, or renaming one, uploads nothing.
+func matchScreenshots(existing []models.MediaAsset, wantChecksums []string) (keep []string, remove []string) {
+	keep = make([]string, len(wantChecksums))
+	used := make([]bool, len(existing))
+
+	for i, want := range wantChecksums {
+		for j, shot := range existing {
+			if used[j] || want == "" || media.AssetChecksum(shot) != want {
+				continue
+			}
+			keep[i] = shot.ID
+			used[j] = true
+
+			break
+		}
+	}
+
+	for j, shot := range existing {
+		if !used[j] {
+			remove = append(remove, shot.ID)
+		}
+	}
+
+	return keep, remove
 }

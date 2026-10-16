@@ -107,6 +107,18 @@ locales = {
   }
 }
 
+# Product page screenshots, per locale and device size, in display order.
+# Uncomment once the images exist: a missing file fails the plan.
+# screenshots = {
+#   "en-US" = {
+#     APP_IPHONE_67 = [
+#       "screenshots/en-US/iphone67/01-home.png",
+#       "screenshots/en-US/iphone67/02-capture.png",
+#       "screenshots/en-US/iphone67/03-reports.png",
+#     ]
+#   }
+# }
+
 review = {
   first_name    = "Ahmed"
   last_name     = "Osman"

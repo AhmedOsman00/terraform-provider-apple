@@ -33,6 +33,7 @@ func TestResourceSchemas(t *testing.T) {
 		"apple_app_store_review_detail":        NewAppStoreReviewDetailResource,
 		"apple_app_price_schedule":             NewAppPriceScheduleResource,
 		"apple_app_availability":               NewAppAvailabilityResource,
+		"apple_app_screenshot_set":             NewAppScreenshotSetResource,
 	}
 
 	for name, newResource := range resources {
@@ -104,6 +105,7 @@ func TestResourceTypeNames(t *testing.T) {
 		{"apple_app_store_review_detail", NewAppStoreReviewDetailResource},
 		{"apple_app_price_schedule", NewAppPriceScheduleResource},
 		{"apple_app_availability", NewAppAvailabilityResource},
+		{"apple_app_screenshot_set", NewAppScreenshotSetResource},
 	}
 
 	for _, tc := range cases {

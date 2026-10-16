@@ -267,6 +267,30 @@ type appPricePointsDataSourceModel struct {
 	FilteredCount types.Int64 `tfsdk:"filtered_count"`
 }
 
+// appScreenshotSetModel maps one display type's screenshots on a version
+// localization.
+//
+// Screenshots is the configured list of local paths, in display order.
+// ScreenshotIDs and ScreenshotChecksums are Apple's view of the same list,
+// position for position: the checksums are what tie a path to an uploaded
+// image, since Apple keeps the bytes and their MD5 but not where they came from.
+type appScreenshotSetModel struct {
+	ID                            types.String `tfsdk:"id"`
+	AppStoreVersionLocalizationID types.String `tfsdk:"app_store_version_localization_id"`
+	ScreenshotDisplayType         types.String `tfsdk:"screenshot_display_type"`
+	Screenshots                   types.List   `tfsdk:"screenshots"`
+	ScreenshotIDs                 types.List   `tfsdk:"screenshot_ids"`
+	ScreenshotChecksums           types.List   `tfsdk:"screenshot_checksums"`
+}
+
+// MaxScreenshotsPerSet is Apple's cap on the screenshots one display type holds.
+const MaxScreenshotsPerSet = 10
+
+// ScreenshotDisplayTypePattern accepts every display type Apple has named so
+// far and the ones it adds later. A closed list would reject a new device size
+// until the provider caught up; Apple validates the value anyway.
+var ScreenshotDisplayTypePattern = regexp.MustCompile(`^(APP|IMESSAGE_APP)_[A-Z0-9_]+$`)
+
 // appStoreVersionsDataSourceModel maps the version listing data source.
 type appStoreVersionsDataSourceModel struct {
 	// Scope

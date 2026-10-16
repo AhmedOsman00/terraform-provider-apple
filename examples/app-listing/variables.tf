@@ -150,6 +150,36 @@ variable "locales" {
   }
 }
 
+variable "screenshots" {
+  description = <<-EOT
+    Product page screenshots, keyed by locale and then by display type, each a
+    list of image paths in the order the App Store shows them -- at most ten.
+
+      screenshots = {
+        "en-US" = {
+          APP_IPHONE_67         = ["screenshots/en-US/iphone67/01.png", ...]
+          APP_IPAD_PRO_3GEN_129 = ["screenshots/en-US/ipad13/01.png", ...]
+        }
+      }
+
+    Relative paths resolve against the directory terraform runs in. Every
+    locale named here must also be in var.locales. Files are tracked by
+    content: editing one uploads it again, reordering or renaming uploads
+    nothing. Apple checks each image's pixel dimensions against its display
+    type, and an image it rejects fails the apply with Apple's reason.
+
+    Empty by default, which leaves whatever screenshots the version has alone.
+  EOT
+
+  type    = map(map(list(string)))
+  default = {}
+
+  validation {
+    condition     = alltrue([for locale in keys(var.screenshots) : contains(keys(var.locales), locale)])
+    error_message = "Every locale in screenshots must also be a key of var.locales: screenshots hang off that locale's version localization."
+  }
+}
+
 variable "review" {
   description = <<-EOT
     What App Review is told: who to contact, how to sign in, and anything a

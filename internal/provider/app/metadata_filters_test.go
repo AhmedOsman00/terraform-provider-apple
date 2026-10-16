@@ -4,6 +4,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
@@ -657,4 +658,71 @@ func TestReconcileTerritories(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestMatchScreenshots covers matching a set's screenshots to the configured
+// files by content: reorders and renames upload nothing, duplicates are matched
+// one for one, and a screenshot Apple failed to process is never kept.
+func TestMatchScreenshots(t *testing.T) {
+	shot := func(id, checksum, state string) models.MediaAsset {
+		c := checksum
+		return models.MediaAsset{ID: id, Attributes: models.MediaAssetAttributes{
+			SourceFileChecksum: &c,
+			AssetDeliveryState: &models.AppMediaAssetState{State: state},
+		}}
+	}
+	done := models.AssetDeliveryComplete
+
+	cases := map[string]struct {
+		existing   []models.MediaAsset
+		want       []string
+		wantKeep   []string
+		wantRemove []string
+	}{
+		"empty set uploads everything": {
+			want:     []string{"a", "b"},
+			wantKeep: []string{"", ""},
+		},
+		"reorder keeps every screenshot": {
+			existing: []models.MediaAsset{shot("1", "a", done), shot("2", "b", done)},
+			want:     []string{"b", "a"},
+			wantKeep: []string{"2", "1"},
+		},
+		"changed content replaces one": {
+			existing:   []models.MediaAsset{shot("1", "a", done), shot("2", "b", done)},
+			want:       []string{"a", "c"},
+			wantKeep:   []string{"1", ""},
+			wantRemove: []string{"2"},
+		},
+		"duplicates match one for one": {
+			existing:   []models.MediaAsset{shot("1", "a", done), shot("2", "a", done), shot("3", "a", done)},
+			want:       []string{"a", "a"},
+			wantKeep:   []string{"1", "2"},
+			wantRemove: []string{"3"},
+		},
+		"failed screenshot is replaced": {
+			existing:   []models.MediaAsset{shot("1", "a", models.AssetDeliveryFailed)},
+			want:       []string{"a"},
+			wantKeep:   []string{""},
+			wantRemove: []string{"1"},
+		},
+		"checksum case does not matter": {
+			existing: []models.MediaAsset{shot("1", "ABC", done)},
+			want:     []string{"abc"},
+			wantKeep: []string{"1"},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			keep, remove := matchScreenshots(tc.existing, tc.want)
+
+			if strings.Join(keep, ",") != strings.Join(tc.wantKeep, ",") {
+				t.Errorf("keep = %q, want %q", keep, tc.wantKeep)
+			}
+			if strings.Join(remove, ",") != strings.Join(tc.wantRemove, ",") {
+				t.Errorf("remove = %q, want %q", remove, tc.wantRemove)
+			}
+		})
+	}
 }

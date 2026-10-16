@@ -22,9 +22,13 @@ const HostURL string = "https://api.appstoreconnect.apple.com"
 type Client struct {
 	HostURL    string
 	HTTPClient *http.Client
-	Token      string
-	IssuerID   string
-	KeyID      string
+	// UploadHTTPClient delivers media file parts to the presigned URLs Apple
+	// hands out for them. It is deliberately not HTTPClient -- see uploads.go.
+	// Left nil, a shared default with its own transport is used.
+	UploadHTTPClient *http.Client
+	Token            string
+	IssuerID         string
+	KeyID            string
 }
 
 // NewClient creates a new Apple API client with a generated JWT token.
@@ -41,11 +45,12 @@ func NewClient(issuerID, keyID, privateKeyPEM string, scope []string) (*Client, 
 	}
 
 	return &Client{
-		HostURL:    HostURL,
-		HTTPClient: &http.Client{Timeout: 30 * time.Second},
-		Token:      token,
-		IssuerID:   issuerID,
-		KeyID:      keyID,
+		HostURL:          HostURL,
+		HTTPClient:       &http.Client{Timeout: 30 * time.Second},
+		UploadHTTPClient: newUploadHTTPClient(),
+		Token:            token,
+		IssuerID:         issuerID,
+		KeyID:            keyID,
 	}, nil
 }
 

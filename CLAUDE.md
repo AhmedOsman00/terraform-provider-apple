@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Terraform provider (`terraform-provider-apple`, module `github.com/AhmedOsman00/terraform-provider-apple`) for Apple App Store Connect, built on the **Terraform Plugin Framework** (not SDK v2). It is published on the Terraform Registry as `ahmedosman00/apple`. It manages Bundle IDs, Bundle ID capabilities, certificates, devices, merchant IDs, Pass Type IDs, and provisioning profiles, plus auto-renewable subscriptions (groups, group localizations, subscriptions, localizations, prices, availability) and one-time in-app purchases (purchases, localizations, price schedules, availability), plus a read-only `apple_territories` listing of the App Store's storefronts. It also manages an app's own App Store listing: content rights, categories, age rating, the localized name and product page, the release record, App Review information, the price and the storefronts it sells in. TestFlight is covered too: tester groups, who is in them, the app's TestFlight page text, a build's "What to Test" note, and what the beta reviewers are told. The team itself is the last layer: who is under Users and Access, what they may do, and the invitations that put them there.
+A Terraform provider (`terraform-provider-apple`, module `github.com/AhmedOsman00/terraform-provider-apple`) for Apple App Store Connect, built on the **Terraform Plugin Framework** (not SDK v2). It is published on the Terraform Registry as `ahmedosman00/apple`. It manages Bundle IDs, Bundle ID capabilities, certificates, devices, merchant IDs, Pass Type IDs, and provisioning profiles, plus auto-renewable subscriptions (groups, group localizations, subscriptions, localizations, prices, availability) and one-time in-app purchases (purchases, localizations, price schedules, availability), the App Review screenshot of either kind of product, plus a read-only `apple_territories` listing of the App Store's storefronts. It also manages an app's own App Store listing: content rights, categories, age rating, the localized name and product page, its screenshots, the release record, App Review information, the price and the storefronts it sells in. TestFlight is covered too: tester groups, who is in them, the app's TestFlight page text, a build's "What to Test" note, and what the beta reviewers are told. The team itself is the last layer: who is under Users and Access, what they may do, and the invitations that put them there.
 
 ## Commands
 
@@ -44,7 +44,7 @@ cannot be used for this: it makes `terraform init` refuse to run.
 
 `tfplugindocs` builds `docs/` from provider/resource/data-source `MarkdownDescription` strings plus the matching files under `examples/`. CI (`.github/workflows/test.yml`) fails the `generate` job if `make generate` produces a diff, so regenerate and commit whenever a schema, example, or guide changes.
 
-`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All fifty-six pages are checked in: `index.md`, thirty-four under `resources/`, nineteen under `data-sources/`, and two under `guides/`.
+`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All fifty-nine pages are checked in: `index.md`, thirty-seven under `resources/`, nineteen under `data-sources/`, and two under `guides/`.
 
 Hand-written prose lives in `templates/`, which is the only part of the docs pipeline a human edits directly. `templates/guides/<name>.md.tmpl` renders to `docs/guides/<name>.md`; a `templates/` directory does not suppress the auto-generated resource and data-source pages, which are still built from the schemas into a temporary directory. Two guides exist: `getting-started` (credentials, installing the provider from the Registry and overriding it with a local build, first configuration, import IDs per resource) and `code-signing` (the `fastlane match` replacement, the state-vs-bundle distribution model, adopting a match certificate).
 
@@ -54,8 +54,9 @@ Two layers, strictly separated, plus a standalone CLI:
 
 ### `internal/apple/` — App Store Connect API client
 
-- `client.go`: `Client` holds the JWT (ES256, `kid` header, 20-minute expiry) built from issuer ID + key ID + PKCS#8 private key. The token is minted once in `NewClient` and is immutable thereafter — a 20-minute life outlives any single Terraform command, so there is deliberately no refresh path and the signing key is not retained. `doRequest` decodes `models.ErrorResponse` into a formatted error, preferring Apple's own message; a 401 is reported as a credentials failure rather than retried, since re-signing with the same key yields an equivalent token.
-- One file per Apple resource (`budleIds.go` — note the typo in the filename — `certificates.go`, `devices.go`, `merchantIds.go`, `passTypeIds.go`, `profiles.go`, `bundleIdCapabilities.go`, `apps.go`, `subscriptionGroups.go`, `subscriptionGroupLocalizations.go`, `subscriptions.go`, `subscriptionLocalizations.go`, `subscriptionPrices.go`, `subscriptionAvailabilities.go`, `inAppPurchases.go`, `inAppPurchaseVersions.go`, `inAppPurchaseLocalizations.go`, `inAppPurchasePrices.go`, `inAppPurchaseAvailabilities.go`, `territories.go`, `appInfos.go`, `appInfoLocalizations.go`, `appStoreVersions.go`, `appStoreVersionLocalizations.go`, `appStoreReviewDetails.go`, `ageRatingDeclarations.go`, `appPrices.go`, `appAvailabilities.go`, `builds.go`, `betaGroups.go`, `betaAppLocalizations.go`, `betaBuildLocalizations.go`, `betaAppReviewDetails.go`, `users.go`, `userInvitations.go`). Each exposes plain `Get*/Create*/Update*/Delete*` methods on `*Client` returning `models.*` structs. No Terraform types here.
+- `client.go`: `Client` holds the JWT (ES256, `kid` header, 20-minute expiry) built from issuer ID + key ID + PKCS#8 private key. The token is minted once in `NewClient` and is immutable thereafter — a 20-minute life outlives any single Terraform command, so there is deliberately no refresh path and the signing key is not retained. `doRequest` decodes `models.ErrorResponse` into a formatted error, preferring Apple's own message; a 401 is reported as a credentials failure rather than retried, since re-signing with the same key yields an equivalent token. `UploadHTTPClient` is a **second network**, used only for media file parts — see `uploads.go` below.
+- `uploads.go`: the image upload flow shared by every media resource — reserve (`POST` with `fileName`/`fileSize`), deliver each `uploadOperations` byte range to its presigned URL, commit (`PATCH` with `uploaded: true` and `sourceFileChecksum`), then poll the asset's `assetDeliveryState` briefly. **Parts never go through `doRequest` or `HTTPClient`**: the presigned URLs are on Apple's asset storage hosts, not App Store Connect, so `doRequest` would hand them the JWT and force a JSON content type onto a binary body, and the API client's 30-second timeout is sized for a JSON call. They go through `UploadHTTPClient` — its own `http.Transport`, a five-minute timeout — with only the headers Apple listed, HTTPS only, and every range bounds-checked before a byte is sent. A `nil` `UploadHTTPClient` (as in tests that build a `Client` literal) falls back to a shared default with its own transport, **never** to `HTTPClient`. A reservation that cannot be completed, and an asset Apple marks `FAILED` (wrong dimensions, typically), is deleted rather than left in its parent as a broken image; the poll is bounded (`assetPollAttempts` × `assetPollInterval`), and an asset still processing when it gives up is returned as-is, not as an error. `MediaChecksum` (MD5, lower-case hex) is the one definition of the checksum, used by the commit and by the provider at plan time. The three asset kinds (`appScreenshots`, `subscriptionAppStoreReviewScreenshots`, `inAppPurchaseAppStoreReviewScreenshots`) share one wire type, `models.MediaAsset`, and differ only in a `mediaKind` — collection path, type, and parent relationship (`appScreenshotSet`, `subscription`, `inAppPurchaseV2` typed `inAppPurchases`).
+- One file per Apple resource (`budleIds.go` — note the typo in the filename — `certificates.go`, `devices.go`, `merchantIds.go`, `passTypeIds.go`, `profiles.go`, `bundleIdCapabilities.go`, `apps.go`, `subscriptionGroups.go`, `subscriptionGroupLocalizations.go`, `subscriptions.go`, `subscriptionLocalizations.go`, `subscriptionPrices.go`, `subscriptionAvailabilities.go`, `inAppPurchases.go`, `inAppPurchaseVersions.go`, `inAppPurchaseLocalizations.go`, `inAppPurchasePrices.go`, `inAppPurchaseAvailabilities.go`, `territories.go`, `appInfos.go`, `appInfoLocalizations.go`, `appStoreVersions.go`, `appStoreVersionLocalizations.go`, `appStoreReviewDetails.go`, `ageRatingDeclarations.go`, `appPrices.go`, `appAvailabilities.go`, `builds.go`, `betaGroups.go`, `betaAppLocalizations.go`, `betaBuildLocalizations.go`, `betaAppReviewDetails.go`, `users.go`, `userInvitations.go`, `appScreenshots.go`, `reviewScreenshots.go`). Each exposes plain `Get*/Create*/Update*/Delete*` methods on `*Client` returning `models.*` structs. No Terraform types here.
 - `models/`: JSON wire types. All responses go through the generics in `common.go`: `Response[T]`, `ListResponse[T]`, `Request[T]`.
 - `pagination.go`: `getAllPages[T]` walks every page of a collection, following the absolute `links.next` URL until it is empty and refusing links that point off-host. All seven `Get*s()` functions go through it — reading only the first page silently truncates results. A `pageSize` of `noPageSize` (0) omits the `limit` parameter entirely, which the `bundleIdCapabilities` relationship requires: it rejects `limit` with a 400. `getAllPagesQuery` is the same walk with extra query parameters applied to the first request only — Apple's `links.next` already carries them forward, so re-appending would duplicate them. The subscription and in-app purchase collections need it: a price is unreadable without its price point included, and either price point catalogue is unusable without `filter[territory]`.
 - Apple's API has no server-side filtering here — "get by identifier/name" helpers (e.g. `GetPassTypeIDByIdentifier`, `GetProfileByName`) list a full collection and scan client-side, so they depend on pagination being complete. The App Store Connect endpoints are the exception: `/v1/apps` supports `filter[bundleId]`, the price point catalogue supports `filter[territory]`, and `/v1/builds` supports `filter[version]` (the build number), `filter[preReleaseVersion.version]` (its train) and `filter[preReleaseVersion.platform]` — all used server-side because the collections are too large to pull whole. `GetBuilds` is the one by-identifier helper in the provider that is a single request rather than a full-collection scan, and it deliberately omits a `processingState` filter: see `apple_app_store_version` below.
@@ -68,7 +69,7 @@ The optional `scope` attribute restricts the JWT to named operations. It must be
 
 Env vars: `APPLE_APP_STORE_CONNECT_ISSUER_ID`, `APPLE_APP_STORE_CONNECT_API_KEY`, `APPLE_APP_STORE_CONNECT_PRIVATE_KEY`.
 
-Each domain lives in its own package (`bundle`, `certificate`, `device`, `merchant`, `passtypeid`, `profile`, `subscription`, `inapppurchase`, `app`, `beta`, `user`) following a consistent four-file convention:
+Each domain lives in its own package (`bundle`, `certificate`, `device`, `merchant`, `passtypeid`, `profile`, `subscription`, `inapppurchase`, `app`, `beta`, `user`, plus the shared `media`) following a consistent four-file convention:
 
 | File | Contents |
 |---|---|
@@ -79,11 +80,12 @@ Each domain lives in its own package (`bundle`, `certificate`, `device`, `mercha
 
 `bundle` additionally carries `capability_*.go` for the `apple_bundle_id_capability` resource/data source, where `capability_models.go` holds `SettingsFromAPI`/`SettingsToAPI` and `OptionsFromAPI`/`OptionsToAPI` to convert nested capability settings between API structs and `types.List`.
 
-`subscription` carries seven resources rather than one, so it prefixes by kind
+`subscription` carries eight resources rather than one, so it prefixes by kind
 the way `bundle` does: `group_*.go` (which covers both the group and its
 localization), `localization_*.go`, `price_resource.go`,
 `price_schedule_resource.go`, `availability_resource.go`,
-`price_point_data_source.go` and `price_point_equalizations_data_source.go`
+`review_screenshot_resource.go`, `price_point_data_source.go` and
+`price_point_equalizations_data_source.go`
 alongside the unprefixed `resource.go` / `data_source.go` for
 `apple_subscription` itself.
 `territory` is a data source only — and the one App Store Connect listing that
@@ -95,11 +97,12 @@ availability resource is otherwise only reachable through a `for` expression
 every caller would have to repeat.
 
 `app` was a data source only and is now the largest package in the provider: it
-carries the nine resources that make up an app's App Store listing, prefixed by
+carries the ten resources that make up an app's App Store listing, prefixed by
 kind the way `subscription` is — `settings_resource.go`, `info_resource.go`,
 `info_localization_resource.go`, `age_rating_resource.go`, `version_resource.go`,
 `version_localization_resource.go`, `review_detail_resource.go`,
-`price_schedule_resource.go` and `availability_resource.go`, alongside
+`screenshot_set_resource.go`, `price_schedule_resource.go` and
+`availability_resource.go`, alongside
 `category_data_source.go`, `price_point_data_source.go`,
 `version_data_source.go` and the unprefixed `data_source.go` for `apple_apps`.
 The shared state structs, validators and helpers live in `metadata_models.go`
@@ -147,7 +150,7 @@ has no endpoint for it — the 4.4.1 OpenAPI spec contains no `appDataUsages`
 path and no matching schema. Anything that automates it is using an
 undocumented endpoint. It is declared per app rather than per version, so a
 manual answer does not recur with each release; `examples/app-listing` reports
-it, along with screenshots, the build upload and submission, through the
+it, along with app preview videos, the build upload and submission, through the
 `remaining_manual_steps` output. Do not add a resource for it without first
 confirming Apple has published one.
 
@@ -227,11 +230,38 @@ show a diff for something nobody configured. `ACCOUNT_HOLDER` is rejected in
 request that grants it, so a configuration carrying it could never apply.
 
 `inapppurchase` is the same shape for one-time purchases: `localization_*.go`,
-`price_schedule_resource.go`, `availability_resource.go` and
-`price_point_data_source.go` alongside the unprefixed `resource.go` /
-`data_source.go` for `apple_in_app_purchase`. It shares nothing with
-`subscription` — Apple models the two as separate resources, and a price point
-from one is meaningless to the other.
+`price_schedule_resource.go`, `availability_resource.go`,
+`review_screenshot_resource.go` and `price_point_data_source.go` alongside the
+unprefixed `resource.go` / `data_source.go` for `apple_in_app_purchase`. It shares no Apple-domain code
+with `subscription` — Apple models the two as separate resources, and a price
+point from one is meaningless to the other. The one exception is the review
+screenshot, whose implementation both take from `media`.
+
+`media` is the one package shared across domains, and it shares only what is
+not Apple-domain logic: `ReadAsset` (read a local file and checksum it),
+`AssetChecksum` (Apple's checksum, lower-cased, or `""` for an asset Apple
+failed to process or holds none for — which can never equal a real file's, so
+the next plan replaces it), and `NewReviewScreenshotResource`. The two review
+screenshot resources differ only in their parent, so
+`subscription/review_screenshot_resource.go` and
+`inapppurchase/review_screenshot_resource.go` are constructors passing a
+`ReviewScreenshotConfig` — type name suffix, parent attribute, and three client
+method expressions. Because the parent attribute's name is configuration, that
+resource reads and writes state by `path.Root(...)` rather than through a
+tfsdk-tagged struct; `internal/provider/media/schema_test.go` is what checks
+each instantiation's schema and type name.
+
+**Media is tracked by content, never by path.** Every media resource takes local
+file paths and exposes the MD5 of each as a computed attribute that its
+`ModifyPlan` fills in **at plan time** by reading the file. Apple keeps the bytes
+and their checksum, not where they came from, so the checksum is the only bridge
+between configuration and Apple: editing an image in place is a diff, moving or
+renaming it is not, and a screenshot changed by hand in App Store Connect reads
+back with a different checksum and shows as drift. The paths are never
+refreshed and are null after an import. A path unknown at plan time leaves the
+checksums (and the IDs) unknown. Writes record the **local** checksums rather
+than re-reading Apple's, both because they are what the plan predicted and
+because an asset still processing may not report one yet.
 
 **App Store Connect resources differ from Developer Portal ones in two ways
 that shape the whole `subscription` package.** They hang off an app record,
@@ -314,7 +344,7 @@ single `locales` map and fans it out to both
 `apple_app_info_localization` and `apple_app_store_version_localization`, which
 is the closest a configuration gets to the flat shape those files use. And its
 `remaining_manual_steps` output names what no configuration can do: App Privacy,
-screenshots, the build upload, export compliance and submission. Attaching the
+app preview videos, the build upload, export compliance and submission. Attaching the
 build is not on that list — `build_number` handles it — but uploading the binary
 is, because Apple publishes no upload endpoint.
 
@@ -438,6 +468,14 @@ cross-variable validation.
 - **`apple_in_app_purchase_localization`**: localizations hang off an **in-app purchase version**, not the purchase. Apple moved them there in App Store Connect API 4.4.1 and deprecated the v1 endpoints that hid it, so the provider writes to `/v2/inAppPurchaseLocalizations` against a version resolved by `EnsureEditableInAppPurchaseVersion`: it picks the highest-numbered version in `PREPARE_FOR_SUBMISSION`, `DEVELOPER_REJECTED` or `REJECTED`, and creates one when every version is in review or approved — which is what App Store Connect's UI does when you edit approved metadata. Versions have no `DELETE`, so one created that way outlives the localization. The resolved version is reported as the computed `version_id`. Unlike a subscription localization there is **no `state`**: `InAppPurchaseLocalizationV2` has none, because the state lives on the version. Import accepts a bare ID — the parent is resolved in two hops, localization → version → purchase — or the composite `<in_app_purchase_id>/<localization_id>`. **Delete tolerates Apple's 409 `Cannot delete the last localization`**: a version must keep at least one, so destroying the only localization warns and drops state rather than erroring — erroring failed the whole destroy and left the purchase behind, and the record goes away with the purchase anyway. `ImportState` sets `review_note` itself instead of going through `applyPurchaseAttributes`, which skips it so that a null in configuration survives a `Read`; an import has no configuration to contradict, and leaving it null dropped a value Apple holds.
 - **`apple_in_app_purchase_price_schedule`**: a purchase has exactly **one** schedule, not a price record per territory the way a subscription does. `POST /v1/inAppPurchasePriceSchedules` replaces it wholesale, and there is no `PATCH` and no `DELETE` — so `Update` posts again (a genuine in-place update, not `RequiresReplace`) and `Delete` warns and drops state only. Both this and `apple_in_app_purchase_availability` need a `ModifyPlan` that marks `id` unknown when anything else changes: Terraform proposes the prior value for a computed attribute, Apple issues a new record ID on every `POST`, and without it every update would be rejected as an inconsistent result. The create request is the only one in the provider using JSON:API's `included` member: the prices do not exist yet, so each is sent inline under a literal placeholder ID (`${price0}`) that the `manualPrices` relationship references, and Apple substitutes real IDs on commit. `baseTerritory` is required — Apple added that after the endpoint shipped. `prices` is a **set**, because Apple returns them unordered, and `Read` matches by `price_point_id` and **keeps the configured dates** for a price already in state: Apple derives an `endDate` for any price a later one supersedes, and adopting it would be a permanent diff. Only `manualPrices` are read; the prices Apple equalizes from the base territory are computed and never the provider's. Import ID is the purchase ID.
 - **`apple_in_app_purchase_availability`**: same singular, `POST`-replaces, no-`DELETE` shape as the price schedule, and the same consequences — `Update` posts again, `Delete` warns and drops state only. The record itself carries only `availableInNewTerritories`; the territory list is a separate paginated collection under `/v1/inAppPurchaseAvailabilities/{id}/availableTerritories`, so `Read` takes two requests. `available_in_new_territories` defaults to `true`, matching App Store Connect's own default — but it only covers storefronts Apple opens *later*, so it is no substitute for naming the current ones; see `apple_subscription_availability` above and `apple_territories`. Import ID is the purchase ID.
+- **`apple_subscription_review_screenshot` / `apple_in_app_purchase_review_screenshot`**: one shared implementation (`media.NewReviewScreenshotResource`) over two Apple resources. A product holds **at most one** review screenshot and Apple has **no request that swaps the file**, so `write` (shared by `Create` and `Update`) reads the product's screenshot first: one whose `AssetChecksum` equals the file's is **adopted** — re-uploading would change nothing but the ID — and one that differs is **deleted before the upload**, because Apple refuses a second. A change of content is therefore an in-place update whose `id` changes, and `ModifyPlan` marks `id` unknown exactly when the planned checksum differs from state. `Read` goes through the product (`GET /v1/subscriptions/{id}/appStoreReviewScreenshot`, `GET /v2/inAppPurchases/{id}/appStoreReviewScreenshot`), never the stored ID, so a screenshot replaced by hand reads as the replacement; both endpoints answer a product with none as 200 `{"data":null}`, which `getParentMedia` maps to "not found". Import ID is the **product** ID. A failed write leaves the plan's unknowns in place, so `Create` drops state and `Update` restores the prior state rather than writing unknowns.
+- **`apple_app_screenshot_set`**: one display type's screenshots under one `apple_app_store_version_localization`, in order. `screenshots` is a list of paths; `screenshot_checksums` and `screenshot_ids` are computed lists aligned with it position for position. `ModifyPlan` computes the checksums and carries `screenshot_ids` forward **only when the checksum list is equal, order included**. Four things shape it:
+  - `Create` **adopts** an existing set for the display type, found by scanning the localization's sets. A version Apple starts from the previous one carries a copy of that version's screenshots, so the set a configuration names often exists already. Screenshots in an adopted set that the configuration does not name are deleted.
+  - Reconciliation (`reconcile`, with the pure matching in `matchScreenshots` in `metadata_filters.go`) matches **by content**, one for one: reordering or renaming uploads nothing, duplicates are matched individually, and an asset Apple marked `FAILED` never matches. Unclaimed screenshots are **deleted before anything is uploaded**, because a set holds at most ten and replacing all ten would otherwise briefly need twenty. Uploads append, so the order is then set in one `PATCH /v1/appScreenshotSets/{id}/relationships/appScreenshots`, which replaces the whole ordered list.
+  - A set exists at Apple whatever happened to its contents, so a failed `Create` or `Update` **still writes state**, from what the set holds at that point (`recordCurrent`) — a failed create is then tainted and replaced on the next apply rather than orphaned.
+  - `screenshot_display_type` is validated by **shape** (`^(APP|IMESSAGE_APP)_[A-Z0-9_]+$`), not by a closed list: a closed list would reject a device size Apple adds until a provider release caught up, and Apple validates the value itself. `Delete` deletes the set, which takes its screenshots with it. Import is the bare set ID; the localization is read back through `include=appStoreVersionLocalization`.
+
+  **App preview videos are not modelled.** They are `appPreviewSets`/`appPreviews` and use the same reservation flow, so `uploads.go` would carry them with a new `mediaKind`, but a video's processing takes far longer than the bounded poll and its frame-time and poster-frame attributes have no counterpart here. `examples/app-listing` lists them in `remaining_manual_steps`.
 - **`apple_app_settings`**: the app record's own `PATCH`, and the only place
   `contentRightsDeclaration` lives — the answer App Store Connect blocks a
   submission on with "You must set up Content Rights Information in App
@@ -689,10 +727,10 @@ Pushing a `v*` tag runs `.github/workflows/release.yml`: GoReleaser cross-compil
 
 Two tiers:
 
-- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`.
+- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`, `internal/apple/uploads_test.go`, `internal/provider/media/files_test.go`, `internal/provider/media/schema_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`. `uploads_test.go` sets `HTTPClient` and `UploadHTTPClient` to two counting transports over one `httptest.NewTLSServer` and asserts which network carried each request and that no part carried an `Authorization` header — that test is the guarantee the two networks stay separate. It shortens `assetPollInterval`/`assetPollAttempts` rather than waiting.
 - **Acceptance** (`internal/provider/*_test.go`, package `provider`): `terraform-plugin-testing` against the real API. `testAccPreCheck` skips when credentials are absent.
 
-All thirty-four resources now have acceptance coverage. `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go` and `internal/provider/user/schema_test.go` are a second, cheaper net under the app listing, TestFlight and team membership resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
+All thirty-seven resources now have acceptance coverage. `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go` and `internal/provider/user/schema_test.go` are a second, cheaper net under the app listing, TestFlight and team membership resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
 
 Two things constrain what the acceptance tier is allowed to do:
 
@@ -739,6 +777,7 @@ Two things constrain what the acceptance tier is allowed to do:
   `TestAccBetaBuildLocalizationResource_basic` needs an uploaded build and skips
   behind `testAccPreCheckBuild` like the build attachment test does.
 - **The team membership tests are the only ones that can remove a person.** `TestAccUserInvitationResource_basic` emails a real address, so it skips unless `APPLE_TEST_USER_INVITE_EMAIL` names one the runner is entitled to invite — the same guard the TestFlight tester test is behind. `TestAccUserResource_basic` goes further: its destroy removes the member from the team for good, so it needs `APPLE_TEST_USER_EMAIL` **and** `APPLE_TEST_ALLOW_USER_REMOVAL`, because naming somebody is not on its own a statement that losing them is acceptable. Neither needs `APPLE_TEST_APP_ID` — they write to the team rather than to an app — and both need an API key with the **Admin** role, which the rest of the suite does not. The roles the tests grant stop at `APP_MANAGER`: a test that granted `ADMIN` would leave a window an interrupted run could not close. `TestAccUsersDataSource_*`, `TestAccUserResource_notOnTheTeam` and the two plan-only refusal tests write nothing and run on credentials alone.
+- **The media tests generate their images.** `media_resource_test.go` writes solid-colour 1290×2796 PNGs into `t.TempDir()` — the 6.7" iPhone portrait size, legal for `APP_IPHONE_67` and as a review screenshot — rather than checking binaries in; a different colour is a different checksum, which is all the tests need. They run under the same guards as the products they hang off (`testAccPreCheckSubscription`, `testAccPreCheckInAppPurchase`), and destroying the parent takes the media with it. `TestAccAppScreenshotSetResource_basic` asserts that swapping the two files keeps both screenshot IDs — the reorder-uploads-nothing promise.
 - **Certificates consume a slot while they exist.** `certificate_resource_test.go` and both profile test files issue one and revoke it on destroy, so a completed run is neutral; an interrupted run leaves a certificate to revoke by hand. `IOS_DEVELOPMENT` is preferred over a distribution type where the profile type allows it.
 
 Identifiers are fixed rather than randomised, matching the existing tests, so an interrupted run leaves a Bundle ID, Merchant ID or profile that must be deleted in the portal before the test passes again.

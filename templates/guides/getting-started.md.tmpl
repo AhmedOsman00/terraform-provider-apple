@@ -305,6 +305,7 @@ them. Anything whose parent cannot be read back takes a composite ID:
 | `apple_app_store_version` | Apple ID, or `<app_id>/<platform>/<version_string>` |
 | `apple_app_store_version_localization` | Apple ID, or `<app_store_version_id>/<locale>` |
 | `apple_app_store_review_detail` | `<app_store_version_id>` |
+| `apple_app_screenshot_set` | `<screenshot_set_id>` |
 | `apple_app_price_schedule` | `<app_id>` |
 | `apple_app_availability` | `<app_id>` |
 | `apple_beta_group` | Apple ID, or `<app_id>/<group_name>` |
@@ -319,10 +320,12 @@ them. Anything whose parent cannot be read back takes a composite ID:
 | `apple_subscription_price` | `<subscription_id>/<price_id>` |
 | `apple_subscription_price_schedule` | `<subscription_id>` |
 | `apple_subscription_availability` | `<subscription_id>` |
+| `apple_subscription_review_screenshot` | `<subscription_id>` |
 | `apple_in_app_purchase` | `<app_id>/<in_app_purchase_id>` |
 | `apple_in_app_purchase_localization` | Apple ID, or `<in_app_purchase_id>/<localization_id>` |
 | `apple_in_app_purchase_price_schedule` | `<in_app_purchase_id>` |
 | `apple_in_app_purchase_availability` | `<in_app_purchase_id>` |
+| `apple_in_app_purchase_review_screenshot` | `<in_app_purchase_id>` |
 | `apple_user` | Apple ID, or the address the member signs in with |
 | `apple_user_invitation` | Apple ID, or the address it was sent to |
 

@@ -1,3 +1,47 @@
+## 0.5.0 (Unreleased)
+
+FEATURES:
+
+* **`apple_app_screenshot_set`.** Manages the product page screenshots for one
+  device size in one language, in order, from local image files.
+
+  ```terraform
+  resource "apple_app_screenshot_set" "iphone_67" {
+    app_store_version_localization_id = apple_app_store_version_localization.en.id
+    screenshot_display_type           = "APP_IPHONE_67"
+    screenshots = [
+      "screenshots/en-US/iphone67/01-home.png",
+      "screenshots/en-US/iphone67/02-reports.png",
+    ]
+  }
+  ```
+
+  Files are tracked by their MD5, computed at plan time and compared with the
+  checksum Apple records: editing an image uploads it again, reordering or
+  renaming files uploads nothing, and a screenshot changed by hand in App Store
+  Connect shows as drift. An existing set — including the copy Apple starts a
+  new version with — is adopted rather than duplicated.
+
+* **`apple_subscription_review_screenshot` and
+  `apple_in_app_purchase_review_screenshot`.** The image App Review is shown of
+  a subscription or a one-time purchase. One per product; a changed file
+  replaces it.
+
+* **`examples/app-listing` manages screenshots** through a new `screenshots`
+  variable (locale → display type → image paths). App preview videos remain
+  manual and stay in `remaining_manual_steps`.
+
+NOTES:
+
+* Image bytes never travel over the API client. Apple answers each upload
+  reservation with presigned URLs on its asset storage hosts, and the file parts
+  are sent there through a separate HTTP client with its own transport and a
+  five-minute timeout, carrying only the headers Apple specified — never the App
+  Store Connect token. After the commit the provider polls briefly for Apple's
+  processing result, so an image with the wrong dimensions fails the apply with
+  Apple's reason instead of appearing as a broken image later; the rejected
+  upload is deleted.
+
 ## 0.4.1 (September 23, 2026)
 
 BUG FIXES:

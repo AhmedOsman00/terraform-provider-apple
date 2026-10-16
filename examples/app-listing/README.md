@@ -1,8 +1,8 @@
 # App Store listing
 
 A runnable module that manages an app's App Store listing: content rights,
-categories, age rating, localized metadata, the release, App Review
-information, the price and the storefronts it sells in.
+categories, age rating, localized metadata, product page screenshots, the
+release, App Review information, the price and the storefronts it sells in.
 
 It is the Terraform equivalent of the flat metadata file EAS and fastlane use —
 an `app.json` `store.config`, or a `Deliverfile` — with two differences that are
@@ -38,8 +38,8 @@ will stop a submission:
   `appDataUsages` resource in the App Store Connect API. It has to be answered
   once on the website. It is declared per app rather than per version, so it
   does not recur with each release.
-- **Screenshots and app previews.** Media assets are not managed by this
-  provider.
+- **App preview videos.** Screenshots are managed — set `screenshots` to a
+  map of locale to display type to image paths — but preview videos are not.
 - **The build upload.** Push the binary with Xcode, Transporter or fastlane;
   Apple publishes no upload endpoint. *Attaching* it is not manual — set
   `build_number` to the `CURRENT_PROJECT_VERSION` the pipeline just built and
@@ -90,7 +90,10 @@ $ terraform import 'apple_app_store_version_localization.this["en-US"]' <version
 ```
 
 Everything else in this module adopts rather than creates, so it needs no
-import — `apply` will find the existing record and patch it.
+import — `apply` will find the existing record and patch it. That includes
+screenshot sets: a version Apple started from the previous one carries a copy
+of its screenshots, and `apply` adopts each set, keeps the images whose content
+matches a configured file, and replaces the rest.
 
 ## Things that are easy to get wrong
 
