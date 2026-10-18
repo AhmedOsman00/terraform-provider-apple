@@ -1,4 +1,19 @@
-## 0.5.1 (Unreleased)
+## 0.6.0 (Unreleased)
+
+ENHANCEMENTS:
+
+* **Cutting the next version is a plain `terraform apply`.** Changing
+  `version_string` on a released `apple_app_store_version` used to fail, since
+  Apple will not rename a shipped version, and releasing again needed a
+  `terraform state rm` of the version, its localizations, review detail and
+  screenshot sets. A released version is now replaced instead: the shipped one
+  is dropped from state and left untouched at Apple, and the next is created.
+  `apple_app_store_version_localization` and `apple_app_screenshot_set` check
+  the version before deleting, and drop a released version's records from
+  state without trying; with the review detail, they adopt the copies Apple
+  starts the new version with. A version still being prepared, or rejected, is
+  renamed in place as before, and one in review still fails until it is
+  withdrawn.
 
 BUG FIXES:
 

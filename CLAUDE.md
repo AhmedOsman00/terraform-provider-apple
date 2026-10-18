@@ -520,7 +520,12 @@ cross-variable validation.
 - **`apple_app_store_version`**: the one resource here with a real create and a
   real delete. `platform` is `RequiresReplace` and accepts `TV_OS` and
   `VISION_OS`, which an `apple_bundle_id` platform does not — the two lists are
-  different and should not be shared. `version_string` is mutable in place.
+  different and should not be shared. `version_string` is mutable in place
+  while the version is editable, and `RequiresReplaceIf` (`replaceReleasedVersion`)
+  replaces it once `app_version_state` is released, so cutting the next release
+  needs no `state rm`. The localization and screenshot set `Delete`s ask
+  `versionReleased` first and drop a released version's records from state
+  quietly; their `Create`s and the review detail adopt Apple's copies.
   **An app holds only one editable version per platform at a time**, so `Create`
   maps Apple's 409 to a diagnostic naming the composite import ID. `Delete`
   warns rather than erroring when the version has reached review, since only an

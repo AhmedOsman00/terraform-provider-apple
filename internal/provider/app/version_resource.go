@@ -92,9 +92,20 @@ func (r *appStoreVersionResource) Schema(_ context.Context, _ resource.SchemaReq
 			"version_string": schema.StringAttribute{
 				MarkdownDescription: "The version number customers see, such as `1.0` or `2.14.3`. Up to " +
 					"three dot-separated numbers. Updatable in place while the version is editable, and " +
-					"it must match the `CFBundleShortVersionString` of the build attached to it.",
+					"it must match the `CFBundleShortVersionString` of the build attached to it.\n\n" +
+					"Changing it on a released version replaces the resource: the shipped version is " +
+					"dropped from state, untouched at Apple, and the next one is created. Its " +
+					"localizations, screenshot sets and review detail are replaced with it and adopt the " +
+					"copies Apple starts the new version with, so cutting a release is a plain apply.",
 				Required:   true,
 				Validators: GetVersionStringValidator(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplaceIf(
+						replaceReleasedVersion,
+						"Replaces the version when it has been released.",
+						"Replaces the version when it has been released.",
+					),
+				},
 			},
 			"copyright": schema.StringAttribute{
 				MarkdownDescription: "The copyright line shown on the product page, conventionally the " +
@@ -752,4 +763,36 @@ func applyAppStoreVersion(model *appStoreVersionModel, version *models.AppStoreV
 			model.AppID = appID
 		}
 	}
+}
+
+// releasedVersionStates are the states in which a version is part of the app's
+// history: Apple will not rename it, and the next release is a new record.
+var releasedVersionStates = map[string]bool{
+	"READY_FOR_DISTRIBUTION":      true,
+	"PROCESSING_FOR_DISTRIBUTION": true,
+	"REPLACED_WITH_NEW_VERSION":   true,
+	"PENDING_DEVELOPER_RELEASE":   true,
+	"PENDING_APPLE_RELEASE":       true,
+	"ACCEPTED":                    true,
+}
+
+// replaceReleasedVersion replaces a version whose version_string changes
+// after it has been released. An editable version is renamed in place, and one
+// in review is left to Update, whose error says to withdraw it first.
+func replaceReleasedVersion(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+	var state types.String
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("app_version_state"), &state)...)
+	resp.RequiresReplace = releasedVersionStates[state.ValueString()]
+}
+
+// versionReleased reports whether Apple has released the version, which is
+// when the records hanging off it can only be dropped from state.
+func versionReleased(client *apple.Client, versionID string) (bool, error) {
+	version, err := client.GetAppStoreVersion(versionID)
+	if err != nil {
+		return false, err
+	}
+
+	return version.Attributes.AppVersionState != nil &&
+		releasedVersionStates[*version.Attributes.AppVersionState], nil
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -49,6 +50,9 @@ func (r *appStoreVersionLocalizationResource) Schema(_ context.Context, _ resour
 			"This is the per-release half of the localized metadata: the description, the keywords, the " +
 			"promotional text and the release notes. The app's name, subtitle and privacy policy link " +
 			"outlive any release and belong to `apple_app_info_localization` instead.\n\n" +
+			"Every version after the first starts with Apple's copy of the previous version's " +
+			"localizations. When the version already has one for `locale`, it is adopted rather " +
+			"than created, and any attribute in it the configuration leaves out is cleared.\n\n" +
 			"~> **`keywords` is a list here and a single 100-character string at Apple.** The provider " +
 			"joins the list with commas and no spaces — a space is a character, and every one of them " +
 			"comes out of the hundred. The limit applies to the joined string, so it is checked after " +
@@ -177,6 +181,43 @@ func (r *appStoreVersionLocalizationResource) Create(ctx context.Context, req re
 	ctx = tflog.SetField(ctx, "app_store_version_id", versionID)
 	ctx = tflog.SetField(ctx, "locale", locale)
 
+	// Apple starts every version after the first with a copy of the previous
+	// version's localizations, so the one this resource is asked for often
+	// exists already.
+	existing, err := r.client.GetAppStoreVersionLocalizations(versionID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Reading App Store Version Localizations",
+			fmt.Sprintf("Could not check whether version '%s' already has a '%s' localization: %s",
+				versionID, locale, err.Error()),
+		)
+		return
+	}
+	for i := range existing {
+		if existing[i].Attributes.Locale != locale {
+			continue
+		}
+
+		tflog.Debug(ctx, "Adopting existing app store version localization", map[string]interface{}{"localization_id": existing[i].ID})
+
+		var current appStoreVersionLocalizationModel
+		applyVersionLocalization(&current, &existing[i])
+
+		localization, err := r.client.UpdateAppStoreVersionLocalization(existing[i].ID, versionLocalizationUpdate(plan, current), nil)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error Adopting App Store Version Localization",
+				fmt.Sprintf("Version '%s' already has a '%s' localization, and it could not be updated to match "+
+					"the configuration: %s", versionID, locale, err.Error()),
+			)
+			return
+		}
+
+		applyVersionLocalization(&plan, localization)
+		resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
+		return
+	}
+
 	localization, err := r.client.CreateAppStoreVersionLocalization(versionID, models.AppStoreVersionLocalizationCreateAttributes{
 		Locale:          locale,
 		Description:     stringOrNil(plan.Description),
@@ -278,14 +319,7 @@ func (r *appStoreVersionLocalizationResource) Update(ctx context.Context, req re
 	localizationID := state.ID.ValueString()
 	ctx = tflog.SetField(ctx, "localization_id", localizationID)
 
-	localization, err := r.client.UpdateAppStoreVersionLocalization(localizationID, models.AppStoreVersionLocalizationUpdateAttributes{
-		Description:     stringOrNil(plan.Description),
-		Keywords:        keywordsOrNil(plan.Keywords),
-		PromotionalText: stringOrNil(plan.PromotionalText),
-		MarketingURL:    stringOrNil(plan.MarketingURL),
-		SupportURL:      stringOrNil(plan.SupportURL),
-		WhatsNew:        stringOrNil(plan.WhatsNew),
-	}, nil)
+	localization, err := r.client.UpdateAppStoreVersionLocalization(localizationID, versionLocalizationUpdate(plan, state), nil)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating App Store Version Localization",
@@ -317,6 +351,11 @@ func (r *appStoreVersionLocalizationResource) Delete(ctx context.Context, req re
 	localizationID := state.ID.ValueString()
 	locale := state.Locale.ValueString()
 	ctx = tflog.SetField(ctx, "localization_id", localizationID)
+
+	if released, _ := versionReleased(r.client, state.AppStoreVersionID.ValueString()); released {
+		tflog.Info(ctx, "Version is released, so its localization is removed from state only")
+		return
+	}
 
 	if err := r.client.DeleteAppStoreVersionLocalization(localizationID, nil); err != nil {
 		errMsg := err.Error()
@@ -425,6 +464,42 @@ func applyVersionLocalization(model *appStoreVersionLocalizationModel, localizat
 	model.MarketingURL = stringOrNull(localization.Attributes.MarketingURL)
 	model.SupportURL = stringOrNull(localization.Attributes.SupportURL)
 	model.WhatsNew = stringOrNull(localization.Attributes.WhatsNew)
+}
+
+// versionLocalizationUpdate builds the PATCH that makes a localization holding
+// current match plan.
+//
+// An attribute the configuration leaves out is sent as null when current holds
+// a value, rather than omitted: Apple keeps whatever an omitted attribute
+// already says, and the state read back would then disagree with the plan.
+func versionLocalizationUpdate(plan, current appStoreVersionLocalizationModel) models.AppStoreVersionLocalizationUpdateAttributes {
+	attributes := models.AppStoreVersionLocalizationUpdateAttributes{
+		Description:     stringOrNil(plan.Description),
+		Keywords:        keywordsOrNil(plan.Keywords),
+		PromotionalText: stringOrNil(plan.PromotionalText),
+		MarketingURL:    stringOrNil(plan.MarketingURL),
+		SupportURL:      stringOrNil(plan.SupportURL),
+		WhatsNew:        stringOrNil(plan.WhatsNew),
+	}
+
+	fields := []struct {
+		name          string
+		plan, current attr.Value
+	}{
+		{"description", plan.Description, current.Description},
+		{"keywords", plan.Keywords, current.Keywords},
+		{"promotionalText", plan.PromotionalText, current.PromotionalText},
+		{"marketingUrl", plan.MarketingURL, current.MarketingURL},
+		{"supportUrl", plan.SupportURL, current.SupportURL},
+		{"whatsNew", plan.WhatsNew, current.WhatsNew},
+	}
+	for _, field := range fields {
+		if field.plan.IsNull() && !field.current.IsNull() && !field.current.IsUnknown() {
+			attributes.Clear = append(attributes.Clear, field.name)
+		}
+	}
+
+	return attributes
 }
 
 // keywordsOrNil renders a keyword list for the wire, omitting the attribute

@@ -5,6 +5,7 @@ subcategory: ""
 description: |-
   Manages one language of a version's App Store product page.
   This is the per-release half of the localized metadata: the description, the keywords, the promotional text and the release notes. The app's name, subtitle and privacy policy link outlive any release and belong to apple_app_info_localization instead.
+  Every version after the first starts with Apple's copy of the previous version's localizations. When the version already has one for locale, it is adopted rather than created, and any attribute in it the configuration leaves out is cleared.
   ~> keywords is a list here and a single 100-character string at Apple. The provider joins the list with commas and no spaces — a space is a character, and every one of them comes out of the hundred. The limit applies to the joined string, so it is checked after joining rather than per keyword.
   The localization for the app's primary language cannot be deleted; destroying that one warns and drops it from state.
 ---
@@ -14,6 +15,8 @@ description: |-
 Manages one language of a version's App Store product page.
 
 This is the per-release half of the localized metadata: the description, the keywords, the promotional text and the release notes. The app's name, subtitle and privacy policy link outlive any release and belong to `apple_app_info_localization` instead.
+
+Every version after the first starts with Apple's copy of the previous version's localizations. When the version already has one for `locale`, it is adopted rather than created, and any attribute in it the configuration leaves out is cleared.
 
 ~> **`keywords` is a list here and a single 100-character string at Apple.** The provider joins the list with commas and no spaces — a space is a character, and every one of them comes out of the hundred. The limit applies to the joined string, so it is checked after joining rather than per keyword.
 

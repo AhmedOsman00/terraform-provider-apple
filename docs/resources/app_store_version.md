@@ -84,6 +84,8 @@ resource "apple_app_store_version" "v3" {
 - `platform` (String) The platform this version is for: `IOS`, `MAC_OS`, `TV_OS` or `VISION_OS`. Note that this is a different list from an `apple_bundle_id`'s platform — Apple accepts `TV_OS` and `VISION_OS` here and rejects both there. Absent from Apple's update request, so changing it replaces the version.
 - `version_string` (String) The version number customers see, such as `1.0` or `2.14.3`. Up to three dot-separated numbers. Updatable in place while the version is editable, and it must match the `CFBundleShortVersionString` of the build attached to it.
 
+Changing it on a released version replaces the resource: the shipped version is dropped from state, untouched at Apple, and the next one is created. Its localizations, screenshot sets and review detail are replaced with it and adopt the copies Apple starts the new version with, so cutting a release is a plain apply.
+
 ### Optional
 
 - `build_number` (String) The build number of the uploaded build to attach — `CFBundleVersion`, which a pipeline knows as `CURRENT_PROJECT_VERSION`. Dot-separated numbers, such as `42` or `1.2.3`.

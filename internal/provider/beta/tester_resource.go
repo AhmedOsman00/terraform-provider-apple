@@ -54,11 +54,12 @@ func (r *betaTesterResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"!> **Creating this sends a real invitation email.** Apple emails the address as soon as the " +
 			"membership exists — for an external group, a stranger receives a TestFlight invitation to " +
 			"your app. Point it only at addresses you are entitled to invite.\n\n" +
-			"A tester record is the **account's**, not the group's: one record per email address, shared " +
-			"by every group and every app it belongs to. So a tester in three groups is three of these " +
-			"resources carrying the same `id`, and the first one to be applied is the one that creates " +
-			"the record. What each resource owns is the membership — destroying it removes the tester " +
-			"from that group and leaves the record, and every other group, alone.\n\n" +
+			"A tester record is the **app's**, not the group's: Apple keeps one record per email address " +
+			"per app, shared by every group of that app it belongs to. So a tester in three groups of one " +
+			"app is three of these resources carrying the same `id`, and the first one to be applied is " +
+			"the one that creates the record. A group of another app gets that app's own record. What " +
+			"each resource owns is the membership — destroying it removes the tester from that group " +
+			"and leaves the record, and every other group, alone.\n\n" +
 			"~> Apple publishes no update for a tester. `first_name` and `last_name` are sent only when " +
 			"the provider creates the record; if the address is already in your account, Apple keeps the " +
 			"name it has and the provider warns rather than pretending otherwise.",
@@ -66,7 +67,7 @@ func (r *betaTesterResource) Schema(_ context.Context, _ resource.SchemaRequest,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				MarkdownDescription: "The unique Apple-generated identifier for the **tester record**, " +
-					"which is shared with every other group this tester belongs to — it does not identify " +
+					"which is shared with every other group of the same app this tester belongs to — it does not identify " +
 					"the membership.",
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
@@ -146,7 +147,26 @@ func (r *betaTesterResource) Create(ctx context.Context, req resource.CreateRequ
 	ctx = tflog.SetField(ctx, "beta_group_id", groupID)
 	ctx = tflog.SetField(ctx, "beta_tester_email", email)
 
-	existing, lookupErr := r.client.GetBetaTesterByEmail(email)
+	group, err := r.client.GetBetaGroup(groupID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Reading Beta Group",
+			fmt.Sprintf("Could not read beta group '%s' to find its app: %s", groupID, err.Error()),
+		)
+
+		return
+	}
+	if group.Relationships == nil || group.Relationships.App == nil || group.Relationships.App.Data.ID == "" {
+		resp.Diagnostics.AddError(
+			"Error Reading Beta Group",
+			fmt.Sprintf("Apple did not report which app beta group '%s' belongs to.", groupID),
+		)
+
+		return
+	}
+	appID := group.Relationships.App.Data.ID
+
+	existing, lookupErr := r.client.GetBetaTesterByEmail(appID, email)
 	switch {
 	case lookupErr == nil:
 		if !r.adoptExistingTester(ctx, &plan, existing, resp) {
@@ -170,7 +190,7 @@ func (r *betaTesterResource) Create(ctx context.Context, req resource.CreateRequ
 		if err != nil && isDuplicate(err) {
 			tflog.Debug(ctx, "Beta tester record was created concurrently, linking it instead")
 
-			raced, raceErr := r.client.GetBetaTesterByEmail(email)
+			raced, raceErr := r.client.GetBetaTesterByEmail(appID, email)
 			if raceErr != nil {
 				r.addWriteError(&resp.Diagnostics, groupID, email, err)
 
@@ -381,9 +401,9 @@ func (r *betaTesterResource) Configure(_ context.Context, req resource.Configure
 // ImportState imports one group membership.
 //
 // The import ID is composite and there is no bare-ID form, for a reason no
-// other resource here has: an Apple tester ID names the person, not the
-// membership, and the same ID belongs to every group they are in -- so a bare
-// ID cannot say which membership was meant.
+// other resource here has: an Apple tester ID names the person within one app,
+// not the membership, and the same ID belongs to every group of that app they
+// are in -- so a bare ID cannot say which membership was meant.
 //
 // first_name and last_name are left null. Apple reports both, but they are
 // inputs it accepts only at creation, and adopting a name into a state the

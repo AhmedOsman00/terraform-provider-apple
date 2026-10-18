@@ -301,6 +301,23 @@ func (r *appScreenshotSetResource) Update(ctx context.Context, req resource.Upda
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
+// versionReleased reports whether the version the localization belongs to has
+// been released. A lookup that fails reports false, so Delete goes on to try.
+func (r *appScreenshotSetResource) versionReleased(localizationID string) bool {
+	localization, err := r.client.GetAppStoreVersionLocalization(localizationID)
+	if err != nil || localization.Relationships == nil {
+		return false
+	}
+
+	versionID := relationshipID(localization.Relationships.AppStoreVersion)
+	if versionID.IsNull() {
+		return false
+	}
+
+	released, _ := versionReleased(r.client, versionID.ValueString())
+	return released
+}
+
 // Delete deletes the set, which takes its screenshots with it.
 func (r *appScreenshotSetResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state appScreenshotSetModel
@@ -310,6 +327,12 @@ func (r *appScreenshotSetResource) Delete(ctx context.Context, req resource.Dele
 	}
 
 	setID := state.ID.ValueString()
+	if r.versionReleased(state.AppStoreVersionLocalizationID.ValueString()) {
+		tflog.Info(ctx, "Version is released, so its screenshot set is removed from state only",
+			map[string]interface{}{"set_id": setID})
+		return
+	}
+
 	if err := r.client.DeleteAppScreenshotSet(setID, nil); err != nil {
 		if media.IsNotFound(err) {
 			tflog.Info(ctx, "Screenshot set already deleted", map[string]interface{}{"set_id": setID})
