@@ -17,3 +17,7 @@ import (
 
 // Generate documentation.
 //go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-dir .. --provider-name apple
+
+// Generate the apple CLI's reference, which docs/ cannot hold: tfplugindocs
+// deletes and re-renders that directory.
+//go:generate go -C .. run ./cmd/apple gen-docs cli/docs

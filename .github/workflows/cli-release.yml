@@ -1,0 +1,98 @@
+# The apple CLI's release workflow, on tags like cli-v0.1.0.
+#
+# The provider's release.yml triggers on v* and never sees these tags. Versions
+# are the CLI's own: cli/CHANGELOG.md holds a section per version, and the
+# GitHub release is never marked latest, so the repository keeps pointing at
+# the provider.
+name: CLI Release
+
+on:
+  push:
+    tags:
+      - 'cli-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Version and release notes
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#cli-v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "$GITHUB_REF_NAME is not cli-vMAJOR.MINOR.PATCH." >&2
+            exit 1
+          fi
+          awk -v v="$version" '
+            !found && $0 ~ "^## " v "([ (]|$)" { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' cli/CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          if [ ! -s "$RUNNER_TEMP/release-notes.md" ]; then
+            echo "cli/CHANGELOG.md has no '## $version' section for tag $GITHUB_REF_NAME." >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: go test ./internal/cli/... ./internal/apple/...
+
+      # GoReleaser outside Pro reads its version from a plain semver tag, so it
+      # is handed one and told not to publish: it builds the archives,
+      # checksums and Homebrew cask into dist/, and the next step publishes
+      # them under the real tag.
+      - name: Build
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: '~> v2'
+          args: release --clean --config .goreleaser.cli.yml --skip=publish,validate
+        env:
+          GORELEASER_CURRENT_TAG: v${{ steps.version.outputs.version }}
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/apple_"$VERSION"_*.tar.gz dist/apple_"$VERSION"_checksums.txt \
+            --title "apple CLI $VERSION" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --latest=false
+
+      - name: Homebrew cask
+        if: env.TAP_TOKEN != ''
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cask=dist/homebrew/Casks/apple.rb
+          if [ ! -s "$cask" ]; then
+            echo "GoReleaser wrote no $cask." >&2
+            exit 1
+          fi
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/AhmedOsman00/homebrew-tap.git" tap
+          mkdir -p tap/Casks
+          cp "$cask" tap/Casks/apple.rb
+          cd tap
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Casks/apple.rb
+          if git diff --cached --quiet; then
+            echo "The cask already describes $VERSION."
+          else
+            git commit -m "apple $VERSION"
+            git push
+          fi

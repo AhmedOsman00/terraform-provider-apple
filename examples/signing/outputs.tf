@@ -41,6 +41,26 @@ output "profiles" {
   ]
 }
 
+output "signing" {
+  description = <<-EOT
+    The certificates and profiles together, in the shape `apple signing install`
+    reads:
+
+      apple signing install --from <(terraform output -json signing) --key distribution=distribution.key
+  EOT
+  value = {
+    certificates = local.certificates
+    profiles = {
+      for profile in local.all_profiles : profile.name => {
+        uuid            = profile.uuid
+        state           = profile.profile_state
+        expiration_date = profile.expiration_date
+        profile_content = nonsensitive(profile.profile_content)
+      }
+    }
+  }
+}
+
 output "registered_devices" {
   description = "The devices included in the development and Ad Hoc profiles."
   value = {

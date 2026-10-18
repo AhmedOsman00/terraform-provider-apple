@@ -68,3 +68,6 @@ jobs:
           # GitHub sets the GITHUB_TOKEN secret automatically.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+          # A cli-v* tag can sit on the same commit, and GoReleaser would
+          # otherwise describe whichever tag git lists first.
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}

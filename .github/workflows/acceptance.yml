@@ -86,6 +86,8 @@ jobs:
           # they skip themselves; the step below says so rather than letting it
           # pass unnoticed.
           APPLE_TEST_APP_ID: ${{ secrets.APPLE_TEST_APP_ID }}
+          # The same app by bundle ID, for the apple CLI's read-only tests.
+          APPLE_TEST_BUNDLE_ID: ${{ secrets.APPLE_TEST_BUNDLE_ID }}
           RUN_FILTER: ${{ inputs.run_filter }}
           INCLUDE_DEVICE_TESTS: ${{ inputs.include_device_tests }}
         # No -parallel: the suite uses fixed identifiers that collide.
@@ -107,7 +109,7 @@ jobs:
           if [ -z "$APPLE_TEST_APP_ID" ]; then
             echo "::warning::APPLE_TEST_APP_ID is not set -- every TestAccSubscription* and TestAccInAppPurchase* test will skip itself."
           fi
-          go test ./internal/provider/ -v -timeout 55m -run "$RUN_FILTER" "${skip[@]}"
+          go test ./internal/provider/ ./internal/cli/ -v -timeout 55m -run "$RUN_FILTER" "${skip[@]}"
 
       # A run killed mid-apply never reaches Terraform's destroy, and the
       # identifiers are fixed, so the leftovers block the next run too.

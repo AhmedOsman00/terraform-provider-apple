@@ -18,6 +18,8 @@ signing key, and nothing Terraform stores is secret.
 | [`docs/`](docs/) | Generated reference for every resource and data source |
 | [`docs/guides/getting-started.md`](docs/guides/getting-started.md) | Credentials, installation, first configuration, importing |
 | [`docs/guides/code-signing.md`](docs/guides/code-signing.md) | The `fastlane match` replacement, end to end |
+| [`docs/guides/releasing.md`](docs/guides/releasing.md) | A release with the provider and the `apple` CLI together |
+| [`cli/`](cli/) | The `apple` CLI: the actions that go with the provider's state |
 | [`examples/signing/`](examples/signing/) | A runnable module that manages a full signing setup |
 
 ## Requirements
@@ -235,7 +237,22 @@ some files dropped where Xcode reads them. Read [the code signing
 guide](docs/guides/code-signing.md) for the exact commands — including the
 PKCS#12 encoding trap that makes `/usr/bin/openssl` the only safe choice — and
 for how to migrate off match by adopting its existing certificate instead of
-reissuing, which would revoke it.
+reissuing, which would revoke it. [`apple signing install`](cli/) does the
+installing in one command.
+
+## The apple CLI
+
+Terraform keeps the state; [`apple`](cli/) does the actions a state cannot
+describe: working out the next version and build, checking a release before it
+starts, waiting for a build to process, installing signing and taking
+screenshots. It uses the same credentials and API client as the provider.
+
+```bash
+brew install --cask ahmedosman00/tap/apple
+read -r version build < <(apple version next --bundle-id com.example.app)
+```
+
+[Releasing an app](docs/guides/releasing.md) walks through a release with both.
 
 ## Development
 

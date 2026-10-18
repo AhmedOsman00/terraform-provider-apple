@@ -50,7 +50,7 @@ Hand-written prose lives in `templates/`, which is the only part of the docs pip
 
 ## Architecture
 
-Two layers, strictly separated, plus a standalone CLI:
+Two layers, strictly separated, plus a CLI over the first of them:
 
 ### `internal/apple/` — App Store Connect API client
 
@@ -60,6 +60,36 @@ Two layers, strictly separated, plus a standalone CLI:
 - `models/`: JSON wire types. All responses go through the generics in `common.go`: `Response[T]`, `ListResponse[T]`, `Request[T]`.
 - `pagination.go`: `getAllPages[T]` walks every page of a collection, following the absolute `links.next` URL until it is empty and refusing links that point off-host. All seven `Get*s()` functions go through it — reading only the first page silently truncates results. A `pageSize` of `noPageSize` (0) omits the `limit` parameter entirely, which the `bundleIdCapabilities` relationship requires: it rejects `limit` with a 400. `getAllPagesQuery` is the same walk with extra query parameters applied to the first request only — Apple's `links.next` already carries them forward, so re-appending would duplicate them. The subscription and in-app purchase collections need it: a price is unreadable without its price point included, and either price point catalogue is unusable without `filter[territory]`.
 - Apple's API has no server-side filtering here — "get by identifier/name" helpers (e.g. `GetPassTypeIDByIdentifier`, `GetProfileByName`) list a full collection and scan client-side, so they depend on pagination being complete. The App Store Connect endpoints are the exception: `/v1/apps` supports `filter[bundleId]`, the price point catalogue supports `filter[territory]`, and `/v1/builds` supports `filter[version]` (the build number), `filter[preReleaseVersion.version]` (its train) and `filter[preReleaseVersion.platform]` — all used server-side because the collections are too large to pull whole. `GetBuilds` is the one by-identifier helper in the provider that is a single request rather than a full-collection scan, and it deliberately omits a `processingState` filter: see `apple_app_store_version` below.
+
+### `cmd/apple` and `internal/cli/` — the `apple` CLI
+
+The actions that go with the provider's state, released separately (see
+Releasing). Terraform holds state; the CLI does what a state cannot describe:
+`version next/set/current`, `release preflight`, `build wait`, `testflight
+notes`, `signing install/clean/encrypt` and `screenshots capture`. It imports
+`internal/apple` and nothing from `internal/provider`, and never runs
+`terraform`, `git commit` or `xcodebuild`.
+
+- `root.go`: `app` holds stdout/stderr, the clock, `sleep` and `newClient`, all
+  swapped in tests. `api()` rebuilds the client every 15 minutes, because the
+  client's token is minted once with a 20-minute life and `build wait` can run
+  for an hour. Every flag also reads `APPLE_<FLAG>` (`applyEnvironment`), and
+  `annotateEnvironment` writes that name into each flag's help so the help and
+  the generated reference cannot leave one out. There is deliberately no config
+  file. Usage errors exit 2 (`usageError`, `exactArgs`, the flag error func),
+  failures 1; results go to stdout (`emit`, or JSON with `--json`), progress to
+  stderr (`logf`).
+- `signing_files.go`: the signing document (`certificates` by role, `profiles`
+  keyed by name or as a list), the `.mobileprovision` plist read by its
+  delimiters, and `.key.enc` files in the `openssl enc -aes-256-cbc -pbkdf2
+  -iter 600000 -a` format. `testdata/fixture.key.enc` was written by
+  `/usr/bin/openssl`, and `TestEncryptKeyIsReadableByOpenSSL` checks the other
+  direction; keep both passing, or keys encrypted outside this tool stop
+  opening.
+- `keychain.go`: `/usr/bin/security`. Identities go in as **legacy** PKCS#12
+  (`pkcs12.Legacy`), the only kind `security import` accepts.
+- `docs.go`: the hidden `gen-docs` command `make generate` runs into
+  `cli/docs/`. It cannot write under `docs/`, which tfplugindocs deletes.
 
 ### `internal/provider/` — Terraform layer
 
@@ -295,15 +325,17 @@ CSR locally and supplies only `var.csr_contents`; a CSR is a public key plus a
 signature over it. That single decision is what makes the state ordinary: a
 CSR, an issued certificate and a provisioning profile are all public documents,
 so nothing in the state or the outputs is secret, and the module needs no
-secret-store dependency, no encrypted bundle, and no companion CLI. The last
-mile — a `.p12` assembled from the certificate and the user's key, plus
-profiles copied where Xcode reads them — is documented in
-`examples/signing/README.md` and `templates/guides/code-signing.md.tmpl` rather
-than automated.
+secret-store dependency and no encrypted bundle. The last mile — a `.p12`
+assembled from the certificate and the user's key, plus profiles copied where
+Xcode reads them — is documented in `examples/signing/README.md` and
+`templates/guides/code-signing.md.tmpl`, and automated by `apple signing
+install`, which reads the module's `signing` output and finds keys itself.
 
 There was previously a `cmd/applesign` CLI and a `local.signing_bundle` JSON
-document carrying private keys between them. Both are gone; do not reintroduce
-either without also reintroducing the reason they existed.
+document carrying private keys between them. Both are gone. `apple signing
+install` is not a return of them: the document it reads is the public
+`signing` output only, and keys come from flags, the environment or `.key.enc`
+files, never from Terraform. Keep it that way.
 
 Certificates reach the outputs through `local.certificates`, which merges the
 ones the module issues with ones adopted from an existing serial via
@@ -730,7 +762,9 @@ The examples pin `version = "~> 0.1"`, and `scripts/validate-examples.sh` builds
 
 ## Releasing
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`: GoReleaser cross-compiles the provider (only `main.go`; the Registry matches every entry in `SHA256SUMS` against expected artifact names, so any extra binary built here would fail ingestion), signs the checksums with the GPG key in the `GPG_PRIVATE_KEY` / `PASSPHRASE` secrets, and attaches `terraform-registry-manifest.json`. `project_name` is pinned in `.goreleaser.yml` because the Registry requires `terraform-provider-apple_<version>_<os>_<arch>.zip`, and GoReleaser would otherwise take the name from the checkout directory. The Registry ingests new tags automatically once the repository is connected and the public GPG key is uploaded; update `CHANGELOG.md` before tagging.
+Pushing a `v*` tag runs `.github/workflows/release.yml`: GoReleaser cross-compiles the provider (only `main.go`; the Registry matches every entry in `SHA256SUMS` against expected artifact names, so any extra binary built here would fail ingestion), signs the checksums with the GPG key in the `GPG_PRIVATE_KEY` / `PASSPHRASE` secrets, and attaches `terraform-registry-manifest.json`. `project_name` is pinned in `.goreleaser.yml` because the Registry requires `terraform-provider-apple_<version>_<os>_<arch>.zip`, and GoReleaser would otherwise take the name from the checkout directory. The Registry ingests new tags automatically once the repository is connected and the public GPG key is uploaded; update `CHANGELOG.md` before tagging. `GORELEASER_CURRENT_TAG` pins the tag, because a `cli-v*` tag can share the commit.
+
+The CLI releases from `cli-v*` tags through `.github/workflows/cli-release.yml`, versioned on its own with notes from `cli/CHANGELOG.md`. It cannot share `.goreleaser.yml` (the Registry rule above), and GoReleaser outside Pro cannot read a version from a prefixed tag, so `.goreleaser.cli.yml` only builds: the workflow hands it `GORELEASER_CURRENT_TAG=v<version>` with `--skip=publish,validate`, then `gh release create` publishes the archives under the `cli-v` tag, never marked latest, and pushes `dist/homebrew/Casks/apple.rb` to `AhmedOsman00/homebrew-tap` when the `HOMEBREW_TAP_TOKEN` secret exists.
 
 ## Tests and CI
 
@@ -738,6 +772,8 @@ Two tiers:
 
 - **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`, `internal/apple/uploads_test.go`, `internal/provider/media/files_test.go`, `internal/provider/media/schema_test.go`, `internal/provider/plan_modifier_order_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`. `uploads_test.go` sets `HTTPClient` and `UploadHTTPClient` to two counting transports over one `httptest.NewTLSServer` and asserts which network carried each request and that no part carried an `Authorization` header — that test is the guarantee the two networks stay separate. It shortens `assetPollInterval`/`assetPollAttempts` rather than waiting.
 - **Acceptance** (`internal/provider/*_test.go`, package `provider`): `terraform-plugin-testing` against the real API. `testAccPreCheck` skips when credentials are absent.
+
+The CLI's credential-free tests (`internal/cli/*_test.go`) drive whole commands through `run` against `fakeConnect`, an `httptest` App Store Connect whose build state advances on each look, with a fake clock so waits finish at once. `internal/cli/acceptance_test.go` only reads, and needs `APPLE_TEST_BUNDLE_ID`.
 
 All thirty-seven resources now have acceptance coverage. `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go` and `internal/provider/user/schema_test.go` are a second, cheaper net under the app listing, TestFlight and team membership resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
 

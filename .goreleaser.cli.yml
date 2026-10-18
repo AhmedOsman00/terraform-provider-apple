@@ -1,0 +1,67 @@
+# The apple CLI, released from cli-v* tags by .github/workflows/cli-release.yml.
+#
+# It cannot share .goreleaser.yml: the Registry ingests a provider release by
+# matching every entry in its SHA256SUMS against the provider's artifact names,
+# so a CLI archive in the same release fails ingestion. This configuration only
+# builds; the workflow publishes the archives under the cli-v tag, because
+# GoReleaser outside Pro cannot read a version from a prefixed tag.
+version: 2
+
+project_name: apple
+
+builds:
+  - id: apple
+    main: ./cmd/apple
+    binary: apple
+    env:
+      - CGO_ENABLED=0
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    flags:
+      - -trimpath
+    ldflags:
+      - '-s -w -X main.version={{ .Version }}'
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    name_template: 'apple_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    files:
+      - LICENSE
+      - cli/README.md
+
+checksum:
+  name_template: 'apple_{{ .Version }}_checksums.txt'
+  algorithm: sha256
+
+homebrew_casks:
+  - name: apple
+    repository:
+      owner: AhmedOsman00
+      name: homebrew-tap
+    skip_upload: true
+    url:
+      template: 'https://github.com/AhmedOsman00/terraform-provider-apple/releases/download/cli-v{{ .Version }}/{{ .ArtifactName }}'
+    homepage: 'https://github.com/AhmedOsman00/terraform-provider-apple/tree/main/cli'
+    description: 'App Store Connect actions to go with the ahmedosman00/apple Terraform provider'
+    license: 'MPL-2.0'
+    binaries:
+      - apple
+    # The binary is not notarized, so Gatekeeper would quarantine it on
+    # first run.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/apple"]
+          end
+
+release:
+  disable: true
+
+changelog:
+  disable: true

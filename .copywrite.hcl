@@ -12,6 +12,9 @@ project {
     # Generated provider documentation
     "docs/**",
 
+    # Generated CLI documentation
+    "cli/docs/**",
+
     # GitHub issue template configuration
     ".github/ISSUE_TEMPLATE/*.yml",
 
@@ -20,5 +23,6 @@ project {
 
     # GoReleaser tooling configuration
     ".goreleaser.yml",
+    ".goreleaser.cli.yml",
   ]
 }

@@ -548,6 +548,18 @@ require devices, and devices are permanent.
 | `TestAccProvider` | No calls | Applies an empty config. The JWT is minted locally; no request is sent. | No change. |
 | `TestAccProvider_ConfigurationValidation` | No calls | Nothing — three deliberately malformed credential sets, all rejected by validators before any request. Runs even without credentials. | No change. |
 
+## The apple CLI
+
+`internal/cli/acceptance_test.go` only reads. It needs `APPLE_TEST_BUNDLE_ID`,
+the bundle ID of the same scratch app `APPLE_TEST_APP_ID` names, and skips
+without it.
+
+| Test | Residue | Creates at Apple | What you see in the portal |
+|---|---|---|---|
+| `TestAccCLIVersionNext` | None | Nothing. Lists the app's versions and the builds of the next one. | No change. |
+| `TestAccCLIReleasePreflight` | None | Nothing. Checks a version `999.0.0` it never creates; failing the check is fine, a usage error is not. | No change. |
+| `TestAccCLIBuildWaitExists` | None | Nothing. Finds the build `APPLE_TEST_BUILD_NUMBER` and `APPLE_TEST_BUILD_PRE_RELEASE_VERSION` name; skips without them. | No change. |
+
 ## If a run is interrupted
 
 Identifiers are fixed rather than randomised, so leftovers block the next run.
