@@ -42,17 +42,11 @@ resource "apple_bundle_id" "example_app" {
   platform   = "IOS"
 }
 
+# Apple Pay takes no settings. The API cannot associate a Merchant ID with an
+# App ID, so the Merchant ID created above is attached in the Developer portal.
 resource "apple_bundle_id_capability" "apple_pay" {
   bundle_id       = apple_bundle_id.example_app.id
   capability_type = "APPLE_PAY"
-
-  # Reference the Merchant ID created above
-  settings = [
-    {
-      key   = "APPLE_PAY_IDENTIFIERS"
-      value = apple_merchant_id.example_merchant.identifier
-    },
-  ]
 }
 ```
 

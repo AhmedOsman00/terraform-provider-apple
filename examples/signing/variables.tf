@@ -33,12 +33,13 @@ variable "devices" {
 variable "capabilities" {
   description = <<-EOT
     Capability types to enable on the App ID, limited to those that take no
-    settings -- for example PUSH_NOTIFICATIONS, IN_APP_PURCHASE, SIRIKIT,
-    HOMEKIT, WALLET, GAME_CENTER.
+    settings -- for example PUSH_NOTIFICATIONS, IN_APP_PURCHASE, APP_GROUPS,
+    APPLE_PAY, ASSOCIATED_DOMAINS, SIRIKIT, HOMEKIT, WALLET, GAME_CENTER.
 
-    Capabilities that require settings (ICLOUD, APP_GROUPS, APPLE_PAY,
-    ASSOCIATED_DOMAINS) need nested `settings` blocks and should be declared
-    directly rather than through this variable.
+    Only ICLOUD, DATA_PROTECTION and APPLE_ID_AUTH take settings; declare those
+    directly rather than through this variable. Which App Groups, iCloud
+    containers or Merchant IDs the App ID uses is not part of the API and is
+    assigned in the Developer portal.
   EOT
   type        = set(string)
   default     = []

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
@@ -82,6 +83,51 @@ func TestAccBundleIDResource_platforms(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestAccBundleIDResource_importAdoptsPlatform imports a Bundle ID over the
+// configuration that created it. Import can only recover Apple's UNIVERSAL, so
+// state and configuration disagree afterwards; the next plan has to record the
+// configured IOS in place rather than destroy the App ID to recreate it.
+func TestAccBundleIDResource_importAdoptsPlatform(t *testing.T) {
+	config := testAccBundleIDResourceConfig("com.test.terraform-import", "Import Example", "IOS")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckBundleIDDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check:  testAccCheckBundleIDExists("apple_bundle_id.test"),
+			},
+			{
+				Config:             config,
+				ResourceName:       "apple_bundle_id.test",
+				ImportState:        true,
+				ImportStatePersist: true,
+				ImportStateIdFunc:  testAccBundleIDImportStateIDFunc("apple_bundle_id.test"),
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if got := states[0].Attributes["platform"]; got != "UNIVERSAL" {
+						return fmt.Errorf("imported platform = %q, want Apple's UNIVERSAL", got)
+					}
+					return nil
+				},
+			},
+			{
+				Config: config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("apple_bundle_id.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckBundleIDExists("apple_bundle_id.test"),
+					resource.TestCheckResourceAttr("apple_bundle_id.test", "platform", "IOS"),
+				),
+			},
+		},
+	})
 }
 
 func TestAccBundleIDResource_validation(t *testing.T) {

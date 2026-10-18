@@ -88,8 +88,15 @@ func (r *bundleIDCapabilityResource) Schema(_ context.Context, _ resource.Schema
 				},
 			},
 			"settings": schema.ListNestedAttribute{
-				MarkdownDescription: "Configuration settings for the capability. The available settings depend on the capability type: " +
-					"`PUSH_NOTIFICATIONS` takes none, while `DATA_PROTECTION` and `ICLOUD` take one each.\n\n" +
+				MarkdownDescription: "Configuration settings for the capability. Apple accepts three setting keys, and every other " +
+					"capability takes none:\n" +
+					"- `ICLOUD_VERSION` on `ICLOUD` - `XCODE_6` (CloudKit) or `XCODE_5` (legacy iCloud Documents)\n" +
+					"- `DATA_PROTECTION_PERMISSION_LEVEL` on `DATA_PROTECTION` - `COMPLETE_PROTECTION`, " +
+					"`PROTECTED_UNLESS_OPEN` or `PROTECTED_UNTIL_FIRST_USER_AUTH`\n" +
+					"- `APPLE_ID_AUTH_APP_CONSENT` on `APPLE_ID_AUTH` - `PRIMARY_APP_CONSENT`\n\n" +
+					"The App Store Connect API has no setting for which iCloud containers, App Groups or Merchant IDs " +
+					"an App ID uses: enabling `ICLOUD`, `APP_GROUPS` or `APPLE_PAY` turns the capability on with " +
+					"nothing assigned, and the assignment is made in the Developer portal.\n\n" +
 					"Set `value` for a single-choice setting, which is the common case, or `options` for a setting that " +
 					"takes several. The two are mutually exclusive -- Apple models both as an options list, and this " +
 					"resource reports a setting with one option through `value`.\n\n" +
@@ -102,7 +109,7 @@ func (r *bundleIDCapabilityResource) Schema(_ context.Context, _ resource.Schema
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"key": schema.StringAttribute{
-							MarkdownDescription: "The setting key identifier, for example `DATA_PROTECTION_PERMISSION_LEVEL`.",
+							MarkdownDescription: "The setting key: `ICLOUD_VERSION`, `DATA_PROTECTION_PERMISSION_LEVEL` or `APPLE_ID_AUTH_APP_CONSENT`.",
 							Required:            true,
 						},
 						"value": schema.StringAttribute{

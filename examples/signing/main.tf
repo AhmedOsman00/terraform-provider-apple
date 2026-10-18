@@ -97,10 +97,9 @@ resource "apple_bundle_id" "app" {
   platform   = "IOS"
 }
 
-# Capabilities that need no further configuration. Anything with settings
-# (ICLOUD, APP_GROUPS, APPLE_PAY, ASSOCIATED_DOMAINS) takes nested `settings`
-# blocks and belongs in your own configuration -- see
-# examples/resources/apple_bundle_id_capability.
+# Capabilities that need no further configuration. The three that take
+# settings (ICLOUD, DATA_PROTECTION, APPLE_ID_AUTH) belong in your own
+# configuration -- see examples/resources/apple_bundle_id_capability.
 resource "apple_bundle_id_capability" "app" {
   for_each = var.capabilities
 

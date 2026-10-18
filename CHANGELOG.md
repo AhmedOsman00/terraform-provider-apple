@@ -1,3 +1,25 @@
+## 0.5.1 (Unreleased)
+
+BUG FIXES:
+
+* **Importing an `apple_bundle_id` no longer plans its replacement.** Import
+  records the platform Apple reports, which is `UNIVERSAL` for every Bundle ID,
+  so a configuration saying `IOS` planned to destroy and recreate the App ID.
+  `platform` now replaces only when state holds something other than
+  `UNIVERSAL`; from `UNIVERSAL` the configured value is recorded in place, and
+  `Update` makes no API call when nothing but the platform changed.
+
+NOTES:
+
+* **The capability examples only use settings Apple accepts.** Apple's
+  `CapabilitySetting.key` has three values -- `ICLOUD_VERSION`,
+  `DATA_PROTECTION_PERMISSION_LEVEL` and `APPLE_ID_AUTH_APP_CONSENT` -- and the
+  examples sent `ICLOUD_SERVICES`, `APP_GROUPS`, `APPLE_PAY_IDENTIFIERS`,
+  `ASSOCIATED_DOMAINS` and `WALLET_PASS_TEAM_ID`, which Apple rejects. The
+  `settings` description lists the three, and says plainly that iCloud
+  containers, App Groups and Merchant IDs are assigned to an App ID in the
+  Developer portal: the App Store Connect API has no field for any of them.
+
 ## 0.5.0 (October 16, 2026)
 
 FEATURES:

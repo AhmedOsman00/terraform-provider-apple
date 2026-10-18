@@ -38,34 +38,24 @@ resource "apple_bundle_id_capability" "in_app_purchase" {
   # In-app purchases don't require additional settings
 }
 
+# ICLOUD_VERSION is the only iCloud setting: XCODE_6 is CloudKit. The iCloud
+# containers are assigned in the Developer portal; the API has no field for them.
 resource "apple_bundle_id_capability" "icloud" {
   bundle_id       = apple_bundle_id.ios_app.id
   capability_type = "ICLOUD"
 
-  # iCloud requires settings configuration
   settings = [
     {
       key   = "ICLOUD_VERSION"
-      value = "XCODE_5"
-    },
-    {
-      key   = "ICLOUD_SERVICES"
-      value = "CloudKit"
+      value = "XCODE_6"
     },
   ]
 }
 
+# App Groups takes no settings; the group is assigned in the Developer portal.
 resource "apple_bundle_id_capability" "app_groups" {
   bundle_id       = apple_bundle_id.ios_app.id
   capability_type = "APP_GROUPS"
-
-  # App Groups allows data sharing between apps
-  settings = [
-    {
-      key   = "APP_GROUPS"
-      value = "group.com.example.myapp.shared"
-    },
-  ]
 }
 
 # Create Merchant ID for Apple Pay
@@ -74,30 +64,17 @@ resource "apple_merchant_id" "ios_app_merchant" {
   display_name = "My iOS App Merchant"
 }
 
+# Apple Pay takes no settings. The Merchant ID above is associated with the App
+# ID in the Developer portal; the API has no field for it.
 resource "apple_bundle_id_capability" "apple_pay" {
   bundle_id       = apple_bundle_id.ios_app.id
   capability_type = "APPLE_PAY"
-
-  # Apple Pay configuration using the created Merchant ID
-  settings = [
-    {
-      key   = "APPLE_PAY_IDENTIFIERS"
-      value = apple_merchant_id.ios_app_merchant.identifier
-    },
-  ]
 }
 
+# Associated Domains takes no settings; the domains live in the entitlements file.
 resource "apple_bundle_id_capability" "associated_domains" {
   bundle_id       = apple_bundle_id.ios_app.id
   capability_type = "ASSOCIATED_DOMAINS"
-
-  # Associated domains for universal links and app clips
-  settings = [
-    {
-      key   = "ASSOCIATED_DOMAINS"
-      value = "applinks:example.com,appclips:clips.example.com"
-    },
-  ]
 }
 
 # Capability for macOS app - HomeKit
@@ -126,20 +103,5 @@ data "apple_merchant_ids" "example_merchants" {
     apple_merchant_id.ios_app_merchant,
     apple_merchant_id.premium_features,
     apple_merchant_id.subscriptions,
-  ]
-}
-
-# Example of using multiple Merchant IDs in a single capability
-# Note: This is for demonstration - typically you'd use one merchant ID per capability
-resource "apple_bundle_id_capability" "apple_pay_premium" {
-  bundle_id       = apple_bundle_id.premium_app.id
-  capability_type = "APPLE_PAY"
-
-  # Using multiple merchant identifiers (comma-separated)
-  settings = [
-    {
-      key   = "APPLE_PAY_IDENTIFIERS"
-      value = "${apple_merchant_id.premium_features.identifier},${apple_merchant_id.subscriptions.identifier}"
-    },
   ]
 }

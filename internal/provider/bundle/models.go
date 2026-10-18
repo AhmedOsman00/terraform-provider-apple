@@ -6,9 +6,12 @@
 package bundle
 
 import (
+	"context"
 	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -109,4 +112,21 @@ func isCreatablePlatform(platform string) bool {
 	}
 
 	return false
+}
+
+// storedPlatform is the platform Apple reports for every Bundle ID, whatever
+// it was created with.
+const storedPlatform = "UNIVERSAL"
+
+// platformRequiresReplace decides whether a planned platform change replaces
+// the Bundle ID.
+//
+// A change away from UNIVERSAL in state does not. State only holds UNIVERSAL
+// when it was configured that way or when it came from Apple -- an import --
+// and Apple holds UNIVERSAL for every Bundle ID either way, so recording the
+// configured value changes nothing at Apple. Replacing would delete an App ID
+// to recreate an identical one, taking its capabilities and every profile
+// generated from it along. Any other change still replaces, as before.
+func platformRequiresReplace(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+	resp.RequiresReplace = req.StateValue.ValueString() != storedPlatform
 }

@@ -17,61 +17,42 @@ resource "apple_bundle_id_capability" "in_app_purchase" {
   capability_type = "IN_APP_PURCHASE"
 }
 
-# Capability with settings - iCloud
+# iCloud with CloudKit. ICLOUD_VERSION is the only iCloud setting Apple
+# accepts: XCODE_6 is CloudKit, XCODE_5 the legacy iCloud Documents. Which
+# iCloud containers the App ID uses is not part of the API at all -- assign
+# them in the Developer portal.
 resource "apple_bundle_id_capability" "icloud" {
   bundle_id       = apple_bundle_id.example_app.id
   capability_type = "ICLOUD"
 
-  # Configure iCloud settings
   settings = [
     {
       key   = "ICLOUD_VERSION"
-      value = "XCODE_5"
-    },
-    {
-      key   = "ICLOUD_SERVICES"
-      value = "CloudKit"
+      value = "XCODE_6"
     },
   ]
 }
 
-# Capability with multiple settings - App Groups
+# App Groups takes no settings. The API enables the capability but cannot
+# create a group or assign one to the App ID; that is Developer portal work.
 resource "apple_bundle_id_capability" "app_groups" {
   bundle_id       = apple_bundle_id.example_app.id
   capability_type = "APP_GROUPS"
-
-  settings = [
-    {
-      key   = "APP_GROUPS"
-      value = "group.com.example.capabilities-demo.shared"
-    },
-  ]
 }
 
-# Apple Pay capability with merchant identifier
+# Apple Pay takes no settings either. A Merchant ID can be created with
+# apple_merchant_id, but associating it with the App ID happens in the
+# Developer portal.
 resource "apple_bundle_id_capability" "apple_pay" {
   bundle_id       = apple_bundle_id.example_app.id
   capability_type = "APPLE_PAY"
-
-  settings = [
-    {
-      key   = "APPLE_PAY_IDENTIFIERS"
-      value = "merchant.com.example.capabilities-demo"
-    },
-  ]
 }
 
-# Associated Domains for universal links and app clips
+# Associated Domains takes no settings. The domains themselves are listed in
+# the app's entitlements file, not on the App ID.
 resource "apple_bundle_id_capability" "associated_domains" {
   bundle_id       = apple_bundle_id.example_app.id
   capability_type = "ASSOCIATED_DOMAINS"
-
-  settings = [
-    {
-      key   = "ASSOCIATED_DOMAINS"
-      value = "applinks:example.com,appclips:clips.example.com,webcredentials:auth.example.com"
-    },
-  ]
 }
 
 # Game Center capability
@@ -102,13 +83,6 @@ resource "apple_bundle_id_capability" "personal_vpn" {
 resource "apple_bundle_id_capability" "wallet_passes" {
   bundle_id       = apple_bundle_id.example_app.id
   capability_type = "WALLET"
-
-  settings = [
-    {
-      key   = "WALLET_PASS_TEAM_ID"
-      value = "ABCD123456"
-    },
-  ]
 }
 
 # Wireless Accessory Configuration

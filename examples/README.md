@@ -122,7 +122,7 @@ resource "apple_bundle_id_capability" "icloud" {
   settings = [
     {
       key   = "ICLOUD_VERSION"
-      value = "XCODE_5"
+      value = "XCODE_6"
     },
   ]
 }

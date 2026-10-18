@@ -288,9 +288,14 @@ profiles or they will carry stale entitlements.
 
 ## What the module does not cover
 
-- Capabilities that take settings (`ICLOUD`, `APP_GROUPS`, `APPLE_PAY`,
-  `ASSOCIATED_DOMAINS`) need nested `settings` blocks; declare them directly.
-  See the `apple_bundle_id_capability` resource page.
+- Capabilities that take settings — `ICLOUD` (`ICLOUD_VERSION`),
+  `DATA_PROTECTION` and `APPLE_ID_AUTH` — need nested `settings`; declare them
+  directly. See the `apple_bundle_id_capability` resource page.
+- Assigning iCloud containers, App Groups or Merchant IDs to the App ID. The
+  App Store Connect API has no field for any of them, so `APP_GROUPS` and
+  `APPLE_PAY` go in `var.capabilities` like any settings-free capability and
+  the assignment itself is made in the Developer portal. Regenerate the
+  profiles afterwards, since they snapshot the entitlements.
 - Non-iOS platforms. The module hardcodes `IOS`; macOS and tvOS need their own
   certificate and profile types.
 - More than one app. The module manages a single bundle ID; a second app needs a

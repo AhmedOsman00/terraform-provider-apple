@@ -65,29 +65,15 @@ output "merchant_count_info" {
   }
 }
 
-# Example of using a Merchant ID data source result in a resource
+# The API cannot associate a Merchant ID with an App ID, so a lookup like this
+# feeds outputs or other tooling rather than an apple_bundle_id_capability.
 data "apple_merchant_ids" "my_merchants" {
   identifier_prefix = "merchant.com.mycompany"
   limit             = 1
 }
 
-variable "bundle_id" {
-  description = "Apple-generated ID of an existing Bundle ID to attach the Apple Pay capability to."
-  type        = string
-}
-
-resource "apple_bundle_id_capability" "apple_pay_from_data" {
-  # Any Bundle ID works here: a variable, or apple_bundle_id.example.id
-  bundle_id       = var.bundle_id
-  capability_type = "APPLE_PAY"
-
-  # Use the first merchant ID found in the data source
-  settings = [
-    {
-      key   = "APPLE_PAY_IDENTIFIERS"
-      value = length(data.apple_merchant_ids.my_merchants.merchant_ids) > 0 ? data.apple_merchant_ids.my_merchants.merchant_ids[0].identifier : "merchant.default"
-    },
-  ]
+output "first_merchant_identifier" {
+  value = one(data.apple_merchant_ids.my_merchants.merchant_ids[*].identifier)
 }
 ```
 

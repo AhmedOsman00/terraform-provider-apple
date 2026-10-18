@@ -49,19 +49,14 @@ resource "apple_bundle_id_capability" "in_app_purchase" {
   capability_type = "IN_APP_PURCHASE"
 }
 
+# Apple Pay takes no settings: associating the Merchant ID with the App ID is
+# Developer portal work.
 resource "apple_bundle_id_capability" "apple_pay" {
   bundle_id       = apple_bundle_id.example_app.id
   capability_type = "APPLE_PAY"
-
-  # Reference the created Merchant ID
-  settings = [
-    {
-      key   = "APPLE_PAY_IDENTIFIERS"
-      value = apple_merchant_id.example_store.identifier
-    },
-  ]
 }
 
+# XCODE_6 is CloudKit. The iCloud containers are assigned in the Developer portal.
 resource "apple_bundle_id_capability" "icloud" {
   bundle_id       = apple_bundle_id.example_app.id
   capability_type = "ICLOUD"
@@ -69,11 +64,7 @@ resource "apple_bundle_id_capability" "icloud" {
   settings = [
     {
       key   = "ICLOUD_VERSION"
-      value = "XCODE_5"
-    },
-    {
-      key   = "ICLOUD_SERVICES"
-      value = "CloudKit"
+      value = "XCODE_6"
     },
   ]
 }

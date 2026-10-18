@@ -76,11 +76,17 @@ func (r *bundleIDResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 					"Apple accepts no other value: tvOS and watchOS App IDs are created as `UNIVERSAL`. " +
 					"Note that Apple stores every Bundle ID as `UNIVERSAL` regardless of what is sent, so this " +
 					"attribute records what was configured rather than what Apple reports back.\n\n" +
-					"This cannot be changed after creation.",
+					"Changing it replaces the Bundle ID, with one exception: an imported Bundle ID records Apple's " +
+					"`UNIVERSAL`, and the configured value is adopted in place on the next apply rather than " +
+					"recreating the App ID.",
 				Required:   true,
 				Validators: []validator.String{PlatformValidator},
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.RequiresReplaceIf(
+						platformRequiresReplace,
+						"Changing the platform replaces the Bundle ID, unless state holds Apple's UNIVERSAL.",
+						"Changing the platform replaces the Bundle ID, unless state holds Apple's `UNIVERSAL`.",
+					),
 				},
 			},
 			"seed_id": schema.StringAttribute{
@@ -256,7 +262,15 @@ func (r *bundleIDResource) Update(ctx context.Context, req resource.UpdateReques
 
 	tflog.Debug(ctx, "Updating Bundle ID with Apple API")
 
-	// Update Bundle ID (only name can be updated)
+	// Only the name reaches Apple. A plan that changes nothing else is the
+	// platform being adopted after an import, which is recorded in state alone.
+	if plan.Name.Equal(state.Name) {
+		plan.ID = state.ID
+		plan.SeedID = state.SeedID
+		resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
+		return
+	}
+
 	bundleID, err := r.client.UpdateBundleID(state.ID.ValueString(), plan.Name.ValueString(), nil)
 	if err != nil {
 		// Handle specific update errors
