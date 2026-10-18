@@ -344,19 +344,27 @@ func TestGetBetaGroupTesterByEmailAsksTheGroupsCollection(t *testing.T) {
 	}
 }
 
-// TestGetBetaTesterByEmailReportsAMissAsNotFound pins the account-wide lookup
-// that decides whether a tester is created or merely added to a group.
+// TestGetBetaTesterByEmailReportsAMissAsNotFound pins the lookup that decides
+// whether a tester is created or merely added to a group, and that it asks for
+// the group's app only: Apple keeps a record per app, and a group refuses
+// another app's with a 409.
 func TestGetBetaTesterByEmailReportsAMissAsNotFound(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/betaTesters" {
 			t.Errorf("path = %q, want /v1/betaTesters", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("filter[apps]"); got != "app-1" {
+			t.Errorf("filter[apps] = %q, want app-1", got)
+		}
+		if got := r.URL.Query().Get("filter[email]"); got != "tester@example.com" {
+			t.Errorf("filter[email] = %q, want tester@example.com", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"data":[]}`)
 	}))
 	defer srv.Close()
 
-	_, err := newTestClient(srv).GetBetaTesterByEmail("tester@example.com")
+	_, err := newTestClient(srv).GetBetaTesterByEmail("app-1", "tester@example.com")
 	if err == nil {
 		t.Fatal("expected an error for an address the account does not hold")
 	}

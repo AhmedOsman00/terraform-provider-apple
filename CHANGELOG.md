@@ -2,6 +2,26 @@
 
 BUG FIXES:
 
+* **`apple_app_store_version_localization` adopts the copy Apple starts a new
+  version with.** Every version after the first begins with the previous
+  version's localizations, so creating one failed with "already has a
+  localization" and the release stopped halfway, needing a `terraform import`
+  per locale. `Create` now finds the existing localization for `locale` and
+  updates it to match the configuration, the way `apple_app_screenshot_set`
+  adopts its set.
+
+* **Removing an attribute from `apple_app_store_version_localization` clears
+  it.** An attribute left out of the configuration was omitted from the
+  `PATCH`, so Apple kept the old text and the apply failed with an
+  inconsistent result. It is now sent as `null`, on update and when adopting.
+
+* **`apple_beta_tester` can put someone who tests one app in another app's
+  group.** Apple keeps a separate tester record per app for the same address,
+  and the provider looked the address up across the whole account, so it could
+  link another app's record, which Apple refuses with a 409, "Tester(s) cannot
+  be assigned". The lookup now asks for the group's app only, and creates that
+  app's record when there is none.
+
 * **Importing an `apple_bundle_id` no longer plans its replacement.** Import
   records the platform Apple reports, which is `UNIVERSAL` for every Bundle ID,
   so a configuration saying `IOS` planned to destroy and recreate the App ID.

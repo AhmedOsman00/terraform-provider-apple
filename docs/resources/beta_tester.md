@@ -7,7 +7,7 @@ description: |-
   Works for both kinds of group, but they take different people:
   Internal group — the address must belong to a user of your App Store Connect team. Apple rejects anything else, and the tester sees builds as soon as they finish processing.External group — any address at all, up to 10,000 per app. The tester sees nothing until Apple's beta review has approved a build, which is what apple_beta_app_review_detail is for.
   !> Creating this sends a real invitation email. Apple emails the address as soon as the membership exists — for an external group, a stranger receives a TestFlight invitation to your app. Point it only at addresses you are entitled to invite.
-  A tester record is the account's, not the group's: one record per email address, shared by every group and every app it belongs to. So a tester in three groups is three of these resources carrying the same id, and the first one to be applied is the one that creates the record. What each resource owns is the membership — destroying it removes the tester from that group and leaves the record, and every other group, alone.
+  A tester record is the app's, not the group's: Apple keeps one record per email address per app, shared by every group of that app it belongs to. So a tester in three groups of one app is three of these resources carrying the same id, and the first one to be applied is the one that creates the record. A group of another app gets that app's own record. What each resource owns is the membership — destroying it removes the tester from that group and leaves the record, and every other group, alone.
   ~> Apple publishes no update for a tester. first_name and last_name are sent only when the provider creates the record; if the address is already in your account, Apple keeps the name it has and the provider warns rather than pretending otherwise.
 ---
 
@@ -22,7 +22,7 @@ Works for both kinds of group, but they take different people:
 
 !> **Creating this sends a real invitation email.** Apple emails the address as soon as the membership exists — for an external group, a stranger receives a TestFlight invitation to your app. Point it only at addresses you are entitled to invite.
 
-A tester record is the **account's**, not the group's: one record per email address, shared by every group and every app it belongs to. So a tester in three groups is three of these resources carrying the same `id`, and the first one to be applied is the one that creates the record. What each resource owns is the membership — destroying it removes the tester from that group and leaves the record, and every other group, alone.
+A tester record is the **app's**, not the group's: Apple keeps one record per email address per app, shared by every group of that app it belongs to. So a tester in three groups of one app is three of these resources carrying the same `id`, and the first one to be applied is the one that creates the record. A group of another app gets that app's own record. What each resource owns is the membership — destroying it removes the tester from that group and leaves the record, and every other group, alone.
 
 ~> Apple publishes no update for a tester. `first_name` and `last_name` are sent only when the provider creates the record; if the address is already in your account, Apple keeps the name it has and the provider warns rather than pretending otherwise.
 
@@ -104,7 +104,7 @@ resource "apple_beta_tester" "ada_in_qa" {
 
 ### Read-Only
 
-- `id` (String) The unique Apple-generated identifier for the **tester record**, which is shared with every other group this tester belongs to — it does not identify the membership.
+- `id` (String) The unique Apple-generated identifier for the **tester record**, which is shared with every other group of the same app this tester belongs to — it does not identify the membership.
 - `invite_type` (String) How the tester came to be in TestFlight, as Apple reports it: `EMAIL` for one invited by address, `PUBLIC_LINK` for one who joined through a group's public link.
 
 ## Import

@@ -3,6 +3,8 @@
 
 package models
 
+import "encoding/json"
+
 // Platform enumeration for App Store versions.
 //
 // This is not the same list as a Bundle ID's platform: an App Store version is
@@ -190,13 +192,37 @@ type AppStoreVersionLocalizationUpdateRequest struct {
 
 // AppStoreVersionLocalizationUpdateAttributes omits locale, which identifies
 // the record.
+//
+// A nil field is left out and Apple keeps what it holds. Clear names the JSON
+// properties to send as an explicit null instead, which is how Apple empties
+// one.
 type AppStoreVersionLocalizationUpdateAttributes struct {
-	Description     *string `json:"description,omitempty"`
-	Keywords        *string `json:"keywords,omitempty"`
-	PromotionalText *string `json:"promotionalText,omitempty"`
-	MarketingURL    *string `json:"marketingUrl,omitempty"`
-	SupportURL      *string `json:"supportUrl,omitempty"`
-	WhatsNew        *string `json:"whatsNew,omitempty"`
+	Description     *string  `json:"description,omitempty"`
+	Keywords        *string  `json:"keywords,omitempty"`
+	PromotionalText *string  `json:"promotionalText,omitempty"`
+	MarketingURL    *string  `json:"marketingUrl,omitempty"`
+	SupportURL      *string  `json:"supportUrl,omitempty"`
+	WhatsNew        *string  `json:"whatsNew,omitempty"`
+	Clear           []string `json:"-"`
+}
+
+// MarshalJSON writes each name in Clear as null.
+func (a AppStoreVersionLocalizationUpdateAttributes) MarshalJSON() ([]byte, error) {
+	type plain AppStoreVersionLocalizationUpdateAttributes
+	body, err := json.Marshal(plain(a))
+	if err != nil || len(a.Clear) == 0 {
+		return body, err
+	}
+
+	fields := map[string]json.RawMessage{}
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return nil, err
+	}
+	for _, name := range a.Clear {
+		fields[name] = json.RawMessage("null")
+	}
+
+	return json.Marshal(fields)
 }
 
 // AppStoreReviewDetail is what App Review reads before testing a build: who to

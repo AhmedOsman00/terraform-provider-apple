@@ -645,11 +645,14 @@ cross-variable validation.
   `Create` maps Apple's duplicate error onto.
 - **`apple_beta_tester`**: one tester in one group, and the only resource here
   whose Apple record is **not what it manages**. A beta tester is one record per
-  email address for the whole account, shared by every group and app it belongs
-  to, so `id` is that record's — two resources naming the same address carry the
-  same `id` — and what each resource owns is the linkage. Four things follow:
-  - `Create` **asks the account first**. A tester who already exists cannot be
-    POSTed again, so the existing record is linked with
+  email address **per app**, shared by every group of that app it belongs to, so
+  `id` is that record's — two resources naming the same address in one app carry
+  the same `id` — and what each resource owns is the linkage. Four things follow:
+  - `Create` **asks the group's app first**: it reads the group for its app, then
+    `GET /v1/betaTesters` with `filter[email]` and `filter[apps]`. Without the app
+    filter the lookup returns another app's record for the same address, and
+    linking that one answers a 409, "Tester(s) cannot be assigned". A tester who
+    already exists cannot be POSTed again, so the existing record is linked with
     `POST /v1/betaGroups/{id}/relationships/betaTesters` instead; a tester who is
     already in the group is an error naming the import ID, because adopting a
     membership silently would let a later destroy remove somebody a

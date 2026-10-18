@@ -48,15 +48,18 @@ func (c *Client) GetBetaGroupTesterByEmail(groupID, email string) (*models.BetaT
 	return nil, fmt.Errorf("beta tester '%s' not found in beta group '%s'", email, groupID)
 }
 
-// GetBetaTesterByEmail finds a tester anywhere in the account.
+// GetBetaTesterByEmail finds a tester's record for one app.
 //
-// A beta tester record is the team's rather than one app's -- the same address
-// is one record across every app and group -- so this is what decides whether a
-// tester has to be created or merely added to a group. A tester who is not in
-// the account is reported as not found rather than as an error.
-func (c *Client) GetBetaTesterByEmail(email string) (*models.BetaTester, error) {
+// Apple keeps a separate record per app for the same address, and a group
+// accepts only its own app's: linking another app's record answers a 409,
+// "Tester(s) cannot be assigned". So the lookup is scoped to the group's app,
+// and this is what decides whether a tester has to be created or merely added
+// to a group. A tester the app has no record for is reported as not found
+// rather than as an error.
+func (c *Client) GetBetaTesterByEmail(appID, email string) (*models.BetaTester, error) {
 	params := url.Values{}
 	params.Set("filter[email]", email)
+	params.Set("filter[apps]", appID)
 
 	testers, err := getAllPagesQuery[models.BetaTester](c, "/v1/betaTesters", defaultPageSize, params)
 	if err != nil {
@@ -69,7 +72,7 @@ func (c *Client) GetBetaTesterByEmail(email string) (*models.BetaTester, error) 
 		}
 	}
 
-	return nil, fmt.Errorf("beta tester '%s' not found in this App Store Connect account", email)
+	return nil, fmt.Errorf("beta tester '%s' not found for app '%s'", email, appID)
 }
 
 // CreateBetaTester creates a tester record and puts it in a group.
@@ -128,7 +131,7 @@ func (c *Client) AddBetaTesterToGroup(groupID, testerID string, authToken *strin
 // RemoveBetaTesterFromGroup takes a tester out of one group.
 //
 // This is not DELETE /v1/betaTesters/{id}, which would remove the person from
-// every app and group in the account. Membership is what this provider manages,
+// every group of the app. Membership is what this provider manages,
 // so membership is what it withdraws; the record stays in the account's tester
 // list.
 func (c *Client) RemoveBetaTesterFromGroup(groupID, testerID string, authToken *string) error {
