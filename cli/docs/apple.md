@@ -23,7 +23,7 @@ Every flag can also be set as APPLE_<FLAG>, such as APPLE_BUNDLE_ID for --bundle
 
 * [apple build](apple_build.md)	 - Check, upload and follow a build through App Store Connect
 * [apple completion](apple_completion.md)	 - Generate the autocompletion script for the specified shell
-* [apple release](apple_release.md)	 - Check an App Store release before it starts
+* [apple release](apple_release.md)	 - Check an App Store release before it starts, and submit it for review
 * [apple screenshots](apple_screenshots.md)	 - Take App Store screenshots on a simulator
 * [apple signing](apple_signing.md)	 - Install the certificates and profiles Terraform issued
 * [apple testflight](apple_testflight.md)	 - Write what TestFlight testers are told

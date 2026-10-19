@@ -207,3 +207,30 @@ func TestDoRequestSurfacesAppleErrorDetail(t *testing.T) {
 		t.Errorf("error = %q, want it to carry Apple's error title", err)
 	}
 }
+
+// TestDoRequestReportsEveryAppleError covers a response listing several
+// problems, the way a refused review submission names each missing piece:
+// reporting only the first would leave the rest to be found one run at a time.
+func TestDoRequestReportsEveryAppleError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		body := models.ErrorResponse{Errors: []models.APIError{
+			{Status: "409", Title: "Screenshots are missing", Detail: "APP_IPHONE_67 has none"},
+			{Status: "409", Title: "Content rights are missing", Detail: "Set them in App Information"},
+		}}
+		if err := json.NewEncoder(w).Encode(body); err != nil {
+			t.Errorf("encoding response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(srv).GetBundleID("any")
+	if err == nil {
+		t.Fatal("GetBundleID() succeeded, want an error")
+	}
+	for _, want := range []string{"409", "APP_IPHONE_67 has none", "Set them in App Information"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to contain %q", err, want)
+		}
+	}
+}

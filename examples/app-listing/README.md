@@ -52,9 +52,9 @@ will stop a submission:
   `Info.plist` at build time. It lives on the build rather than the version, and
   a build without it parks the version in `WAITING_FOR_EXPORT_COMPLIANCE`
   however complete the metadata is.
-- **Submitting for review.** App Store Connect only. Apple does publish a
-  submission API, but submission is an event rather than a state: a resource for
-  it would cancel a live review on destroy and resubmit on apply.
+- **Submitting for review.** `apple release submit`, or App Store Connect.
+  Submission is an event rather than a state: a resource for it would cancel a
+  live review on destroy and resubmit on apply.
 
 ## Usage
 

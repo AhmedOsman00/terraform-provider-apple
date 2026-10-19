@@ -153,9 +153,18 @@ marks the build `INVALID`.
 TF_VAR_app_version="$version" TF_VAR_app_build_number="$build" terraform apply
 ```
 
-Submitting for review stays in App Store Connect. Submission is an event, not a
-state: a resource for it would cancel a live review on destroy and resubmit on
-apply.
+### 7. Submit for review
+
+```sh
+apple release submit "$version"
+```
+
+Submission is an event, not a state — a resource for it would cancel a live
+review on destroy and resubmit on apply — so the CLI does it rather than
+Terraform. It checks that the version can be submitted and that its build is
+attached and `VALID`, reuses an open draft submission or one App Review rejected,
+and prints every objection Apple raises when the version is added. A version
+already waiting for review is reported and left alone, so the step can be rerun.
 
 ## In CI
 

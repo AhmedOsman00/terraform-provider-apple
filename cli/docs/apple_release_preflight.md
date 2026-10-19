@@ -39,5 +39,5 @@ apple release preflight VERSION [flags]
 
 ### SEE ALSO
 
-* [apple release](apple_release.md)	 - Check an App Store release before it starts
+* [apple release](apple_release.md)	 - Check an App Store release before it starts, and submit it for review
 

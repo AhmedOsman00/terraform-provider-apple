@@ -10,6 +10,7 @@ cannot describe:
 | `apple version next` | The next version and build number App Store Connect will accept |
 | `apple version set` / `current` | Write or read `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` |
 | `apple release preflight` | Check a release before anything changes: the version, a version stuck in review, release notes per locale |
+| `apple release submit` | Submit a version for App Review once Terraform has attached its build |
 | `apple build verify` | Check an archive or `.ipa`: bundle ID, version, build and signed entitlements |
 | `apple build upload` | Upload an `.ipa` through the App Store Connect API, without `altool` or Xcode |
 | `apple build wait` | Wait for an uploaded build to exist or finish processing, and set its "What to Test" |
@@ -70,6 +71,7 @@ apple build upload build/App.ipa
 apple testflight notes --header "Build $version ($build)" > notes.txt
 apple build wait "$version" "$build" --what-to-test notes.txt
 TF_VAR_app_version="$version" TF_VAR_app_build_number="$build" terraform apply
+apple release submit "$version"
 ```
 
 The [Releasing an app](https://registry.terraform.io/providers/ahmedosman00/apple/latest/docs/guides/releasing)

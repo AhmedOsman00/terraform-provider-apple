@@ -1,4 +1,4 @@
-## 0.2.0 (Unreleased)
+## 0.2.0 (October 19, 2026)
 
 FEATURES:
 
@@ -15,6 +15,14 @@ FEATURES:
   Apple to accept or refuse the upload, prints Apple's warnings and errors, and
   removes an upload it could not deliver. Follow it with `apple build wait`.
   The file is streamed part by part, never held in memory whole.
+
+* **`apple release submit`.** Submits a version for App Review through the
+  review submission API, after checking that the version can be submitted and
+  that its build is attached and `VALID`. An open draft submission is reused,
+  and one App Review rejected is resubmitted rather than replaced. Apple's
+  every objection to the version is printed, not only the first. A version
+  already waiting for or in review is reported and left alone, so a pipeline can
+  rerun it.
 
 ## 0.1.0 (October 18, 2026)
 

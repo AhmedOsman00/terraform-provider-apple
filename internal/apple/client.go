@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
@@ -135,9 +136,15 @@ func (c *Client) doRequest(req *http.Request, authToken *string) ([]byte, error)
 
 	// Prefer Apple's own structured error message when it supplies one.
 	var errorResponse models.ErrorResponse
+	// Apple lists one error per problem -- a refused review submission names
+	// every missing piece -- so all of them are reported, not only the first.
 	if err := json.Unmarshal(body, &errorResponse); err == nil && len(errorResponse.Errors) > 0 {
-		return nil, fmt.Errorf("API error (status %d): %s - %s",
-			res.StatusCode, errorResponse.Errors[0].Title, errorResponse.Errors[0].Detail)
+		messages := make([]string, 0, len(errorResponse.Errors))
+		for _, apiErr := range errorResponse.Errors {
+			messages = append(messages, fmt.Sprintf("%s - %s", apiErr.Title, apiErr.Detail))
+		}
+
+		return nil, fmt.Errorf("API error (status %d): %s", res.StatusCode, strings.Join(messages, "; "))
 	}
 
 	// A 401 means the credentials themselves were rejected. Re-signing a token

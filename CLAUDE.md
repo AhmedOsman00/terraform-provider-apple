@@ -65,7 +65,7 @@ Two layers, strictly separated, plus a CLI over the first of them:
 
 The actions that go with the provider's state, released separately (see
 Releasing). Terraform holds state; the CLI does what a state cannot describe:
-`version next/set/current`, `release preflight`, `build verify/upload/wait`,
+`version next/set/current`, `release preflight/submit`, `build verify/upload/wait`,
 `testflight notes`, `signing install/clean/encrypt` and `screenshots capture`.
 It imports `internal/apple` and nothing from `internal/provider`, and never runs
 `terraform`, `git commit` or `xcodebuild` — it checks and uploads what
@@ -201,7 +201,7 @@ path and no matching schema. Anything that automates it is using an
 undocumented endpoint. It is declared per app rather than per version, so a
 manual answer does not recur with each release; `examples/app-listing` reports
 it, along with app preview videos, the build upload (which `apple build upload`
-does outside Terraform) and submission, through the
+does outside Terraform) and submission (`apple release submit`), through the
 `remaining_manual_steps` output. Do not add a resource for it without first
 confirming Apple has published one.
 
@@ -400,7 +400,8 @@ is the closest a configuration gets to the flat shape those files use. And its
 app preview videos, the build upload, export compliance and submission. Attaching the
 build is not on that list — `build_number` handles it — but uploading the binary
 is: it is an event rather than state, so it belongs to `apple build upload` (or
-Xcode, or Transporter), not to a resource.
+Xcode, or Transporter), not to a resource. Submission is on the list for the same
+reason, and `apple release submit` does it.
 
 Two things there are easy to get wrong:
 
@@ -636,13 +637,22 @@ cross-variable validation.
   on it. For the same reason `GetBuilds` takes no processing-state filter —
   filtering a processing build away turns a wait into a "no such build".
 
-  **Submission is deliberately not modelled.** The modern flow exists
+  **Submission is deliberately not modelled as a resource.** The modern flow
   (`POST /v1/reviewSubmissions` → `POST /v1/reviewSubmissionItems` → `PATCH`
-  with `submitted: true`; the older `appStoreVersionSubmissions` is gone), but
-  it is an event rather than a state, and a resource for it would cancel a live
-  review on destroy and resubmit on apply — the same irreversibility class as
-  `apple_app_price_schedule` and `apple_app_availability`, which are guarded
-  behind `APPLE_TEST_ALLOW_APP_PRICING` for it. Export compliance stays manual
+  with `submitted: true`; the older `appStoreVersionSubmissions` is gone) is an
+  event rather than a state, and a resource for it would cancel a live review on
+  destroy and resubmit on apply. The CLI's `apple release submit`
+  (`internal/cli/release_submit.go` over `internal/apple/reviewSubmissions.go`)
+  does it instead: Apple holds one open submission per platform, so it reuses an
+  `UNRESOLVED_ISSUES` one (a rejected submission is resubmitted, not replaced),
+  then a `READY_FOR_REVIEW` draft, and creates one only when neither exists; a
+  version already `WAITING_FOR_REVIEW` or `IN_REVIEW` is reported and exits 0.
+  Apple validates the version when it is added as an item and answers with one
+  error per missing piece, which is why `doRequest` reports **every** error in
+  Apple's response rather than the first. Submission sits in the same
+  irreversibility class as `apple_app_price_schedule` and
+  `apple_app_availability`, which are guarded behind
+  `APPLE_TEST_ALLOW_APP_PRICING` for it, so it has no acceptance test. Export compliance stays manual
   too: `usesNonExemptEncryption` lives on the **build**, not the version, and a
   build without it parks the version in `WAITING_FOR_EXPORT_COMPLIANCE` however
   complete the metadata is. It is normally answered by

@@ -1,6 +1,6 @@
 ## apple release
 
-Check an App Store release before it starts
+Check an App Store release before it starts, and submit it for review
 
 ### Options
 
@@ -18,4 +18,5 @@ Check an App Store release before it starts
 
 * [apple](apple.md)	 - App Store Connect actions to go with the Terraform provider
 * [apple release preflight](apple_release_preflight.md)	 - Check that App Store Connect will take VERSION, before anything is changed
+* [apple release submit](apple_release_submit.md)	 - Submit VERSION for App Review
 

@@ -23,9 +23,9 @@ const maxWhatsNew = 4000
 func newReleaseCommand(a *app) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "release",
-		Short: "Check an App Store release before it starts",
+		Short: "Check an App Store release before it starts, and submit it for review",
 	}
-	cmd.AddCommand(newReleasePreflightCommand(a))
+	cmd.AddCommand(newReleasePreflightCommand(a), newReleaseSubmitCommand(a))
 	return cmd
 }
 

@@ -34,6 +34,18 @@ type fakeConnect struct {
 	uploadStates []string
 	uploadLooks  int
 
+	// attachedBuild is the build JSON GET .../build answers, or "" for none.
+	attachedBuild string
+	// submissions are the app's open review submissions, as JSON.
+	submissions []string
+	// items holds each submission's item JSON.
+	items map[string][]string
+	// itemErrors, when set, is Apple refusing the version, one error each.
+	itemErrors []string
+	added      []string
+	submitted  []string
+	created    int
+
 	mu        sync.Mutex
 	looks     int
 	whatsNew  map[string]string
@@ -101,6 +113,50 @@ func (f *fakeConnect) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.whatsNew[body.Data.Attributes.Locale] = body.Data.Attributes.WhatsNew
 		w.WriteHeader(http.StatusCreated)
 		fmt.Fprint(w, `{"data":{"type":"betaBuildLocalizations","id":"BL1","attributes":{}}}`)
+
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/appStoreVersions/") && strings.HasSuffix(r.URL.Path, "/build"):
+		if f.attachedBuild == "" {
+			fmt.Fprint(w, `{"data":null}`)
+			return
+		}
+		fmt.Fprintf(w, `{"data":%s}`, f.attachedBuild)
+
+	case r.Method == http.MethodGet && r.URL.Path == "/v1/apps/APP1/reviewSubmissions":
+		data(f.submissions)
+
+	case r.Method == http.MethodPost && r.URL.Path == "/v1/reviewSubmissions":
+		f.created++
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"data":{"type":"reviewSubmissions","id":"RS-NEW","attributes":{"state":"READY_FOR_REVIEW"}}}`)
+
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/reviewSubmissions/") && strings.HasSuffix(r.URL.Path, "/items"):
+		if r.URL.Query().Get("include") != "appStoreVersion" {
+			f.t.Errorf("items were read without include=appStoreVersion")
+		}
+		data(f.items[strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/v1/reviewSubmissions/"), "/items")])
+
+	case r.Method == http.MethodPost && r.URL.Path == "/v1/reviewSubmissionItems":
+		if len(f.itemErrors) > 0 {
+			w.WriteHeader(http.StatusConflict)
+			fmt.Fprintf(w, `{"errors":[%s]}`, strings.Join(f.itemErrors, ","))
+			return
+		}
+		var body struct {
+			Data struct {
+				Relationships map[string]struct {
+					Data struct{ ID string } `json:"data"`
+				} `json:"relationships"`
+			} `json:"data"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		f.added = append(f.added, body.Data.Relationships["reviewSubmission"].Data.ID+" "+body.Data.Relationships["appStoreVersion"].Data.ID)
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"data":{"type":"reviewSubmissionItems","id":"I1","attributes":{"state":"READY_FOR_REVIEW"}}}`)
+
+	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/v1/reviewSubmissions/"):
+		id := strings.TrimPrefix(r.URL.Path, "/v1/reviewSubmissions/")
+		f.submitted = append(f.submitted, id)
+		fmt.Fprintf(w, `{"data":{"type":"reviewSubmissions","id":%q,"attributes":{"state":"WAITING_FOR_REVIEW"}}}`, id)
 
 	case r.Method == http.MethodPost && r.URL.Path == "/v1/buildUploads":
 		w.WriteHeader(http.StatusCreated)
