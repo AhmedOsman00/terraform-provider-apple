@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Terraform provider (`terraform-provider-apple`, module `github.com/AhmedOsman00/terraform-provider-apple`) for Apple App Store Connect, built on the **Terraform Plugin Framework** (not SDK v2). It is published on the Terraform Registry as `ahmedosman00/apple`. It manages Bundle IDs, Bundle ID capabilities, certificates, devices, merchant IDs, Pass Type IDs, and provisioning profiles, plus auto-renewable subscriptions (groups, group localizations, subscriptions, localizations, prices, availability) and one-time in-app purchases (purchases, localizations, price schedules, availability), the App Review screenshot of either kind of product, plus a read-only `apple_territories` listing of the App Store's storefronts. It also manages an app's own App Store listing: content rights, categories, age rating, the localized name and product page, its screenshots, the release record, App Review information, the price and the storefronts it sells in. TestFlight is covered too: tester groups, who is in them, the app's TestFlight page text, a build's "What to Test" note, and what the beta reviewers are told. The team itself is the last layer: who is under Users and Access, what they may do, and the invitations that put them there.
+A Terraform provider (`terraform-provider-apple`, module `github.com/AhmedOsman00/terraform-provider-apple`) for Apple App Store Connect, built on the **Terraform Plugin Framework** (not SDK v2). It is published on the Terraform Registry as `ahmedosman00/apple`. It manages Bundle IDs, Bundle ID capabilities, certificates, devices, merchant IDs, Pass Type IDs, and provisioning profiles, plus auto-renewable subscriptions (groups, group localizations, subscriptions, localizations, prices, availability) and one-time in-app purchases (purchases, localizations, price schedules, availability), the App Review screenshot of either kind of product, plus a read-only `apple_territories` listing of the App Store's storefronts. It also manages an app's own App Store listing: content rights, categories, age rating, the localized name and product page, its screenshots, the release record, App Review information, the price and the storefronts it sells in. TestFlight is covered too: tester groups, who is in them, which builds they get, the app's TestFlight page text, a build's "What to Test" note, and what the beta reviewers are told. The team itself is the last layer: who is under Users and Access, what they may do, and the invitations that put them there.
 
 ## Commands
 
@@ -44,7 +44,7 @@ cannot be used for this: it makes `terraform init` refuse to run.
 
 `tfplugindocs` builds `docs/` from provider/resource/data-source `MarkdownDescription` strings plus the matching files under `examples/`. CI (`.github/workflows/test.yml`) fails the `generate` job if `make generate` produces a diff, so regenerate and commit whenever a schema, example, or guide changes.
 
-`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All fifty-nine pages are checked in: `index.md`, thirty-seven under `resources/`, nineteen under `data-sources/`, and two under `guides/`.
+`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All sixty pages are checked in: `index.md`, thirty-eight under `resources/`, nineteen under `data-sources/`, and two under `guides/`.
 
 Hand-written prose lives in `templates/`, which is the only part of the docs pipeline a human edits directly. `templates/guides/<name>.md.tmpl` renders to `docs/guides/<name>.md`; a `templates/` directory does not suppress the auto-generated resource and data-source pages, which are still built from the schemas into a temporary directory. Two guides exist: `getting-started` (credentials, installing the provider from the Registry and overriding it with a local build, first configuration, import IDs per resource) and `code-signing` (the `fastlane match` replacement, the state-vs-bundle distribution model, adopting a match certificate).
 
@@ -206,8 +206,8 @@ does outside Terraform) and submission, through the
 confirming Apple has published one.
 
 `beta` is TestFlight, and is the fastlane `pilot` replacement the way
-`examples/signing` is `match` and `examples/app-listing` is `deliver`. Five
-resources — `group_resource.go`, `tester_resource.go`,
+`examples/signing` is `match` and `examples/app-listing` is `deliver`. Six
+resources — `group_resource.go`, `tester_resource.go`, `group_build_resource.go`,
 `app_localization_resource.go`, `build_localization_resource.go` and
 `app_review_detail_resource.go` — over `models.go`, with no data source and no
 `filters.go`, because nothing here lists. **Four things shape it:**
@@ -230,14 +230,14 @@ the group — one per email address, shared by every group and app it is in. So
 `Delete` withdraws the membership through
 `DELETE /v1/betaGroups/{id}/relationships/betaTesters` and never
 `DELETE /v1/betaTesters/{id}`, which would remove the person from every app in
-the account.
+the account. Build assignment (`apple_beta_group_build`) is a linkage the same
+way, through `betaGroups/{id}/relationships/builds`.
 
-**Build assignment is still absent**, and so is beta review submission. The
-first is real state and simply is not modelled yet
-(`betaGroups/{id}/relationships/builds`); the second is an event, and falls
+**Beta review submission is absent on purpose.** It is an event, and falls
 under the same rule `apple_app_store_version` submission does — a resource for
-it would cancel a live review on destroy and resubmit on apply.
-`has_access_to_all_builds` is what a group without build assignment uses.
+it would cancel a live review on destroy and resubmit on apply. So an external
+group can be given a build here and its testers still see nothing until the
+build is submitted and approved in App Store Connect.
 
 `user` is Users and Access, and the only part of the provider that manages the
 **team** rather than anything the team ships — `resource.go`,
@@ -739,6 +739,31 @@ cross-variable validation.
     person, not the membership, and the same ID belongs to every group they are
     in — the second resource in the provider with no bare form, for a different
     reason than `apple_beta_build_localization`.
+- **`apple_beta_group_build`**: one build given to one group, and the build
+  half of what `apple_beta_tester` is for people. Apple has no identifier for an
+  assignment, so `id` is composed as `<group_id>/<build_id>`. The build is named
+  by `build_number` + `pre_release_version` (+ optional `platform`) and resolved
+  through `GetBuildByNumber`, the way `apple_beta_build_localization` does it —
+  except that the app is **read from the group** rather than configured, since
+  `GET /v1/betaGroups/{id}` accepts `include=app`. Four things follow:
+  - `Create` refuses a group with `has_access_to_all_builds` before asking Apple:
+    such a group already receives every build, and an explicit assignment on it
+    has nothing to mean. It also refuses a build **already assigned**, naming the
+    import ID, for `apple_beta_tester`'s reason — adopting it would let a later
+    destroy take away a build a configuration never gave.
+  - `Read` asks the group's **linkage** (`GET .../relationships/builds`, paged at
+    200) rather than `.../builds`, because only membership is in question; a
+    build taken off by hand reads as gone, and so does a deleted group. The build
+    coordinates are never refreshed.
+  - A refused assignment reports the build's `processingState`, already in hand
+    from the lookup: a build that is not `VALID` is almost always why. It does
+    **not** wait — the same no-polling rule as `apple_app_store_version`;
+    `apple build wait` is the wait.
+  - Every attribute is `RequiresReplace`, so a new `build_number` takes the old
+    build off and puts the new one on. Import is
+    `<group_id>/<pre_release_version>/<build_number>`, or with `<platform>`
+    second, and has no bare-ID form, for `apple_beta_build_localization`'s
+    reason.
 - **`apple_beta_app_localization`**: the app's TestFlight page text, one record
   per locale, surviving every build. `Create` **reads first and patches when a
   record exists**, the way `apple_app_store_review_detail` does: Apple writes one
@@ -797,7 +822,7 @@ Two tiers:
 
 The CLI's credential-free tests (`internal/cli/*_test.go`) drive whole commands through `run` against `fakeConnect`, an `httptest` App Store Connect whose build state advances on each look, with a fake clock so waits finish at once. `internal/cli/acceptance_test.go` only reads, and needs `APPLE_TEST_BUNDLE_ID`.
 
-All thirty-seven resources now have acceptance coverage. `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go` and `internal/provider/user/schema_test.go` are a second, cheaper net under the app listing, TestFlight and team membership resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
+All thirty-eight resources now have acceptance coverage. `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go` and `internal/provider/user/schema_test.go` are a second, cheaper net under the app listing, TestFlight and team membership resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
 
 Two things constrain what the acceptance tier is allowed to do:
 
@@ -841,8 +866,10 @@ Two things constrain what the acceptance tier is allowed to do:
   then remove. `TestAccBetaAppReviewDetailResource_basic` adopts a record that
   cannot be deleted at all, so its contact details stay on the app afterwards
   and `testAccCheckAppStillExists` is its `CheckDestroy`.
-  `TestAccBetaBuildLocalizationResource_basic` needs an uploaded build and skips
-  behind `testAccPreCheckBuild` like the build attachment test does.
+  `TestAccBetaBuildLocalizationResource_basic` and
+  `TestAccBetaGroupBuildResource_basic` need an uploaded build and skip behind
+  `testAccPreCheckBuild` like the build attachment test does; the second gives
+  it to an internal group with no testers, so the assignment reaches nobody.
 - **The team membership tests are the only ones that can remove a person.** `TestAccUserInvitationResource_basic` emails a real address, so it skips unless `APPLE_TEST_USER_INVITE_EMAIL` names one the runner is entitled to invite — the same guard the TestFlight tester test is behind. `TestAccUserResource_basic` goes further: its destroy removes the member from the team for good, so it needs `APPLE_TEST_USER_EMAIL` **and** `APPLE_TEST_ALLOW_USER_REMOVAL`, because naming somebody is not on its own a statement that losing them is acceptable. Neither needs `APPLE_TEST_APP_ID` — they write to the team rather than to an app — and both need an API key with the **Admin** role, which the rest of the suite does not. The roles the tests grant stop at `APP_MANAGER`: a test that granted `ADMIN` would leave a window an interrupted run could not close. `TestAccUsersDataSource_*`, `TestAccUserResource_notOnTheTeam` and the two plan-only refusal tests write nothing and run on credentials alone.
 - **The media tests generate their images.** `media_resource_test.go` writes solid-colour 1290×2796 PNGs into `t.TempDir()` — the 6.7" iPhone portrait size, legal for `APP_IPHONE_67` and as a review screenshot — rather than checking binaries in; a different colour is a different checksum, which is all the tests need. They run under the same guards as the products they hang off (`testAccPreCheckSubscription`, `testAccPreCheckInAppPurchase`), and destroying the parent takes the media with it. `TestAccAppScreenshotSetResource_basic` asserts that swapping the two files keeps both screenshot IDs — the reorder-uploads-nothing promise.
 - **Certificates consume a slot while they exist.** `certificate_resource_test.go` and both profile test files issue one and revoke it on destroy, so a completed run is neutral; an interrupted run leaves a certificate to revoke by hand. `IOS_DEVELOPMENT` is preferred over a distribution type where the profile type allows it.

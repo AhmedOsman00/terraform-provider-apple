@@ -76,7 +76,7 @@ output "public_beta_link" {
 - `feedback_enabled` (Boolean) Whether testers can send screenshot and crash feedback from the TestFlight app.
 - `has_access_to_all_builds` (Boolean) Whether the group automatically sees every build of the app rather than only the builds assigned to it. Absent from Apple's update request, so changing it replaces the group.
 
-Since this provider does not assign builds to groups, a group without this sees nothing until a build is assigned to it by hand or by another tool — its testers included.
+A group without this sees only the builds assigned to it, one `apple_beta_group_build` each.
 - `ios_builds_available_for_apple_silicon_mac` (Boolean) Whether this group's testers can install the iOS build on an Apple silicon Mac.
 - `ios_builds_available_for_apple_vision` (Boolean) Whether this group's testers can install the iOS build on Apple Vision Pro.
 - `is_internal_group` (Boolean) Whether the group draws its members from your App Store Connect team (`true`) or from arbitrary email addresses (`false`, the default). Absent from Apple's update request — a group does not change kind, so changing this replaces it.

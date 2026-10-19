@@ -52,8 +52,8 @@ func (r *betaBuildLocalizationResource) Schema(_ context.Context, _ resource.Sch
 			"The build is named the way a pipeline already names it, by `build_number` and " +
 			"`pre_release_version` rather than by Apple's opaque build ID, exactly as " +
 			"`apple_app_store_version` does. The provider resolves the ID itself.\n\n" +
-			"~> This provider does not upload builds. The binary must already be in App Store Connect, " +
-			"put there by Xcode, Transporter or fastlane.",
+			"~> Terraform does not upload builds. The binary must already be in App Store Connect, " +
+			"put there by `apple build upload`, Xcode or Transporter.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -381,9 +381,9 @@ func (r *betaBuildLocalizationResource) write(ctx context.Context, plan *betaBui
 		diags.AddError(
 			"Build Not Found",
 			fmt.Sprintf("Could not find build '%s' of version '%s' for app '%s': %s\n\n"+
-				"This provider does not upload builds — the binary must already be in App Store Connect, "+
-				"put there by Xcode, Transporter or fastlane.%s",
-				buildNumber, train, appID, err.Error(), r.describeAvailableBuilds(appID, platform, train)),
+				"Terraform does not upload builds — the binary must already be in App Store Connect, "+
+				"put there by `apple build upload`, Xcode or Transporter.%s",
+				buildNumber, train, appID, err.Error(), describeAvailableBuilds(r.client, appID, platform, train)),
 		)
 
 		return
@@ -442,8 +442,8 @@ func (r *betaBuildLocalizationResource) write(ctx context.Context, plan *betaBui
 //
 // Best-effort: a listing that fails adds nothing to a diagnostic that is
 // already being raised about the build that was asked for.
-func (r *betaBuildLocalizationResource) describeAvailableBuilds(appID, platform, train string) string {
-	builds, err := r.client.GetBuilds(appID, platform, train, "")
+func describeAvailableBuilds(client *apple.Client, appID, platform, train string) string {
+	builds, err := client.GetBuilds(appID, platform, train, "")
 	if err != nil || len(builds) == 0 {
 		return ""
 	}

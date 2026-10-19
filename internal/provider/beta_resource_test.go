@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -38,6 +39,10 @@ import (
 //     membership, not the tester record: that stays in the account's tester
 //     list afterwards, because Apple's delete would remove the person from
 //     every app in the account.
+//   - apple_beta_group_build assigns the uploaded build named by
+//     testAccPreCheckBuild to a group the test creates, with no testers in it,
+//     so the assignment reaches nobody. Destroy takes the build off and deletes
+//     the group; the build itself is untouched.
 //   - apple_beta_app_review_detail adopts a record Apple created with the app.
 //     There is nothing to delete, so testAccCheckAppStillExists is the only
 //     honest CheckDestroy and the contact details stay on the app afterwards.
@@ -403,6 +408,68 @@ resource "apple_beta_build_localization" "test" {
 `, testAccAppID(), os.Getenv(testAccBuildNumberEnvVar), os.Getenv(testAccBuildTrainEnvVar), testAccBetaLocale, whatsNew)
 }
 
+// --- apple_beta_group_build ----------------------------------------------------
+
+// TestAccBetaGroupBuildResource_basic assigns an uploaded build to a group of
+// its own. The group is internal, holds no testers and does not receive every
+// build, so the assignment notifies nobody and is the only build it has.
+func TestAccBetaGroupBuildResource_basic(t *testing.T) {
+	name := testAccBetaGroupName("Terraform Builds")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckBuild(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckDestroyAll(testAccCheckBetaGroupBuildDestroy, testAccCheckBetaGroupDestroy),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBetaGroupBuildConfig(name),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckBetaGroupBuildExists("apple_beta_group_build.test"),
+					resource.TestCheckResourceAttrPair(
+						"apple_beta_group_build.test", "group_id", "apple_beta_group.builds", "id"),
+					resource.TestCheckResourceAttrSet("apple_beta_group_build.test", "build_id"),
+				),
+			},
+			// The import ID names the build by its numbers, as the
+			// configuration does; there is no bare-ID form.
+			{
+				ResourceName:      "apple_beta_group_build.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateIdFunc: func(state *terraform.State) (string, error) {
+					rs, ok := state.RootModule().Resources["apple_beta_group_build.test"]
+					if !ok {
+						return "", fmt.Errorf("apple_beta_group_build.test not found in state")
+					}
+
+					return strings.Join([]string{
+						rs.Primary.Attributes["group_id"],
+						os.Getenv(testAccBuildTrainEnvVar),
+						os.Getenv(testAccBuildNumberEnvVar),
+					}, "/"), nil
+				},
+			},
+		},
+	})
+}
+
+func testAccBetaGroupBuildConfig(groupName string) string {
+	return fmt.Sprintf(`
+resource "apple_beta_group" "builds" {
+  app_id                   = %[1]q
+  name                     = %[2]q
+  is_internal_group        = true
+  has_access_to_all_builds = false
+}
+
+resource "apple_beta_group_build" "test" {
+  group_id            = apple_beta_group.builds.id
+  build_number        = %[3]q
+  pre_release_version = %[4]q
+}
+`, testAccAppID(), groupName, os.Getenv(testAccBuildNumberEnvVar), os.Getenv(testAccBuildTrainEnvVar))
+}
+
 // --- apple_beta_app_review_detail ----------------------------------------------
 
 // TestAccBetaAppReviewDetailResource_basic adopts the record Apple created with
@@ -625,6 +692,63 @@ func testAccCheckBetaTesterDestroy(state *terraform.State) error {
 
 		if _, err := client.GetBetaGroupTesterByEmail(groupID, email); err == nil {
 			return fmt.Errorf("beta tester %s is still in beta group %s after destroy", email, groupID)
+		}
+	}
+
+	return nil
+}
+
+// testAccCheckBetaGroupBuildExists asks Apple whether the group actually holds
+// the build: the ID in state is composed by the provider and proves nothing.
+func testAccCheckBetaGroupBuildExists(name string) resource.TestCheckFunc {
+	return func(state *terraform.State) error {
+		rs, ok := state.RootModule().Resources[name]
+		if !ok {
+			return fmt.Errorf("resource %s not found in state", name)
+		}
+
+		client, err := testAccAPIClient()
+		if err != nil {
+			return err
+		}
+
+		groupID := rs.Primary.Attributes["group_id"]
+		buildID := rs.Primary.Attributes["build_id"]
+
+		assigned, err := client.GetBetaGroupBuildIDs(groupID)
+		if err != nil {
+			return err
+		}
+		if !slices.Contains(assigned, buildID) {
+			return fmt.Errorf("build %s is not assigned to beta group %s at Apple", buildID, groupID)
+		}
+
+		return nil
+	}
+}
+
+// testAccCheckBetaGroupBuildDestroy asserts the assignment is gone. A group
+// that is itself gone holds nothing, which testAccCheckBetaGroupDestroy checks.
+func testAccCheckBetaGroupBuildDestroy(state *terraform.State) error {
+	client, err := testAccAPIClient()
+	if err != nil {
+		return err
+	}
+
+	for _, rs := range state.RootModule().Resources {
+		if rs.Type != "apple_beta_group_build" {
+			continue
+		}
+
+		groupID := rs.Primary.Attributes["group_id"]
+		buildID := rs.Primary.Attributes["build_id"]
+
+		assigned, err := client.GetBetaGroupBuildIDs(groupID)
+		if err != nil {
+			continue
+		}
+		if slices.Contains(assigned, buildID) {
+			return fmt.Errorf("build %s is still assigned to beta group %s after destroy", buildID, groupID)
 		}
 	}
 

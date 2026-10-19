@@ -102,9 +102,8 @@ func (r *betaGroupResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				MarkdownDescription: "Whether the group automatically sees every build of the app rather " +
 					"than only the builds assigned to it. Absent from Apple's update request, so changing " +
 					"it replaces the group.\n\n" +
-					"Since this provider does not assign builds to groups, a group without this sees " +
-					"nothing until a build is assigned to it by hand or by another tool — its testers " +
-					"included.",
+					"A group without this sees only the builds assigned to it, one " +
+					"`apple_beta_group_build` each.",
 				Optional: true,
 				Computed: true,
 				PlanModifiers: []planmodifier.Bool{

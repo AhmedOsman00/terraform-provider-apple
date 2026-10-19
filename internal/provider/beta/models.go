@@ -81,6 +81,21 @@ type betaTesterModel struct {
 	InviteType types.String `tfsdk:"invite_type"`
 }
 
+// betaGroupBuildModel maps one build assigned to one TestFlight group.
+//
+// Like a tester's membership it is a linkage rather than a record: id is
+// composed here from the group and build IDs, because Apple has no identifier
+// for the assignment itself. The build is named by the two numbers a pipeline
+// already exports, the way betaBuildLocalizationModel names it.
+type betaGroupBuildModel struct {
+	ID                types.String `tfsdk:"id"`
+	GroupID           types.String `tfsdk:"group_id"`
+	Platform          types.String `tfsdk:"platform"`
+	PreReleaseVersion types.String `tfsdk:"pre_release_version"`
+	BuildNumber       types.String `tfsdk:"build_number"`
+	BuildID           types.String `tfsdk:"build_id"`
+}
+
 // betaAppReviewDetailModel maps what the beta reviewers are told about an app.
 type betaAppReviewDetailModel struct {
 	ID                  types.String `tfsdk:"id"`

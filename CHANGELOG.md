@@ -1,3 +1,28 @@
+## 0.7.0 (Unreleased)
+
+FEATURES:
+
+* **`apple_beta_group_build`.** Gives one TestFlight group one build — what a
+  group without `has_access_to_all_builds` needs before its testers can install
+  anything.
+
+  ```terraform
+  resource "apple_beta_group_build" "release_candidate" {
+    group_id            = apple_beta_group.release_candidates.id
+    build_number        = var.build_number
+    pre_release_version = var.marketing_version
+  }
+  ```
+
+  The build is named by the numbers a pipeline already has, and the app is read
+  from the group. Like `apple_beta_tester` it is a linkage: destroying it takes
+  the build off the group and leaves the build alone, and changing
+  `build_number` swaps one build for the next. Apple refuses a build that is
+  still processing, and the error says which state it is in. For an external
+  group, beta review submission is still done in App Store Connect.
+
+  Import is `<group_id>/<pre_release_version>/<build_number>`.
+
 ## 0.6.0 (October 18, 2026)
 
 ENHANCEMENTS:

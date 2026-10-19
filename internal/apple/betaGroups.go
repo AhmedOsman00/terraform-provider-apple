@@ -154,3 +154,60 @@ func (c *Client) DeleteBetaGroup(groupID string, authToken *string) error {
 
 	return err
 }
+
+// GetBetaGroupBuildIDs lists the IDs of the builds assigned to a group.
+//
+// The linkage endpoint is asked rather than /v1/betaGroups/{id}/builds: the
+// question is only whether a build is assigned, and identifiers answer it
+// without a build record per entry. A group holds a build per upload for as
+// long as Apple keeps them, so this is paged.
+func (c *Client) GetBetaGroupBuildIDs(groupID string) ([]string, error) {
+	linkages, err := getAllPages[models.ResourceData](c,
+		fmt.Sprintf("/v1/betaGroups/%s/relationships/builds", groupID), defaultPageSize)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(linkages))
+	for _, linkage := range linkages {
+		ids = append(ids, linkage.ID)
+	}
+
+	return ids, nil
+}
+
+// AddBuildToBetaGroup gives a group's testers one build. Apple answers 204
+// with no body.
+func (c *Client) AddBuildToBetaGroup(groupID, buildID string, authToken *string) error {
+	return c.betaGroupBuildLinkage("POST", groupID, buildID, authToken)
+}
+
+// RemoveBuildFromBetaGroup takes one build away from a group's testers. The
+// build itself is untouched, as is every other group it was given to.
+func (c *Client) RemoveBuildFromBetaGroup(groupID, buildID string, authToken *string) error {
+	return c.betaGroupBuildLinkage("DELETE", groupID, buildID, authToken)
+}
+
+func (c *Client) betaGroupBuildLinkage(method, groupID, buildID string, authToken *string) error {
+	requestData := models.BetaGroupBuildLinkageRequest{
+		Data: []models.ResourceData{{Type: "builds", ID: buildID}},
+	}
+
+	rb, err := json.Marshal(requestData)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(
+		method,
+		fmt.Sprintf("%s/v1/betaGroups/%s/relationships/builds", c.HostURL, groupID),
+		strings.NewReader(string(rb)),
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.doRequest(req, authToken)
+
+	return err
+}

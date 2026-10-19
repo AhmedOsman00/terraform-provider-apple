@@ -372,3 +372,60 @@ func TestGetBetaTesterByEmailReportsAMissAsNotFound(t *testing.T) {
 		t.Errorf("error = %q, want it to report not found", err.Error())
 	}
 }
+
+// TestBetaGroupBuildLinkageUsesTheGroupRelationship covers build assignment:
+// the build goes to the group's relationship endpoint as a builds identifier,
+// and removing it is the same body with DELETE -- never a request against the
+// build itself.
+func TestBetaGroupBuildLinkageUsesTheGroupRelationship(t *testing.T) {
+	var requests []string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		requests = append(requests, r.Method+" "+r.URL.Path+" "+string(body))
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv)
+	if err := client.AddBuildToBetaGroup("g1", "b1", nil); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if err := client.RemoveBuildFromBetaGroup("g1", "b1", nil); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+
+	want := []string{
+		`POST /v1/betaGroups/g1/relationships/builds {"data":[{"type":"builds","id":"b1"}]}`,
+		`DELETE /v1/betaGroups/g1/relationships/builds {"data":[{"type":"builds","id":"b1"}]}`,
+	}
+	if strings.Join(requests, "\n") != strings.Join(want, "\n") {
+		t.Errorf("requests:\n%s\nwant:\n%s", strings.Join(requests, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// TestGetBetaGroupBuildIDsFollowsPagination covers a group holding more
+// builds than one page: every upload stays assigned until Apple expires it.
+func TestGetBetaGroupBuildIDsFollowsPagination(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/v1/betaGroups/g1/relationships/builds" {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("cursor") == "" {
+			fmt.Fprintf(w, `{"data":[{"type":"builds","id":"b1"}],"links":{"next":"%s/v1/betaGroups/g1/relationships/builds?cursor=2"}}`, srv.URL)
+			return
+		}
+		fmt.Fprint(w, `{"data":[{"type":"builds","id":"b2"}],"links":{}}`)
+	}))
+	defer srv.Close()
+
+	ids, err := newTestClient(srv).GetBetaGroupBuildIDs("g1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(ids, ",") != "b1,b2" {
+		t.Errorf("ids = %v, want b1 and b2", ids)
+	}
+}

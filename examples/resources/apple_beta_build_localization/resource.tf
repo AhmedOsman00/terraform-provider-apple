@@ -18,9 +18,9 @@ variable "marketing_version" {
 # is named by the two numbers a pipeline already exports, not by Apple's opaque
 # build ID — the provider resolves that itself.
 #
-# This provider does not upload builds: the binary must already be in App Store
-# Connect, put there by Xcode, Transporter or fastlane, and Apple leaves it
-# PROCESSING for five to thirty minutes afterwards.
+# Terraform does not upload builds: the binary must already be in App Store
+# Connect, put there by `apple build upload`, Xcode or Transporter, and Apple
+# leaves it PROCESSING for five to thirty minutes afterwards.
 resource "apple_beta_build_localization" "whats_new" {
   for_each = {
     "en-US" = "Shared budgets, and a rewritten sync engine. Please add a budget on one device and check that it appears on another within a few seconds."

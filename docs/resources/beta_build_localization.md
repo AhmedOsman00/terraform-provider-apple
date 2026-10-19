@@ -6,7 +6,7 @@ description: |-
   Manages one build's What to Test note in one language — the text TestFlight shows a tester beside the Install button.
   This is the half of TestFlight metadata that is replaced with every upload: the note hangs off a build, so each new build starts without one. What survives across builds — the app's TestFlight description, feedback address and links — is apple_beta_app_localization.
   The build is named the way a pipeline already names it, by build_number and pre_release_version rather than by Apple's opaque build ID, exactly as apple_app_store_version does. The provider resolves the ID itself.
-  ~> This provider does not upload builds. The binary must already be in App Store Connect, put there by Xcode, Transporter or fastlane.
+  ~> Terraform does not upload builds. The binary must already be in App Store Connect, put there by apple build upload, Xcode or Transporter.
 ---
 
 # apple_beta_build_localization (Resource)
@@ -17,7 +17,7 @@ This is the half of TestFlight metadata that is **replaced with every upload**: 
 
 The build is named the way a pipeline already names it, by `build_number` and `pre_release_version` rather than by Apple's opaque build ID, exactly as `apple_app_store_version` does. The provider resolves the ID itself.
 
-~> This provider does not upload builds. The binary must already be in App Store Connect, put there by Xcode, Transporter or fastlane.
+~> Terraform does not upload builds. The binary must already be in App Store Connect, put there by `apple build upload`, Xcode or Transporter.
 
 ## Example Usage
 
@@ -42,9 +42,9 @@ variable "marketing_version" {
 # is named by the two numbers a pipeline already exports, not by Apple's opaque
 # build ID — the provider resolves that itself.
 #
-# This provider does not upload builds: the binary must already be in App Store
-# Connect, put there by Xcode, Transporter or fastlane, and Apple leaves it
-# PROCESSING for five to thirty minutes afterwards.
+# Terraform does not upload builds: the binary must already be in App Store
+# Connect, put there by `apple build upload`, Xcode or Transporter, and Apple
+# leaves it PROCESSING for five to thirty minutes afterwards.
 resource "apple_beta_build_localization" "whats_new" {
   for_each = {
     "en-US" = "Shared budgets, and a rewritten sync engine. Please add a budget on one device and check that it appears on another within a few seconds."

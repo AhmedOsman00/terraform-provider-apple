@@ -17,7 +17,7 @@ import (
 // mistake like an attribute that is both Required and Computed would otherwise
 // surface only in the acceptance tier -- and that tier needs credentials and a
 // real app, so it does not run in CI. This is the credential-free net under the
-// five resources, and it pins the resource type names, since renaming one is
+// six resources, and it pins the resource type names, since renaming one is
 // breaking.
 func TestResourceSchemas(t *testing.T) {
 	t.Parallel()
@@ -25,6 +25,7 @@ func TestResourceSchemas(t *testing.T) {
 	resources := map[string]func() resource.Resource{
 		"apple_beta_group":              NewBetaGroupResource,
 		"apple_beta_tester":             NewBetaTesterResource,
+		"apple_beta_group_build":        NewBetaGroupBuildResource,
 		"apple_beta_app_localization":   NewBetaAppLocalizationResource,
 		"apple_beta_build_localization": NewBetaBuildLocalizationResource,
 		"apple_beta_app_review_detail":  NewBetaAppReviewDetailResource,

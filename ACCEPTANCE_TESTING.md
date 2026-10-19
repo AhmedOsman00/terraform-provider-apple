@@ -40,7 +40,7 @@ Assuming every test passes and every destroy completes:
 |---|---|---|
 | **Permanent** | 2 | Device registrations that can never be removed — one iOS, one Mac. Terraform disables them; they still occupy slots until the membership year renews. |
 | **Transient peak** | 2 | Certificates alive at once, at most. Tests run sequentially and each revokes what it issued. |
-| **Net zero** | 16 | Resource kinds fully cleaned up: Bundle IDs, capabilities, Merchant IDs, Pass Type IDs, profiles, subscription groups, subscriptions, localizations, prices, in-app purchases, their localizations, price schedules and availability, beta groups and both TestFlight localizations. |
+| **Net zero** | 17 | Resource kinds fully cleaned up: Bundle IDs, capabilities, Merchant IDs, Pass Type IDs, profiles, subscription groups, subscriptions, localizations, prices, in-app purchases, their localizations, price schedules and availability, beta groups, their build assignments and both TestFlight localizations. |
 | **Opt-in residue** | 1 | A beta tester record in the account, if `APPLE_TEST_BETA_TESTER_EMAIL` is set. The membership is removed; the record is not — see [TestFlight](#testflight). |
 | **Opt-in removal** | 1 | A team member removed from Users and Access, if `APPLE_TEST_USER_EMAIL` and `APPLE_TEST_ALLOW_USER_REMOVAL` are both set. They have to be invited again — see [Team members](#team-members-users-and-access). |
 | **Reserved forever** | ~13 | Subscription and in-app purchase product identifiers, randomised per run. Invisible once deleted, drawn from an unlimited namespace — see [Subscriptions](#subscriptions) and [In-app purchases](#in-app-purchases). |
@@ -421,9 +421,10 @@ localization for the app's primary locale itself and refuses to delete the last
 one an app has, so a test on the primary locale would adopt a record it could
 not then remove.
 
-**`TestAccBetaBuildLocalizationResource_basic` needs a build that already
-exists**, for the same reason `TestAccAppStoreVersionResource_build` does: the
-provider does not upload builds. It skips unless `APPLE_TEST_BUILD_NUMBER` and
+**`TestAccBetaBuildLocalizationResource_basic` and
+`TestAccBetaGroupBuildResource_basic` need a build that already exists**, for
+the same reason `TestAccAppStoreVersionResource_build` does: the provider does
+not upload builds. It skips unless `APPLE_TEST_BUILD_NUMBER` and
 `APPLE_TEST_BUILD_PRE_RELEASE_VERSION` name a build already uploaded to the app
 under test.
 
@@ -444,6 +445,7 @@ the record stays under TestFlight > Testers afterwards.
 | `TestAccBetaTesterResource_basic` | **Leaves the tester record** — opt-in | One external group with a randomised name, plus a membership for `APPLE_TEST_BETA_TESTER_EMAIL`; imports by `<group_id>/<email>`. Apple emails that address an invitation. | A tester appears in the group under TestFlight > Testers and Groups, then the group and the membership go — the tester stays in the account's tester list. |
 | `TestAccBetaAppLocalizationResource_basic` | Net zero | A `de-DE` TestFlight page description, feedback email and marketing URL; updates the description; imports. | TestFlight > Test Information gains a German entry, then loses it. |
 | `TestAccBetaBuildLocalizationResource_basic` | Net zero — opt-in | A `de-DE` "What to Test" note on the build named by `APPLE_TEST_BUILD_NUMBER`; updates it; imports by the composite ID. | The build's What to Test gains a German entry, then loses it. The build itself is untouched. |
+| `TestAccBetaGroupBuildResource_basic` | Net zero — opt-in | One internal group with a randomised name, no testers and no access to all builds, given the build named by `APPLE_TEST_BUILD_NUMBER`; imports by `<group_id>/<pre_release_version>/<build_number>`. Nobody is notified: the group holds no testers. | A group appears under TestFlight with the build in it, then the build comes off and the group is deleted. The build itself is untouched. |
 | `TestAccBetaAppReviewDetailResource_basic` | **Leaves the beta review contact set** | Nothing. Apple publishes no `POST` and no `DELETE` for the record, so this patches what is already there and `destroy` only drops state. | TestFlight > Test Information > Beta App Review Information shows the test's contact details and notes, permanently. |
 
 An interrupted run leaves at most a beta group or two, deletable in TestFlight >

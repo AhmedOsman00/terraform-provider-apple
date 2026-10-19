@@ -297,3 +297,11 @@ type BetaTesterCreateRelationships struct {
 type BetaTesterLinkageRequest struct {
 	Data []ResourceData `json:"data"`
 }
+
+// BetaGroupBuildLinkageRequest is the body of a group's build assignment
+// endpoints: POST gives the group's testers the listed builds, DELETE takes
+// them away. Neither touches the build, which stays in every other group it was
+// given to.
+type BetaGroupBuildLinkageRequest struct {
+	Data []ResourceData `json:"data"`
+}

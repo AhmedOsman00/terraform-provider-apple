@@ -330,6 +330,7 @@ func (p *appleProvider) Resources(_ context.Context) []func() resource.Resource 
 		app.NewAppScreenshotSetResource,
 		beta.NewBetaGroupResource,
 		beta.NewBetaTesterResource,
+		beta.NewBetaGroupBuildResource,
 		beta.NewBetaAppLocalizationResource,
 		beta.NewBetaBuildLocalizationResource,
 		beta.NewBetaAppReviewDetailResource,
