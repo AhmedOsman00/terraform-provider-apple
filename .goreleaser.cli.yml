@@ -52,13 +52,15 @@ homebrew_casks:
     binaries:
       - apple
     # The binary is not notarized, so Gatekeeper would quarantine it on
-    # first run.
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/apple"]
-          end
+    # first run. Homebrew 7 deprecates the postflight block GoReleaser's hooks
+    # render, and its steps may not interpolate a path, so xattr runs from the
+    # staged directory.
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "apple"], chdir: "."
+        end
+      end
 
 release:
   disable: true

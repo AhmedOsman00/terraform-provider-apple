@@ -294,4 +294,5 @@ profiles or they will carry stale entitlements.
 - Key distribution. The module deliberately knows nothing about where your
   private key lives, which is what lets it impose no secret-store dependency.
 - App Store Connect app records, TestFlight, and uploads. This module stops at
-  code signing — `xcrun altool` or `fastlane deliver` still handle delivery.
+  code signing — `apple build upload`, `xcrun altool` or `fastlane deliver`
+  handle delivery.

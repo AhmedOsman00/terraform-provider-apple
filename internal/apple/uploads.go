@@ -137,7 +137,7 @@ func (c *Client) uploadMedia(kind mediaKind, parentID, fileName string, data []b
 		return cause
 	}
 
-	if err := c.uploadParts(reserved.Attributes.UploadOperations, data); err != nil {
+	if err := c.uploadParts(reserved.Attributes.UploadOperations, bytes.NewReader(data), int64(len(data))); err != nil {
 		return nil, abandon(fmt.Errorf("could not upload '%s': %w", fileName, err))
 	}
 
@@ -202,13 +202,14 @@ func (c *Client) reserveMedia(kind mediaKind, parentID, fileName string, fileSiz
 }
 
 // uploadParts delivers each byte range to its presigned URL over the upload
-// client. Only the headers Apple listed are sent -- never the API token.
-func (c *Client) uploadParts(operations []models.UploadOperation, data []byte) error {
+// client. Only the headers Apple listed are sent -- never the API token. Each
+// part is read from file as it is sent, so a binary of several hundred
+// megabytes is never held in memory whole.
+func (c *Client) uploadParts(operations []models.UploadOperation, file io.ReaderAt, size int64) error {
 	if len(operations) == 0 {
 		return fmt.Errorf("no upload operations were returned for the reservation")
 	}
 
-	size := int64(len(data))
 	for i, op := range operations {
 		if op.Offset < 0 || op.Length <= 0 || op.Offset+op.Length > size {
 			return fmt.Errorf("upload operation %d covers bytes %d-%d of a %d-byte file",
@@ -228,7 +229,7 @@ func (c *Client) uploadParts(operations []models.UploadOperation, data []byte) e
 			method = http.MethodPut
 		}
 
-		req, err := http.NewRequest(method, op.URL, bytes.NewReader(data[op.Offset:op.Offset+op.Length]))
+		req, err := http.NewRequest(method, op.URL, io.NewSectionReader(file, op.Offset, op.Length))
 		if err != nil {
 			return err
 		}

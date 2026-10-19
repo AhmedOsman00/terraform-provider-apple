@@ -4,6 +4,7 @@
 package apple
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -228,13 +229,13 @@ func TestUploadPartsRefusesBadOperations(t *testing.T) {
 
 	for name, op := range cases {
 		t.Run(name, func(t *testing.T) {
-			if err := client.uploadParts([]models.UploadOperation{op}, data); err == nil {
+			if err := client.uploadParts([]models.UploadOperation{op}, bytes.NewReader(data), int64(len(data))); err == nil {
 				t.Error("expected an error")
 			}
 		})
 	}
 
-	if err := client.uploadParts(nil, data); err == nil {
+	if err := client.uploadParts(nil, bytes.NewReader(data), int64(len(data))); err == nil {
 		t.Error("expected an error for a reservation with no operations")
 	}
 }

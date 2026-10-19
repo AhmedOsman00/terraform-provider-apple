@@ -12,6 +12,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.9
 	golang.org/x/term v0.47.0
+	howett.net/plist v1.0.1
 	software.sslmate.com/src/go-pkcs12 v0.7.4
 )
 

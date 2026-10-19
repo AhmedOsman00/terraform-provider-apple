@@ -58,7 +58,7 @@ output "remaining_manual_steps" {
   value = [
     "App Privacy: answer the data-collection questionnaire in App Store Connect. Apple publishes no endpoint for it -- there is no appDataUsages resource in the API. It is declared per app rather than per version, so it does not recur.",
     "App preview videos: upload them in App Store Connect. Screenshots are managed through var.screenshots; preview videos are not.",
-    "Build upload: push the binary with Xcode, Transporter or fastlane. Attaching it is not manual -- set build_number and this module links it -- but Apple has no upload endpoint, and a build stays PROCESSING for five to thirty minutes afterwards.",
+    "Build upload: push the binary with `apple build upload`, Xcode or Transporter -- an upload is an event, not state, so Terraform does not do it. Attaching it is not manual -- set build_number and this module links it -- but a build stays PROCESSING for five to thirty minutes after the upload.",
     "Export compliance: answer it with ITSAppUsesNonExemptEncryption in Info.plist at build time. It lives on the build rather than the version, and a build without it parks the version in WAITING_FOR_EXPORT_COMPLIANCE however complete the metadata is.",
     "Submit for review: App Store Connect only, once the above are done. Submission is an event rather than a state -- a resource for it would cancel a live review on destroy and resubmit on apply.",
   ]

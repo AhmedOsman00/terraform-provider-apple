@@ -19,9 +19,9 @@ const maxWhatToTest = 4000
 func newBuildCommand(a *app) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "build",
-		Short: "Follow an uploaded build through App Store Connect",
+		Short: "Check, upload and follow a build through App Store Connect",
 	}
-	cmd.AddCommand(newBuildWaitCommand(a))
+	cmd.AddCommand(newBuildVerifyCommand(a), newBuildUploadCommand(a), newBuildWaitCommand(a))
 	return cmd
 }
 

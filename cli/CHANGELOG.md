@@ -1,3 +1,21 @@
+## 0.2.0 (Unreleased)
+
+FEATURES:
+
+* **`apple build verify`.** Checks an `.xcarchive`, `.ipa` or `.app` against the
+  bundle ID, version and build it should carry, and against `--entitlement
+  KEY=VALUE` for what it was signed with, reporting every mismatch at once.
+  The Info.plist is read in Go, so those checks run on any runner; entitlements
+  come from `codesign` and need macOS. Out of an `.ipa` only the executable is
+  extracted, and only when an entitlement is checked.
+
+* **`apple build upload`.** Uploads an `.ipa` through App Store Connect's build
+  upload API (API 4.1): no `altool`, Transporter or Xcode, just the API key.
+  The version, build and bundle ID come from the `.ipa` itself. It waits for
+  Apple to accept or refuse the upload, prints Apple's warnings and errors, and
+  removes an upload it could not deliver. Follow it with `apple build wait`.
+  The file is streamed part by part, never held in memory whole.
+
 ## 0.1.0 (October 18, 2026)
 
 FEATURES:

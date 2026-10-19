@@ -6,7 +6,7 @@ description: |-
   Manages one release of an app on one platform.
   A version owns everything that describes a particular release rather than the app itself: the version string, the copyright line, how it is released once approved, and — through apple_app_store_version_localization — the description, keywords and release notes. What describes the app across releases (name, subtitle, categories, age rating) belongs to apple_app_info and apple_app_info_localization.
   An app can hold only one editable version per platform at a time; Apple answers a second with a 409 naming the one already being prepared. Import the existing one rather than creating another.
-  Set build_number to attach an uploaded build. The provider names the build the way a build pipeline does — CURRENT_PROJECT_VERSION and MARKETING_VERSION — and resolves Apple's opaque build ID itself; uploading the binary is still Xcode's, Transporter's or fastlane's job.
+  Set build_number to attach an uploaded build. The provider names the build the way a build pipeline does — CURRENT_PROJECT_VERSION and MARKETING_VERSION — and resolves Apple's opaque build ID itself. Uploading the binary is an event rather than state, and stays outside Terraform: apple build upload, Xcode or Transporter.
   Only an editable version can be deleted. A version that has been released, or is in review, is part of the app's history — destroying it warns and drops it from state.
 ---
 
@@ -18,7 +18,7 @@ A version owns everything that describes a particular release rather than the ap
 
 An app can hold only **one editable version per platform** at a time; Apple answers a second with a 409 naming the one already being prepared. Import the existing one rather than creating another.
 
-Set `build_number` to attach an uploaded build. The provider names the build the way a build pipeline does — `CURRENT_PROJECT_VERSION` and `MARKETING_VERSION` — and resolves Apple's opaque build ID itself; uploading the binary is still Xcode's, Transporter's or fastlane's job.
+Set `build_number` to attach an uploaded build. The provider names the build the way a build pipeline does — `CURRENT_PROJECT_VERSION` and `MARKETING_VERSION` — and resolves Apple's opaque build ID itself. Uploading the binary is an event rather than state, and stays outside Terraform: `apple build upload`, Xcode or Transporter.
 
 Only an editable version can be deleted. A version that has been released, or is in review, is part of the app's history — destroying it warns and drops it from state.
 

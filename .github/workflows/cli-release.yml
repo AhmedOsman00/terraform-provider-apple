@@ -62,37 +62,65 @@ jobs:
         env:
           GORELEASER_CURRENT_TAG: v${{ steps.version.outputs.version }}
 
+      # On a re-run the release exists already. The archives are rebuilt, and
+      # the cask carries their checksums, so they replace what is there.
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            dist/apple_"$VERSION"_*.tar.gz dist/apple_"$VERSION"_checksums.txt \
-            --title "apple CLI $VERSION" \
-            --notes-file "$RUNNER_TEMP/release-notes.md" \
-            --latest=false
+          assets=(dist/apple_"$VERSION"_*.tar.gz dist/apple_"$VERSION"_checksums.txt)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+              --title "apple CLI $VERSION" \
+              --notes-file "$RUNNER_TEMP/release-notes.md" \
+              --latest=false
+          fi
 
+      # The tap's main branch only takes pull requests, so the cask goes in on
+      # a branch and through a PR that merges itself. Committing through the
+      # API attributes the change to the token's owner.
       - name: Homebrew cask
         if: env.TAP_TOKEN != ''
         env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
+          TAP: AhmedOsman00/homebrew-tap
         run: |
           cask=dist/homebrew/Casks/apple.rb
           if [ ! -s "$cask" ]; then
             echo "GoReleaser wrote no $cask." >&2
             exit 1
           fi
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/AhmedOsman00/homebrew-tap.git" tap
-          mkdir -p tap/Casks
-          cp "$cask" tap/Casks/apple.rb
-          cd tap
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add Casks/apple.rb
-          if git diff --cached --quiet; then
-            echo "The cask already describes $VERSION."
-          else
-            git commit -m "apple $VERSION"
-            git push
+
+          # gh api prints the error body on a 404, so only its exit status
+          # says whether the cask exists.
+          file_sha=""
+          current=""
+          if meta=$(gh api "repos/$TAP/contents/Casks/apple.rb?ref=main" 2>/dev/null); then
+            file_sha=$(jq -r .sha <<< "$meta")
+            current=$(jq -r .content <<< "$meta" | base64 -d)
           fi
+          if [ -n "$file_sha" ] && [ "$current" = "$(cat "$cask")" ]; then
+            echo "The cask already describes $VERSION."
+            exit 0
+          fi
+
+          branch="apple-$VERSION"
+          main_sha=$(gh api "repos/$TAP/git/ref/heads/main" --jq .object.sha)
+          gh api -X DELETE "repos/$TAP/git/refs/heads/$branch" >/dev/null 2>&1 || true
+          gh api "repos/$TAP/git/refs" -f ref="refs/heads/$branch" -f sha="$main_sha" >/dev/null
+
+          args=(-f message="apple $VERSION" -f content="$(base64 -w0 "$cask")" -f branch="$branch")
+          if [ -n "$file_sha" ]; then
+            args+=(-f sha="$file_sha")
+          fi
+          gh api -X PUT "repos/$TAP/contents/Casks/apple.rb" "${args[@]}" >/dev/null
+
+          pr=$(gh pr create --repo "$TAP" --base main --head "$branch" \
+            --title "apple $VERSION" \
+            --body "The cask for [apple CLI $VERSION](https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME).")
+          gh pr merge "$pr" --repo "$TAP" --squash --delete-branch
+          echo "Merged $pr."

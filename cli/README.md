@@ -10,13 +10,15 @@ cannot describe:
 | `apple version next` | The next version and build number App Store Connect will accept |
 | `apple version set` / `current` | Write or read `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` |
 | `apple release preflight` | Check a release before anything changes: the version, a version stuck in review, release notes per locale |
+| `apple build verify` | Check an archive or `.ipa`: bundle ID, version, build and signed entitlements |
+| `apple build upload` | Upload an `.ipa` through the App Store Connect API, without `altool` or Xcode |
 | `apple build wait` | Wait for an uploaded build to exist or finish processing, and set its "What to Test" |
 | `apple testflight notes` | A "What to Test" note from git |
 | `apple signing install` / `clean` / `encrypt` | Put the certificates and profiles Terraform issued where Xcode looks, with keys that never pass through Terraform |
 | `apple screenshots capture` | App Store screenshots from a simulator with a clean status bar |
 
-Building and uploading stay with `xcodebuild`: `-exportArchive` with
-`-authenticationKeyPath` uploads with the same API key.
+Building stays with `xcodebuild`: `apple` checks and uploads what it makes, and
+never runs it.
 
 ## Install
 
@@ -57,8 +59,13 @@ apple release preflight "$version" --notes-dir store/release-notes
 apple version set "$version" "$build"
 
 apple signing install --from <(terraform output -json signing) --key-dir signing --ephemeral-keychain
-xcodebuild archive ... && xcodebuild -exportArchive ...   # uploads
+xcodebuild archive -archivePath build/App.xcarchive ...
+apple build verify build/App.xcarchive --version "$version" --build "$build"
+xcodebuild -exportArchive -archivePath build/App.xcarchive -exportPath build ...
 apple signing clean
+apple build verify build/App.ipa --version "$version" --build "$build" \
+  --entitlement aps-environment=production
+apple build upload build/App.ipa
 
 apple testflight notes --header "Build $version ($build)" > notes.txt
 apple build wait "$version" "$build" --what-to-test notes.txt

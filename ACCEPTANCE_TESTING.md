@@ -721,9 +721,9 @@ step 2 stays safe — as does step 8, which needs two variables rather than one
 because it ends by removing somebody from the team.
 
 Step 5 is skipped rather than failed when those two variables are absent,
-because nothing in the suite can produce their fixture: Apple publishes no
-build-upload endpoint, so the binary has to arrive through Xcode, Transporter or
-fastlane first.
+because nothing in the suite can produce their fixture: it needs a real,
+processed binary, uploaded first with `apple build upload`, Xcode or
+Transporter.
 
 Step 4 is opt-in past credentials for a reason: those two tests are the only
 ones in the suite that change what an app costs and where it sells, and neither

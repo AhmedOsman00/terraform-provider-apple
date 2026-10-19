@@ -57,8 +57,8 @@ func (r *appStoreVersionResource) Schema(_ context.Context, _ resource.SchemaReq
 			"than creating another.\n\n" +
 			"Set `build_number` to attach an uploaded build. The provider names the build the way a " +
 			"build pipeline does — `CURRENT_PROJECT_VERSION` and `MARKETING_VERSION` — and resolves " +
-			"Apple's opaque build ID itself; uploading the binary is still Xcode's, Transporter's or " +
-			"fastlane's job.\n\n" +
+			"Apple's opaque build ID itself. Uploading the binary is an event rather than state, and " +
+			"stays outside Terraform: `apple build upload`, Xcode or Transporter.\n\n" +
 			"Only an editable version can be deleted. A version that has been released, or is in " +
 			"review, is part of the app's history — destroying it warns and drops it from state.",
 

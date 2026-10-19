@@ -29,6 +29,11 @@ type fakeConnect struct {
 	builds   map[string][]string
 	states   []string
 
+	// partsURL is where build upload parts go: a TLS server of the test's.
+	partsURL     string
+	uploadStates []string
+	uploadLooks  int
+
 	mu        sync.Mutex
 	looks     int
 	whatsNew  map[string]string
@@ -97,10 +102,41 @@ func (f *fakeConnect) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		fmt.Fprint(w, `{"data":{"type":"betaBuildLocalizations","id":"BL1","attributes":{}}}`)
 
+	case r.Method == http.MethodPost && r.URL.Path == "/v1/buildUploads":
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"data":{"type":"buildUploads","id":"U1","attributes":{"state":{"state":"AWAITING_UPLOAD"}}}}`)
+
+	case r.Method == http.MethodPost && r.URL.Path == "/v1/buildUploadFiles":
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprintf(w, `{"data":{"type":"buildUploadFiles","id":"F1","attributes":{"uploadOperations":[`+
+			`{"method":"PUT","url":%q,"offset":0,"length":%d}]}}}`, f.partsURL, f.uploadSize(r))
+
+	case r.Method == http.MethodPatch && r.URL.Path == "/v1/buildUploadFiles/F1":
+		fmt.Fprint(w, `{"data":{"type":"buildUploadFiles","id":"F1","attributes":{}}}`)
+
+	case r.Method == http.MethodGet && r.URL.Path == "/v1/buildUploads/U1":
+		state := f.uploadStates[min(f.uploadLooks, len(f.uploadStates)-1)]
+		f.uploadLooks++
+		fmt.Fprintf(w, `{"data":{"type":"buildUploads","id":"U1","attributes":{"state":%s},`+
+			`"relationships":{"build":{"data":{"type":"builds","id":"B-7"}}}}}`, state)
+
 	default:
 		f.t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+// uploadSize is the fileSize a reservation asked for.
+func (f *fakeConnect) uploadSize(r *http.Request) int64 {
+	var body struct {
+		Data struct {
+			Attributes struct {
+				FileSize int64 `json:"fileSize"`
+			} `json:"attributes"`
+		} `json:"data"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	return body.Data.Attributes.FileSize
 }
 
 type harness struct {

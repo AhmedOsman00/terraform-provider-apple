@@ -40,8 +40,9 @@ will stop a submission:
   does not recur with each release.
 - **App preview videos.** Screenshots are managed — set `screenshots` to a
   map of locale to display type to image paths — but preview videos are not.
-- **The build upload.** Push the binary with Xcode, Transporter or fastlane;
-  Apple publishes no upload endpoint. *Attaching* it is not manual — set
+- **The build upload.** Push the binary with `apple build upload`, Xcode or
+  Transporter; an upload is an event rather than state, so Terraform does not
+  do it. *Attaching* it is not manual — set
   `build_number` to the `CURRENT_PROJECT_VERSION` the pipeline just built and
   this module links it to the version. Apple leaves a build `PROCESSING` for
   five to thirty minutes after the upload finishes and refuses to attach one

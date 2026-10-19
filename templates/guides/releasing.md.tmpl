@@ -116,18 +116,25 @@ instead. There is no `terraform state rm` step.
 ```sh
 apple signing install --from <(terraform output -json signing) --key-dir signing --ephemeral-keychain
 xcodebuild archive -project App.xcodeproj -scheme App -archivePath build/App.xcarchive
+apple build verify build/App.xcarchive --version "$version" --build "$build"
 xcodebuild -exportArchive -archivePath build/App.xcarchive -exportOptionsPlist ExportOptions.plist \
-  -exportPath build -authenticationKeyPath AuthKey.p8 \
-  -authenticationKeyID "$APPLE_APP_STORE_CONNECT_API_KEY" \
-  -authenticationKeyIssuerID "$APPLE_APP_STORE_CONNECT_ISSUER_ID"
+  -exportPath build
 apple signing clean
+apple build verify build/App.ipa --version "$version" --build "$build" \
+  --entitlement aps-environment=production
+apple build upload build/App.ipa
 ```
 
 `signing install` reads the certificates and profiles from a Terraform output
 (see [Code Signing](./code-signing.md) for the module), and the private keys from
 files, the environment, or `.key.enc` files encrypted with `apple signing
-encrypt`. With `destination` set to `upload` in `ExportOptions.plist`, the export
-uploads the build.
+encrypt`. `build verify` checks that the archive and the exported `.ipa` carry
+the version and build just set and were signed with the entitlements a release
+needs — a push entitlement still on `development` is the usual catch — and
+reports every mismatch at once. `build upload` sends the `.ipa` through App Store
+Connect's build upload API with the same API key, so the export no longer has
+to: leave `destination` at `export` in `ExportOptions.plist`. Exporting with
+`destination` set to `upload` still works if you prefer it.
 
 ### 5. Wait for processing
 

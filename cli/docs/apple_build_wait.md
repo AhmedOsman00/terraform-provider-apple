@@ -36,5 +36,5 @@ apple build wait VERSION BUILD [flags]
 
 ### SEE ALSO
 
-* [apple build](apple_build.md)	 - Follow an uploaded build through App Store Connect
+* [apple build](apple_build.md)	 - Check, upload and follow a build through App Store Connect
 

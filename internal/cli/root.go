@@ -46,6 +46,9 @@ type app struct {
 	clientAt  time.Time
 	now       func() time.Time
 	sleep     func(time.Duration)
+
+	// entitlements reads a signed binary's entitlements: codesign when nil.
+	entitlements func(executable string) (map[string]any, error)
 }
 
 // tokenLifetime is how long a client is reused. The provider mints a 20-minute
@@ -152,7 +155,7 @@ func newRootCommand(a *app, version string) *cobra.Command {
 // the generated reference cannot leave one out.
 func annotateEnvironment(cmd *cobra.Command) {
 	note := func(flag *pflag.Flag) {
-		if flag.Name == "help" || flag.Name == "version" || strings.Contains(flag.Usage, "(env ") {
+		if flag.Name == "help" || isVersionFlag(cmd, flag) || strings.Contains(flag.Usage, "(env ") {
 			return
 		}
 		flag.Usage += " (env " + envName(flag.Name) + ")"
@@ -170,12 +173,18 @@ func envName(flag string) string {
 	return "APPLE_" + strings.ToUpper(strings.ReplaceAll(flag, "-", "_"))
 }
 
+// isVersionFlag is the root's own --version. A command's --version, such as
+// build verify's, is an ordinary flag with a variable of its own.
+func isVersionFlag(cmd *cobra.Command, flag *pflag.Flag) bool {
+	return flag.Name == "version" && !cmd.HasParent()
+}
+
 // applyEnvironment sets every flag the command line left alone from its
 // variable, so CI can set a value once at the workflow level.
 func applyEnvironment(cmd *cobra.Command) error {
 	var err error
 	cmd.Flags().VisitAll(func(flag *pflag.Flag) {
-		if err != nil || flag.Changed || flag.Name == "help" || flag.Name == "version" {
+		if err != nil || flag.Changed || flag.Name == "help" || isVersionFlag(cmd, flag) {
 			return
 		}
 		value, ok := os.LookupEnv(envName(flag.Name))
@@ -197,6 +206,8 @@ func Execute(version string) int {
 		newClient: clientFromEnvironment,
 		now:       time.Now,
 		sleep:     time.Sleep,
+
+		entitlements: codesignEntitlements,
 	}
 	return run(a, version, os.Args[1:])
 }

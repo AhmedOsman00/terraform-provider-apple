@@ -56,7 +56,7 @@ Two layers, strictly separated, plus a CLI over the first of them:
 
 - `client.go`: `Client` holds the JWT (ES256, `kid` header, 20-minute expiry) built from issuer ID + key ID + PKCS#8 private key. The token is minted once in `NewClient` and is immutable thereafter — a 20-minute life outlives any single Terraform command, so there is deliberately no refresh path and the signing key is not retained. `doRequest` decodes `models.ErrorResponse` into a formatted error, preferring Apple's own message; a 401 is reported as a credentials failure rather than retried, since re-signing with the same key yields an equivalent token. `UploadHTTPClient` is a **second network**, used only for media file parts — see `uploads.go` below.
 - `uploads.go`: the image upload flow shared by every media resource — reserve (`POST` with `fileName`/`fileSize`), deliver each `uploadOperations` byte range to its presigned URL, commit (`PATCH` with `uploaded: true` and `sourceFileChecksum`), then poll the asset's `assetDeliveryState` briefly. **Parts never go through `doRequest` or `HTTPClient`**: the presigned URLs are on Apple's asset storage hosts, not App Store Connect, so `doRequest` would hand them the JWT and force a JSON content type onto a binary body, and the API client's 30-second timeout is sized for a JSON call. They go through `UploadHTTPClient` — its own `http.Transport`, a five-minute timeout — with only the headers Apple listed, HTTPS only, and every range bounds-checked before a byte is sent. A `nil` `UploadHTTPClient` (as in tests that build a `Client` literal) falls back to a shared default with its own transport, **never** to `HTTPClient`. A reservation that cannot be completed, and an asset Apple marks `FAILED` (wrong dimensions, typically), is deleted rather than left in its parent as a broken image; the poll is bounded (`assetPollAttempts` × `assetPollInterval`), and an asset still processing when it gives up is returned as-is, not as an error. `MediaChecksum` (MD5, lower-case hex) is the one definition of the checksum, used by the commit and by the provider at plan time. The three asset kinds (`appScreenshots`, `subscriptionAppStoreReviewScreenshots`, `inAppPurchaseAppStoreReviewScreenshots`) share one wire type, `models.MediaAsset`, and differ only in a `mediaKind` — collection path, type, and parent relationship (`appScreenshotSet`, `subscription`, `inAppPurchaseV2` typed `inAppPurchases`).
-- One file per Apple resource (`budleIds.go` — note the typo in the filename — `certificates.go`, `devices.go`, `merchantIds.go`, `passTypeIds.go`, `profiles.go`, `bundleIdCapabilities.go`, `apps.go`, `subscriptionGroups.go`, `subscriptionGroupLocalizations.go`, `subscriptions.go`, `subscriptionLocalizations.go`, `subscriptionPrices.go`, `subscriptionAvailabilities.go`, `inAppPurchases.go`, `inAppPurchaseVersions.go`, `inAppPurchaseLocalizations.go`, `inAppPurchasePrices.go`, `inAppPurchaseAvailabilities.go`, `territories.go`, `appInfos.go`, `appInfoLocalizations.go`, `appStoreVersions.go`, `appStoreVersionLocalizations.go`, `appStoreReviewDetails.go`, `ageRatingDeclarations.go`, `appPrices.go`, `appAvailabilities.go`, `builds.go`, `betaGroups.go`, `betaAppLocalizations.go`, `betaBuildLocalizations.go`, `betaAppReviewDetails.go`, `users.go`, `userInvitations.go`, `appScreenshots.go`, `reviewScreenshots.go`). Each exposes plain `Get*/Create*/Update*/Delete*` methods on `*Client` returning `models.*` structs. No Terraform types here.
+- One file per Apple resource (`budleIds.go` — note the typo in the filename — `certificates.go`, `devices.go`, `merchantIds.go`, `passTypeIds.go`, `profiles.go`, `bundleIdCapabilities.go`, `apps.go`, `subscriptionGroups.go`, `subscriptionGroupLocalizations.go`, `subscriptions.go`, `subscriptionLocalizations.go`, `subscriptionPrices.go`, `subscriptionAvailabilities.go`, `inAppPurchases.go`, `inAppPurchaseVersions.go`, `inAppPurchaseLocalizations.go`, `inAppPurchasePrices.go`, `inAppPurchaseAvailabilities.go`, `territories.go`, `appInfos.go`, `appInfoLocalizations.go`, `appStoreVersions.go`, `appStoreVersionLocalizations.go`, `appStoreReviewDetails.go`, `ageRatingDeclarations.go`, `appPrices.go`, `appAvailabilities.go`, `builds.go`, `betaGroups.go`, `betaAppLocalizations.go`, `betaBuildLocalizations.go`, `betaAppReviewDetails.go`, `users.go`, `userInvitations.go`, `appScreenshots.go`, `reviewScreenshots.go`, `buildUploads.go`). Each exposes plain `Get*/Create*/Update*/Delete*` methods on `*Client` returning `models.*` structs. No Terraform types here.
 - `models/`: JSON wire types. All responses go through the generics in `common.go`: `Response[T]`, `ListResponse[T]`, `Request[T]`.
 - `pagination.go`: `getAllPages[T]` walks every page of a collection, following the absolute `links.next` URL until it is empty and refusing links that point off-host. All seven `Get*s()` functions go through it — reading only the first page silently truncates results. A `pageSize` of `noPageSize` (0) omits the `limit` parameter entirely, which the `bundleIdCapabilities` relationship requires: it rejects `limit` with a 400. `getAllPagesQuery` is the same walk with extra query parameters applied to the first request only — Apple's `links.next` already carries them forward, so re-appending would duplicate them. The subscription and in-app purchase collections need it: a price is unreadable without its price point included, and either price point catalogue is unusable without `filter[territory]`.
 - Apple's API has no server-side filtering here — "get by identifier/name" helpers (e.g. `GetPassTypeIDByIdentifier`, `GetProfileByName`) list a full collection and scan client-side, so they depend on pagination being complete. The App Store Connect endpoints are the exception: `/v1/apps` supports `filter[bundleId]`, the price point catalogue supports `filter[territory]`, and `/v1/builds` supports `filter[version]` (the build number), `filter[preReleaseVersion.version]` (its train) and `filter[preReleaseVersion.platform]` — all used server-side because the collections are too large to pull whole. `GetBuilds` is the one by-identifier helper in the provider that is a single request rather than a full-collection scan, and it deliberately omits a `processingState` filter: see `apple_app_store_version` below.
@@ -65,17 +65,22 @@ Two layers, strictly separated, plus a CLI over the first of them:
 
 The actions that go with the provider's state, released separately (see
 Releasing). Terraform holds state; the CLI does what a state cannot describe:
-`version next/set/current`, `release preflight`, `build wait`, `testflight
-notes`, `signing install/clean/encrypt` and `screenshots capture`. It imports
-`internal/apple` and nothing from `internal/provider`, and never runs
-`terraform`, `git commit` or `xcodebuild`.
+`version next/set/current`, `release preflight`, `build verify/upload/wait`,
+`testflight notes`, `signing install/clean/encrypt` and `screenshots capture`.
+It imports `internal/apple` and nothing from `internal/provider`, and never runs
+`terraform`, `git commit` or `xcodebuild` — it checks and uploads what
+`xcodebuild` made, and does not wrap it. A proxy that forwarded arguments to
+`xcodebuild`, `altool` or `cktool` was considered and rejected: it would turn
+every build change into a CLI release for nothing those tools do not already do.
 
 - `root.go`: `app` holds stdout/stderr, the clock, `sleep` and `newClient`, all
   swapped in tests. `api()` rebuilds the client every 15 minutes, because the
   client's token is minted once with a 20-minute life and `build wait` can run
   for an hour. Every flag also reads `APPLE_<FLAG>` (`applyEnvironment`), and
   `annotateEnvironment` writes that name into each flag's help so the help and
-  the generated reference cannot leave one out. There is deliberately no config
+  the generated reference cannot leave one out. Only the root's own `--version`
+  is exempt (`isVersionFlag`); `build verify --version` reads `APPLE_VERSION`
+  like any other flag. There is deliberately no config
   file. Usage errors exit 2 (`usageError`, `exactArgs`, the flag error func),
   failures 1; results go to stdout (`emit`, or JSON with `--json`), progress to
   stderr (`logf`).
@@ -88,6 +93,21 @@ notes`, `signing install/clean/encrypt` and `screenshots capture`. It imports
   opening.
 - `keychain.go`: `/usr/bin/security`. Identities go in as **legacy** PKCS#12
   (`pkcs12.Legacy`), the only kind `security import` accepts.
+- `bundle.go`: the app inside an `.ipa`, `.xcarchive` or `.app`. The Info.plist
+  is read with `howett.net/plist`, because anything Xcode built holds a
+  **binary** plist and `build upload` must run on Linux; the `.ipa` is read in
+  place, and only the executable is extracted, only for `build verify
+  --entitlement`. Entitlements come from `codesign` (macOS only) through
+  `app.entitlements`, which tests swap.
+- `build_upload.go`: `apple build upload`, over `UploadBuild` in
+  `internal/apple/buildUploads.go` — App Store Connect API 4.1's
+  `buildUploads` → `buildUploadFiles` reservation → parts → commit. It differs
+  from the screenshot flow in two ways: the commit takes `sourceFileChecksums`
+  (an object naming its algorithm) rather than one string, and parts are read
+  from the file through an `io.ReaderAt`, since an `.ipa` is too large to hold
+  in memory. The file is reserved as `ASSET` / `com.apple.ipa` alone; whether
+  Apple also wants the `ASSET_DESCRIPTION` or `ASSET_SPI` types `altool` sends
+  is **unverified against the live API**.
 - `docs.go`: the hidden `gen-docs` command `make generate` runs into
   `cli/docs/`. It cannot write under `docs/`, which tfplugindocs deletes.
 
@@ -180,7 +200,8 @@ has no endpoint for it — the 4.4.1 OpenAPI spec contains no `appDataUsages`
 path and no matching schema. Anything that automates it is using an
 undocumented endpoint. It is declared per app rather than per version, so a
 manual answer does not recur with each release; `examples/app-listing` reports
-it, along with app preview videos, the build upload and submission, through the
+it, along with app preview videos, the build upload (which `apple build upload`
+does outside Terraform) and submission, through the
 `remaining_manual_steps` output. Do not add a resource for it without first
 confirming Apple has published one.
 
@@ -378,7 +399,8 @@ is the closest a configuration gets to the flat shape those files use. And its
 `remaining_manual_steps` output names what no configuration can do: App Privacy,
 app preview videos, the build upload, export compliance and submission. Attaching the
 build is not on that list — `build_number` handles it — but uploading the binary
-is, because Apple publishes no upload endpoint.
+is: it is an event rather than state, so it belongs to `apple build upload` (or
+Xcode, or Transporter), not to a resource.
 
 Two things there are easy to get wrong:
 
@@ -770,7 +792,7 @@ The CLI releases from `cli-v*` tags through `.github/workflows/cli-release.yml`,
 
 Two tiers:
 
-- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`, `internal/apple/uploads_test.go`, `internal/provider/media/files_test.go`, `internal/provider/media/schema_test.go`, `internal/provider/plan_modifier_order_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`. `uploads_test.go` sets `HTTPClient` and `UploadHTTPClient` to two counting transports over one `httptest.NewTLSServer` and asserts which network carried each request and that no part carried an `Authorization` header — that test is the guarantee the two networks stay separate. It shortens `assetPollInterval`/`assetPollAttempts` rather than waiting.
+- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`, `internal/apple/uploads_test.go`, `internal/apple/buildUploads_test.go`, `internal/provider/media/files_test.go`, `internal/provider/media/schema_test.go`, `internal/provider/plan_modifier_order_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`. `uploads_test.go` sets `HTTPClient` and `UploadHTTPClient` to two counting transports over one `httptest.NewTLSServer` and asserts which network carried each request and that no part carried an `Authorization` header — that test is the guarantee the two networks stay separate. It shortens `assetPollInterval`/`assetPollAttempts` rather than waiting.
 - **Acceptance** (`internal/provider/*_test.go`, package `provider`): `terraform-plugin-testing` against the real API. `testAccPreCheck` skips when credentials are absent.
 
 The CLI's credential-free tests (`internal/cli/*_test.go`) drive whole commands through `run` against `fakeConnect`, an `httptest` App Store Connect whose build state advances on each look, with a fake clock so waits finish at once. `internal/cli/acceptance_test.go` only reads, and needs `APPLE_TEST_BUNDLE_ID`.
