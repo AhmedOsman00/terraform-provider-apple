@@ -1,4 +1,4 @@
-## Unreleased
+## 0.3.0 (October 21, 2026)
 
 FEATURES:
 
@@ -28,6 +28,13 @@ FEATURES:
   login, so this works with HCP Terraform or any other backend without the CLI
   knowing about it. `--from FILE` and `--from -` are unchanged, for someone who
   is sent the document rather than given the state.
+
+BUG FIXES:
+
+* **The CLI is built with Go 1.26.10.** Go 1.26.9's `crypto/x509` did not
+  distrust a set of compromised intermediate certificates (GO-2026-6809), and
+  every request the CLI makes to App Store Connect and Apple's upload hosts
+  goes through it. Building from source now needs Go 1.26.10 or later.
 
 ## 0.2.0 (October 19, 2026)
 
