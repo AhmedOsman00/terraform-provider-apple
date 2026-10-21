@@ -4,15 +4,15 @@ go 1.26.9
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/hashicorp/hcl/v2 v2.24.0
+	github.com/hashicorp/hcl/v2 v2.25.0
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.19.0
 	github.com/hashicorp/terraform-plugin-go v0.31.0
 	github.com/hashicorp/terraform-plugin-log v0.11.0
 	github.com/hashicorp/terraform-plugin-testing v1.16.0
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.9
-	github.com/zclconf/go-cty v1.18.1
+	github.com/spf13/pflag v1.0.10
+	github.com/zclconf/go-cty v1.19.0
 	golang.org/x/term v0.47.0
 	howett.net/plist v1.0.1
 	software.sslmate.com/src/go-pkcs12 v0.7.4
@@ -22,6 +22,7 @@ require (
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
+	github.com/apparentlymart/go-textseg/v17 v17.0.1 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/fatih/color v1.18.0 // indirect
