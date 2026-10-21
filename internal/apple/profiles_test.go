@@ -313,3 +313,48 @@ func TestCreateProfileDoesNotRetryClientError(t *testing.T) {
 		t.Errorf("POST attempts = %d, want 1: a 409 must not be retried", posts)
 	}
 }
+
+// TestGetProfileLinkagesReadsAllThree covers what an import needs and the
+// profile record does not carry: its bundle ID, certificates and devices, each
+// a relationship of its own. The certificate linkage is paged to show the walk
+// follows it, and the order Apple returns is kept, since certificates is a
+// list and a reordered one is a diff.
+func TestGetProfileLinkagesReadsAllThree(t *testing.T) {
+	var srvURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v1/profiles/P1/relationships/bundleId":
+			_, _ = w.Write([]byte(`{"data":{"type":"bundleIds","id":"BUNDLE1"}}`))
+		case "/v1/profiles/P1/relationships/certificates":
+			if r.URL.Query().Get("cursor") == "" {
+				_, _ = w.Write([]byte(`{"data":[{"type":"certificates","id":"C2"}],` +
+					`"links":{"next":"` + srvURL + `/v1/profiles/P1/relationships/certificates?cursor=2"}}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"data":[{"type":"certificates","id":"C1"}]}`))
+		case "/v1/profiles/P1/relationships/devices":
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		default:
+			t.Errorf("unexpected request %s", r.URL)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	srvURL = srv.URL
+
+	linkages, err := newTestClient(srv).GetProfileLinkages("P1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if linkages.BundleID != "BUNDLE1" {
+		t.Errorf("BundleID = %q, want BUNDLE1", linkages.BundleID)
+	}
+	if len(linkages.CertificateIDs) != 2 || linkages.CertificateIDs[0] != "C2" || linkages.CertificateIDs[1] != "C1" {
+		t.Errorf("CertificateIDs = %v, want [C2 C1] in Apple's order across both pages", linkages.CertificateIDs)
+	}
+	if len(linkages.DeviceIDs) != 0 {
+		t.Errorf("DeviceIDs = %v, want none for an App Store profile", linkages.DeviceIDs)
+	}
+}

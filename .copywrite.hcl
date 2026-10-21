@@ -15,6 +15,9 @@ project {
     # Generated CLI documentation
     "cli/docs/**",
 
+    # apple terraform export's expected output, compared byte for byte
+    "internal/export/testdata/**",
+
     # GitHub issue template configuration
     ".github/ISSUE_TEMPLATE/*.yml",
 

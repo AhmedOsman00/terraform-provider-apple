@@ -252,6 +252,11 @@ brew install --cask ahmedosman00/tap/apple
 read -r version build < <(apple version next --bundle-id com.example.app)
 ```
 
+Adopting an account that already exists starts with `apple terraform export`,
+which writes the configuration from what App Store Connect holds, `import`
+blocks included, so the first `terraform plan` imports everything and changes
+nothing. See [Exporting an existing account](docs/guides/getting-started.md#exporting-an-existing-account).
+
 [Releasing an app](docs/guides/releasing.md) walks through a release with both.
 
 ## Development

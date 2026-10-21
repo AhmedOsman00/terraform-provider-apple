@@ -287,6 +287,15 @@ func (r *appSettingsResource) ImportState(ctx context.Context, req resource.Impo
 	state := appSettingsModel{AppID: types.StringValue(app.ID)}
 	applyAppSettings(&state, app)
 
+	// Read leaves the URLs alone so that a value Apple omits cannot blank a
+	// configured one. An import has no configuration to protect, and leaving
+	// them null made the first plan rewrite every URL the app already had.
+	state.AccessibilityURL = stringOrNull(app.Attributes.AccessibilityURL)
+	state.SubscriptionStatusURL = stringOrNull(app.Attributes.SubscriptionStatusURL)
+	state.SubscriptionStatusURLVersion = stringOrNull(app.Attributes.SubscriptionStatusURLVersion)
+	state.SubscriptionStatusURLForSandbox = stringOrNull(app.Attributes.SubscriptionStatusURLForSandbox)
+	state.SubscriptionStatusURLVersionForSandbox = stringOrNull(app.Attributes.SubscriptionStatusURLVersionForSandbox)
+
 	diags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 }

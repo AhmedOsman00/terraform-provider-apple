@@ -550,6 +550,21 @@ require devices, and devices are permanent.
 | `TestAccProvider` | No calls | Applies an empty config. The JWT is minted locally; no request is sent. | No change. |
 | `TestAccProvider_ConfigurationValidation` | No calls | Nothing — three deliberately malformed credential sets, all rejected by validators before any request. Runs even without credentials. | No change. |
 
+## Export
+
+`TestAccExport_firstPlanChangesNothing` checks the promise `apple terraform
+export` makes. It exports the `APPLE_TEST_APP_ID` app plus the whole team's
+signing and Users and Access records, then runs `terraform plan` over the
+result and fails unless that plan only imports. The step is `PlanOnly`, so
+nothing is applied and no state is ever destroyed. That matters, because
+destroying the imported records would delete the test app's version, beta
+groups and team members. The team part needs an Admin API key; without one it
+is left out with a note rather than failing.
+
+| Test | Residue | Creates at Apple | What you see in the portal |
+|---|---|---|---|
+| `TestAccExport_firstPlanChangesNothing` | None | Nothing. Reads the team's Developer Portal records, the test app's listing, products and TestFlight setup, and the team's members, then plans. | No change. |
+
 ## The apple CLI
 
 `internal/cli/acceptance_test.go` only reads. It needs `APPLE_TEST_BUNDLE_ID`,
@@ -667,7 +682,7 @@ export APPLE_TEST_APP_ID=6448459855
 
 # 1. Read-only first — proves the credentials work, creates nothing.
 TF_ACC=1 go test -v ./internal/provider/ -timeout 30m \
-  -run 'TestAccProvider|DataSource_validation|DataSource_empty|DevicesDataSource'
+  -run 'TestAccProvider|DataSource_validation|DataSource_empty|DevicesDataSource|TestAccExport'
 
 # 2. Everything except the two permanent device tests.
 #

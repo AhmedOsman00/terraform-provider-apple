@@ -36,7 +36,8 @@ Generation runs `terraform fmt` but never `terraform validate`, which is why
 `make validate-examples` (`scripts/validate-examples.sh`) exists separately: it
 builds the provider into a throwaway filesystem mirror, synthesizes a
 `required_providers` block for the example directories that have none, and runs
-`terraform init` + `terraform validate` in each. That is the only check that
+`terraform init` + `terraform validate` in each, and in
+`internal/export/testdata/golden`. That is the only check that
 catches an example written against a schema the provider does not have — a
 `settings { ... }` block where the schema is a `ListNestedAttribute`, an
 attribute that does not exist, or a value a validator rejects. `dev_overrides`
@@ -66,8 +67,10 @@ Two layers, strictly separated, plus a CLI over the first of them:
 The actions that go with the provider's state, released separately (see
 Releasing). Terraform holds state; the CLI does what a state cannot describe:
 `version next/set/current`, `release preflight/submit`, `build verify/upload/wait`,
-`testflight notes`, `signing install/clean/encrypt` and `screenshots capture`.
-It imports `internal/apple` and nothing from `internal/provider`, and never runs
+`testflight notes`, `signing install/clean/encrypt`, `screenshots capture` and
+`terraform export`.
+It imports `internal/apple` (and `internal/export`, which imports only
+`internal/apple`) and nothing from `internal/provider`, and never runs
 `terraform`, `git commit` or `xcodebuild` — it checks and uploads what
 `xcodebuild` made, and does not wrap it. A proxy that forwarded arguments to
 `xcodebuild`, `altool` or `cktool` was considered and rejected: it would turn
@@ -108,8 +111,67 @@ every build change into a CLI release for nothing those tools do not already do.
   in memory. The file is reserved as `ASSET` / `com.apple.ipa` alone; whether
   Apple also wants the `ASSET_DESCRIPTION` or `ASSET_SPI` types `altool` sends
   is **unverified against the live API**.
+- `terraform.go`: `apple terraform export`, a thin wrapper over
+  `internal/export` (below). It refuses a non-empty `--out` unless `--force`,
+  so it can never write over a configuration that already manages the account,
+  and it only reads.
 - `docs.go`: the hidden `gen-docs` command `make generate` runs into
   `cli/docs/`. It cannot write under `docs/`, which tfplugindocs deletes.
+
+### `internal/export/` — configuration from the live account
+
+`apple terraform export` writes a resource block per record with Apple's
+values and an `import` block beside each, plus `EXPORT_NOTES.md`. **The
+contract is that the first `terraform plan` only imports.** That holds only if
+every value is written exactly as the provider's `ImportState` + `Read` record
+it, so each `export*` function mirrors those (and says which). When an import
+leaves an attribute null, the export leaves it out. When a list comes back in
+Apple's order, the export keeps that order. When an import adopts a value, the
+export writes it. If you change what an `ImportState` records, change the
+matching exporter, and the other way round.
+
+A `Source` interface (`source.go`) lists every client method the export
+reads; `*apple.Client` satisfies it and `fake_test.go` is the canned account
+the tests use. It never imports `internal/provider`.
+
+Rules that are easy to undo by accident:
+
+- **Certificates are data sources, never resources.** Importing an
+  `apple_certificate` reissues it on the next apply, which revokes the
+  original. Profiles refer to `data.apple_certificates.<x>.certificates[0].id`.
+- **One `apple_subscription_price_schedule` per subscription**, never
+  `apple_subscription_price` as well: they write the same set and fight. It
+  carries `depends_on` the subscription's availability, which Apple requires
+  first.
+- **Screenshots and review screenshots are left out.** The paths cannot be
+  recovered and Apple's checksum would not match a re-downloaded file.
+- **Demo account passwords are sensitive variables defaulting to null.** The
+  import records null, so null keeps the plan empty.
+- **`apple_beta_tester` omits `first_name`/`last_name`:** the import does not
+  record them and both force replacement. Public link testers, disabled
+  devices, inactive profiles, the Account Holder, `apple_beta_group_build` and
+  `apple_beta_build_localization` are left out with a note.
+- **An internal beta group gets no `public_link_*` attribute**, even a false
+  one: `ValidateConfig` rejects any on an internal group.
+- One `apple_app_store_version` per platform: the editable one, or the newest
+  when none is.
+- Strings go through `hclwrite`, which escapes `${` and `%{`. Apple text is
+  data, and unescaped it would be an interpolation.
+
+Three imports had to be fixed for this contract to hold, and must stay fixed:
+`apple_profile` import reads `bundle_id`, `certificates` and `devices` from the
+profile's relationships (`GetProfileLinkages`; it had recorded them empty, so
+every imported profile planned a reissue), `apple_app_settings` import adopts
+the URLs that `Read` deliberately does not refresh, and `apple_subscription`
+import adopts `review_note` as `apple_in_app_purchase`'s does.
+
+`testdata/golden/` is the whole output for the fake account. Regenerate it with
+`go test ./internal/export -update` and read the diff, because that diff is what
+users get. `make validate-examples` runs `terraform validate` over it, which is
+what checks the exporter against the schema. The directory is excluded from
+the copywrite headers, since it is compared byte for byte.
+`TestAccExport_firstPlanChangesNothing` is the only test that checks the
+empty-plan contract against Apple.
 
 ### `internal/provider/` — Terraform layer
 
@@ -809,7 +871,7 @@ cross-variable validation.
   so. Import ID is the app ID.
 - **`apple_user`**: adopted on create like `apple_app_settings`, and the only adopting resource in the provider with a **real delete** — `DELETE /v1/users/{id}` takes the person off the team and revokes their access to every app, which the API cannot undo. `Create` is a lookup that must succeed plus the same `PATCH` `Update` sends; an address that is not already a member is an error naming `apple_user_invitation`, because Apple publishes no way to add one. `username` is `RequiresReplace` and belongs to the person's Apple Account rather than to the team, which is also why `first_name` and `last_name` are **computed**: Apple's update request carries neither. Roles are a `types.Set` sorted before being sent, so two configurations naming the same roles produce the same body. `Read` looks the member up by Apple's ID rather than by username — a person who left and rejoined is not the same record — and refreshes `visible_apps` only when state holds one; see the `user` package notes above for why. `ACCOUNT_HOLDER` is refused in `ValidateConfig`, and Apple's refusal of a write naming the account holder is mapped to a diagnostic that says to transfer the membership rather than retry.
 - **`apple_user_invitation`**: the only way to add a member, and a record Apple **destroys on acceptance**. Every configurable attribute is `RequiresReplace` (there is no `PATCH /v1/userInvitations`) and `Update` exists only to report that it was reached, the shape `apple_profile` and `apple_beta_tester` are in. `first_name` and `last_name` are **required here and nowhere else** — Apple rejects the create without them — which is what makes them computed on `apple_user`. The 404-means-three-things problem is handled in `Read` (see above) and again in `Delete`: an invitation already accepted cannot be cancelled, so `Delete` warns, drops state and names `apple_user` rather than deleting the member, which would turn removing a stale invitation from a configuration into removing a colleague. An invitation lapses after 72 hours, reported through the computed `expiration_date`.
-- **`apple_profile`**: every configurable attribute is `RequiresReplace`, `name` included — Apple rejects `PATCH /v1/profiles` with 403 `does not allow 'UPDATE'`, so a rename is a reissue and `Update` exists only to report that it was reached. Profile content/UUID/state/dates are Apple-computed. `CreateProfile` retries a 5xx up to three times: `POST /v1/profiles` intermittently answers 500 for a well-formed request that succeeds on the next attempt. It looks the name up before each retry and adopts an already-issued profile, so a 500 that arrives after Apple committed the write does not duplicate it.
+- **`apple_profile`**: import reads `bundle_id`, `certificates` and `devices` through `GetProfileLinkages`, because the profile record carries none of them and all three are `RequiresReplace`. `devices` is null for a profile with none, matching a configuration that leaves it unset. Every configurable attribute is `RequiresReplace`, `name` included — Apple rejects `PATCH /v1/profiles` with 403 `does not allow 'UPDATE'`, so a rename is a reissue and `Update` exists only to report that it was reached. Profile content/UUID/state/dates are Apple-computed. `CreateProfile` retries a 5xx up to three times: `POST /v1/profiles` intermittently answers 500 for a well-formed request that succeeds on the next attempt. It looks the name up before each retry and adopts an already-issued profile, so a 500 that arrives after Apple committed the write does not duplicate it.
 
 ## Local testing
 
@@ -827,7 +889,7 @@ The CLI releases from `cli-v*` tags through `.github/workflows/cli-release.yml`,
 
 Two tiers:
 
-- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`, `internal/apple/uploads_test.go`, `internal/apple/buildUploads_test.go`, `internal/provider/media/files_test.go`, `internal/provider/media/schema_test.go`, `internal/provider/plan_modifier_order_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`. `uploads_test.go` sets `HTTPClient` and `UploadHTTPClient` to two counting transports over one `httptest.NewTLSServer` and asserts which network carried each request and that no part carried an `Authorization` header — that test is the guarantee the two networks stay separate. It shortens `assetPollInterval`/`assetPollAttempts` rather than waiting.
+- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`, `internal/apple/uploads_test.go`, `internal/apple/buildUploads_test.go`, `internal/apple/profiles_test.go`, `internal/export/export_test.go`, `internal/provider/media/files_test.go`, `internal/provider/media/schema_test.go`, `internal/provider/plan_modifier_order_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`. `uploads_test.go` sets `HTTPClient` and `UploadHTTPClient` to two counting transports over one `httptest.NewTLSServer` and asserts which network carried each request and that no part carried an `Authorization` header — that test is the guarantee the two networks stay separate. It shortens `assetPollInterval`/`assetPollAttempts` rather than waiting.
 - **Acceptance** (`internal/provider/*_test.go`, package `provider`): `terraform-plugin-testing` against the real API. `testAccPreCheck` skips when credentials are absent.
 
 The CLI's credential-free tests (`internal/cli/*_test.go`) drive whole commands through `run` against `fakeConnect`, an `httptest` App Store Connect whose build state advances on each look, with a fake clock so waits finish at once. `internal/cli/acceptance_test.go` only reads, and needs `APPLE_TEST_BUNDLE_ID`.

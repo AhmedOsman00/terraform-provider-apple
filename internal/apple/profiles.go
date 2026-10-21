@@ -237,3 +237,52 @@ func (c *Client) GetProfileByName(name string) (*models.Profile, error) {
 
 	return nil, fmt.Errorf("profile with name '%s' not found", name)
 }
+
+// ProfileLinkages are the three things a profile was issued for. Apple reports
+// none of them on the profile record itself, only as relationship links.
+type ProfileLinkages struct {
+	BundleID       string
+	CertificateIDs []string
+	DeviceIDs      []string
+}
+
+// GetProfileLinkages reads the bundle ID, certificates and devices a profile
+// names, in the order Apple returns them. Every one of them is fixed at
+// issue, so an import that leaves them out plans a reissue.
+func (c *Client) GetProfileLinkages(profileID string) (*ProfileLinkages, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/profiles/%s/relationships/bundleId", c.HostURL, profileID), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := c.doRequest(req, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	bundle := models.Response[models.ResourceData]{}
+	if err := json.Unmarshal(body, &bundle); err != nil {
+		return nil, err
+	}
+
+	linkages := &ProfileLinkages{BundleID: bundle.Data.ID}
+
+	for _, relationship := range []struct {
+		name string
+		into *[]string
+	}{
+		{"certificates", &linkages.CertificateIDs},
+		{"devices", &linkages.DeviceIDs},
+	} {
+		data, err := getAllPages[models.ResourceData](c,
+			fmt.Sprintf("/v1/profiles/%s/relationships/%s", profileID, relationship.name), defaultPageSize)
+		if err != nil {
+			return nil, fmt.Errorf("reading the %s of profile %s: %w", relationship.name, profileID, err)
+		}
+		for _, linkage := range data {
+			*relationship.into = append(*relationship.into, linkage.ID)
+		}
+	}
+
+	return linkages, nil
+}

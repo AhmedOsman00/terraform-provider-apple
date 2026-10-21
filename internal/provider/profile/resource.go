@@ -12,7 +12,6 @@ import (
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
@@ -504,10 +503,34 @@ func (r *profileResource) ImportState(ctx context.Context, req resource.ImportSt
 	state.Name = types.StringValue(profile.Attributes.Name)
 	state.Platform = platformValue(profile.Attributes.Platform)
 
-	// For import, we need to set relationships to empty lists since we don't have them from the API response
-	state.Certificates, _ = types.ListValue(types.StringType, []attr.Value{})
-	state.Devices, _ = types.ListValue(types.StringType, []attr.Value{})
-	state.BundleID = types.StringValue("") // Will be resolved from relationships if available
+	// The bundle ID, certificates and devices are all RequiresReplace and
+	// absent from the profile record, so they are read from its relationships.
+	// Leaving them empty planned a reissue of every imported profile.
+	linkages, err := r.client.GetProfileLinkages(profile.ID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Importing Profile",
+			fmt.Sprintf("Could not read the bundle ID, certificates and devices of Profile '%s': %s", profile.ID, err.Error()),
+		)
+		return
+	}
+
+	state.BundleID = types.StringValue(linkages.BundleID)
+	certificates, diags := types.ListValueFrom(ctx, types.StringType, linkages.CertificateIDs)
+	resp.Diagnostics.Append(diags...)
+	state.Certificates = certificates
+
+	// An App Store profile names no devices, and a configuration for one
+	// leaves the attribute unset rather than writing an empty list.
+	state.Devices = types.ListNull(types.StringType)
+	if len(linkages.DeviceIDs) > 0 {
+		devices, diags := types.ListValueFrom(ctx, types.StringType, linkages.DeviceIDs)
+		resp.Diagnostics.Append(diags...)
+		state.Devices = devices
+	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	if profile.Attributes.ProfileContent != nil {
 		state.ProfileContent = types.StringValue(*profile.Attributes.ProfileContent)
@@ -545,10 +568,5 @@ func (r *profileResource) ImportState(ctx context.Context, req resource.ImportSt
 		"profile_name": profile.Attributes.Name,
 	})
 
-	// Set state
-	diags := resp.State.Set(ctx, &state)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

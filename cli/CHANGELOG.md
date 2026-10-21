@@ -1,3 +1,26 @@
+## Unreleased
+
+FEATURES:
+
+* **`apple terraform export`.** Writes Terraform configuration for what an App
+  Store Connect account already holds: a resource block per record carrying
+  Apple's values, an `import` block beside each, and `EXPORT_NOTES.md` listing
+  what was left out and why. The first `terraform plan` should then import
+  everything and change nothing, which is what copying values by hand cannot
+  promise.
+
+  ```sh
+  apple terraform export --out ./apple --app com.example.app
+  ```
+
+  Certificates are read through `apple_certificates` data sources rather than
+  imported, because importing one reissues it and revokes the original.
+  Screenshots are left out, since Apple keeps their bytes rather than the
+  files, and demo account passwords become sensitive variables. `--only`
+  limits it to `signing`, `app`, `products`, `testflight` or `team`, and
+  `--json` prints the summary and notes as JSON. It only reads, and refuses an
+  `--out` that already holds files unless `--force` is given.
+
 ## 0.2.0 (October 19, 2026)
 
 FEATURES:

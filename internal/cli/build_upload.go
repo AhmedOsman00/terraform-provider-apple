@@ -80,7 +80,7 @@ func newBuildUploadCommand(a *app) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			a.logf("Uploaded; Apple is checking it.")
+			a.logf("Uploaded; Apple is checking the upload. Build processing starts once it is COMPLETE.")
 
 			deadline := a.now().Add(timeout)
 			for {
@@ -114,7 +114,7 @@ func newBuildUploadCommand(a *app) *cobra.Command {
 				if !a.now().Before(deadline) {
 					return fmt.Errorf("gave up waiting; the upload of %s is %s", label, orNone(state))
 				}
-				a.logf("%s %s: %s", a.now().UTC().Format("15:04:05"), label, orNone(state))
+				a.logf("%s upload of %s: %s", a.now().UTC().Format("15:04:05"), label, orNone(state))
 				a.sleep(interval)
 			}
 		},

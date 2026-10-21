@@ -2,7 +2,10 @@
 # Copyright (c) AO Studio
 # SPDX-License-Identifier: MPL-2.0
 
-# Run `terraform validate` over every directory under examples/.
+# Run `terraform validate` over every directory under examples/, and over the
+# configuration `apple terraform export` writes for its test account
+# (internal/export/testdata/golden), so an export written against an attribute
+# the schema does not have fails here rather than in a user's first plan.
 #
 # `make generate` only runs `terraform fmt`, which catches syntax but not a
 # `settings { ... }` block written against a ListNestedAttribute, an attribute
@@ -70,7 +73,7 @@ EOF
   else
     failed+=("$dir")
   fi
-done < <(cd "$REPO_ROOT" && find examples -type f -name '*.tf' -exec dirname {} \; | sort -u)
+done < <(cd "$REPO_ROOT" && find examples internal/export/testdata/golden -type f -name '*.tf' -exec dirname {} \; | sort -u)
 
 if [ ${#failed[@]} -ne 0 ]; then
   echo

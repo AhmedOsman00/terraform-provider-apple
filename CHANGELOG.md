@@ -1,3 +1,19 @@
+## Unreleased
+
+BUG FIXES:
+
+* **Importing an `apple_profile` no longer plans its reissue.** The import
+  recorded an empty `bundle_id`, `certificates` and `devices`, all of which
+  force replacement, so the first plan after any profile import destroyed it
+  and issued a new one. They are now read from the profile's relationships.
+
+* **Importing `apple_app_settings` keeps the app's URLs.** `accessibility_url`
+  and the four `subscription_status_url*` attributes were left null on
+  import, so the first plan proposed writing back values Apple already held.
+
+* **Importing an `apple_subscription` keeps its `review_note`**, as importing an
+  `apple_in_app_purchase` already did.
+
 ## 0.7.0 (October 19, 2026)
 
 FEATURES:

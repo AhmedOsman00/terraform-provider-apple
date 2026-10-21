@@ -361,6 +361,14 @@ func (r *subscriptionResource) ImportState(ctx context.Context, req resource.Imp
 	state := subscriptionModel{ID: types.StringValue(subscription.ID)}
 	applySubscriptionAttributes(&state, subscription)
 
+	// applySubscriptionAttributes skips review_note so that a null in
+	// configuration survives a Read. An import has no configuration to
+	// contradict, and leaving it null dropped a value Apple holds -- the same
+	// rule apple_in_app_purchase's import follows.
+	if subscription.Attributes.ReviewNote != nil {
+		state.ReviewNote = types.StringValue(*subscription.Attributes.ReviewNote)
+	}
+
 	if subscription.Relationships != nil && subscription.Relationships.Group != nil {
 		if groupID := subscription.Relationships.Group.Data.ID; groupID != "" {
 			state.GroupID = types.StringValue(groupID)

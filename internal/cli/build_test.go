@@ -258,6 +258,9 @@ func TestBuildUploadSendsTheIPAAndWaitsForApple(t *testing.T) {
 	if h.sleeps != 1 {
 		t.Errorf("slept %d times, want 1", h.sleeps)
 	}
+	if !strings.Contains(h.errOut.String(), "upload of 1.2.0 (7): PROCESSING") {
+		t.Errorf("the poll did not name the upload:\n%s", h.errOut)
+	}
 
 	var result uploadResult
 	if err := json.Unmarshal(h.out.Bytes(), &result); err != nil {

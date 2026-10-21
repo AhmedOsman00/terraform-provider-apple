@@ -17,6 +17,7 @@ cannot describe:
 | `apple testflight notes` | A "What to Test" note from git |
 | `apple signing install` / `clean` / `encrypt` | Put the certificates and profiles Terraform issued where Xcode looks, with keys that never pass through Terraform |
 | `apple screenshots capture` | App Store screenshots from a simulator with a clean status bar |
+| `apple terraform export` | Terraform configuration and `import` blocks for what the account already holds, so the first plan changes nothing |
 
 Building stays with `xcodebuild`: `apple` checks and uploads what it makes, and
 never runs it.

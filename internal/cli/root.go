@@ -119,7 +119,8 @@ func newRootCommand(a *app, version string) *cobra.Command {
 		Short: "App Store Connect actions to go with the Terraform provider",
 		Long: "apple performs the steps Terraform cannot model: working out the next version and build,\n" +
 			"checking a release before it starts, waiting for a build, installing signing and taking\n" +
-			"screenshots. Terraform keeps the state; this does the actions.\n\n" +
+			"screenshots, and writing configuration for what an account already holds.\n" +
+			"Terraform keeps the state; this does the actions.\n\n" +
 			"Credentials are the provider's: APPLE_APP_STORE_CONNECT_ISSUER_ID,\n" +
 			"APPLE_APP_STORE_CONNECT_API_KEY and APPLE_APP_STORE_CONNECT_PRIVATE_KEY.\n" +
 			"Every flag can also be set as APPLE_<FLAG>, such as APPLE_BUNDLE_ID for --bundle-id.",
@@ -144,6 +145,7 @@ func newRootCommand(a *app, version string) *cobra.Command {
 		newTestFlightCommand(a),
 		newSigningCommand(a),
 		newScreenshotsCommand(a),
+		newTerraformCommand(a),
 	)
 	root.AddCommand(newDocsCommand(root))
 	annotateEnvironment(root)

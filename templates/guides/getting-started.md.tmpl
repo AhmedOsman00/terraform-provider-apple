@@ -276,6 +276,53 @@ backend with locking and versioning, and restrict read access to it as tightly a
 you would restrict the signing keys themselves — because that is what it holds.
 [Code Signing](./code-signing.md) works through what that means in practice.
 
+## Exporting an existing account
+
+The fastest way to bring an account under Terraform is not to write the
+configuration at all. The `apple` CLI reads what App Store Connect holds and
+writes it out: one resource block per record with the value Apple holds, an
+`import` block beside each, and an `EXPORT_NOTES.md` listing what it left out
+and why.
+
+```bash
+apple terraform export --out ./apple --app com.example.myapp
+cd apple
+terraform init
+terraform plan
+```
+
+The plan should import everything and change nothing — `N to import, 0 to add,
+0 to change, 0 to destroy`. That is the reason to export rather than copy
+values out of App Store Connect by hand: a price, an age rating answer or a
+category typed slightly differently is overwritten on the first apply, and a
+`product_id` typed differently plans a replacement that consumes the real
+identifier for good. Do not apply a plan that changes or replaces anything;
+fix the configuration first. Once the import is applied, the `import` blocks
+can be deleted.
+
+A few records are deliberately not imported, and the notes say which:
+
+- **Certificates** are read through `apple_certificates` data sources, and
+  profiles refer to them there. Importing an `apple_certificate` reissues it,
+  which revokes the one you are signing with.
+- **Screenshots** are left out. Apple keeps a screenshot's bytes, not the file it
+  came from, so a screenshot resource needs the image on disk.
+- **Demo account passwords** become sensitive variables defaulting to null.
+  Apple does not return them, and a null leaves Apple's alone.
+- Disabled devices, inactive profiles, testers who joined through a public link,
+  the Account Holder, and per-build TestFlight records are left out as well.
+
+`--only` limits the export to `signing`, `app`, `products`, `testflight` or
+`team`; `app`, `products` and `testflight` cover every app on the team unless
+`--app` names some. The command only reads: it writes nothing to Apple and does
+not run Terraform. Install it from the
+[releases](https://github.com/AhmedOsman00/terraform-provider-apple/releases)
+or with `brew install --cask ahmedosman00/tap/apple`.
+
+The generated files are ordinary configuration, so they are also a good
+starting point to hand to an AI assistant: every value in them came from Apple
+rather than from a guess.
+
 ## Importing what you already have
 
 You almost certainly have identifiers, devices, and profiles in the developer
