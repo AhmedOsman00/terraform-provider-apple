@@ -49,6 +49,8 @@ type app struct {
 
 	// entitlements reads a signed binary's entitlements: codesign when nil.
 	entitlements func(executable string) (map[string]any, error)
+	// terraformOutput reads one output of the configuration in dir as JSON.
+	terraformOutput func(dir, name string) ([]byte, error)
 }
 
 // tokenLifetime is how long a client is reused. The provider mints a 20-minute
@@ -209,7 +211,8 @@ func Execute(version string) int {
 		now:       time.Now,
 		sleep:     time.Sleep,
 
-		entitlements: codesignEntitlements,
+		entitlements:    codesignEntitlements,
+		terraformOutput: terraformOutputJSON,
 	}
 	return run(a, version, os.Args[1:])
 }

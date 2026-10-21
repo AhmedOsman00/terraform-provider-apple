@@ -21,6 +21,14 @@ FEATURES:
   `--json` prints the summary and notes as JSON. It only reads, and refuses an
   `--out` that already holds files unless `--force` is given.
 
+* **`apple signing install --terraform DIR`.** Runs `terraform -chdir=DIR
+  output -json signing` and installs from that, so installing is one step and
+  no `signing.json` is left on disk to go stale or be committed.
+  `--terraform-output` names a different output. Terraform does the backend
+  login, so this works with HCP Terraform or any other backend without the CLI
+  knowing about it. `--from FILE` and `--from -` are unchanged, for someone who
+  is sent the document rather than given the state.
+
 ## 0.2.0 (October 19, 2026)
 
 FEATURES:

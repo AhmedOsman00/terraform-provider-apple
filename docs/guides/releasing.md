@@ -114,7 +114,7 @@ instead. There is no `terraform state rm` step.
 ### 4. Build, sign and upload
 
 ```sh
-apple signing install --from <(terraform output -json signing) --key-dir signing --ephemeral-keychain
+apple signing install --terraform terraform/ --key-dir signing --ephemeral-keychain
 xcodebuild archive -project App.xcodeproj -scheme App -archivePath build/App.xcarchive
 apple build verify build/App.xcarchive --version "$version" --build "$build"
 xcodebuild -exportArchive -archivePath build/App.xcarchive -exportOptionsPlist ExportOptions.plist \
@@ -125,8 +125,12 @@ apple build verify build/App.ipa --version "$version" --build "$build" \
 apple build upload build/App.ipa
 ```
 
-`signing install` reads the certificates and profiles from a Terraform output
-(see [Code Signing](./code-signing.md) for the module), and the private keys from
+`signing install --terraform` runs `terraform output -json signing` in that
+directory and reads the certificates and profiles from it (see
+[Code Signing](./code-signing.md) for the module), so no copy is left on disk to
+go stale after the next apply. Someone without access to the state can be sent
+the output as a file instead and pass `--from signing.json`, or `--from -` to
+read it from stdin. The private keys come from
 files, the environment, or `.key.enc` files encrypted with `apple signing
 encrypt`. `build verify` checks that the archive and the exported `.ipa` carry
 the version and build just set and were signed with the entitlements a release

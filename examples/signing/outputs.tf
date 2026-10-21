@@ -46,7 +46,7 @@ output "signing" {
     The certificates and profiles together, in the shape `apple signing install`
     reads:
 
-      apple signing install --from <(terraform output -json signing) --key distribution=distribution.key
+      apple signing install --terraform . --key distribution=distribution.key
   EOT
   value = {
     certificates = local.certificates

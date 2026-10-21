@@ -71,7 +71,8 @@ Releasing). Terraform holds state; the CLI does what a state cannot describe:
 `terraform export`.
 It imports `internal/apple` (and `internal/export`, which imports only
 `internal/apple`) and nothing from `internal/provider`, and never runs
-`terraform`, `git commit` or `xcodebuild` — it checks and uploads what
+`terraform` (other than the read-only `terraform output` behind `signing
+install --terraform`), `git commit` or `xcodebuild` — it checks and uploads what
 `xcodebuild` made, and does not wrap it. A proxy that forwarded arguments to
 `xcodebuild`, `altool` or `cktool` was considered and rejected: it would turn
 every build change into a CLI release for nothing those tools do not already do.
@@ -412,7 +413,10 @@ secret-store dependency and no encrypted bundle. The last mile — a `.p12`
 assembled from the certificate and the user's key, plus profiles copied where
 Xcode reads them — is documented in `examples/signing/README.md` and
 `templates/guides/code-signing.md.tmpl`, and automated by `apple signing
-install`, which reads the module's `signing` output and finds keys itself.
+install`, which reads the module's `signing` output (from a file, stdin, or
+`--terraform DIR`, which runs `terraform output` itself rather than talking to a
+backend — HCP tokens and workspace lookup stay Terraform's job) and finds keys
+itself.
 
 There was previously a `cmd/applesign` CLI and a `local.signing_bundle` JSON
 document carrying private keys between them. Both are gone. `apple signing

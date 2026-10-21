@@ -60,7 +60,7 @@ read -r version build < <(apple version next)
 apple release preflight "$version" --notes-dir store/release-notes
 apple version set "$version" "$build"
 
-apple signing install --from <(terraform output -json signing) --key-dir signing --ephemeral-keychain
+apple signing install --terraform terraform/ --key-dir signing --ephemeral-keychain
 xcodebuild archive -archivePath build/App.xcarchive ...
 apple build verify build/App.xcarchive --version "$version" --build "$build"
 xcodebuild -exportArchive -archivePath build/App.xcarchive -exportPath build ...

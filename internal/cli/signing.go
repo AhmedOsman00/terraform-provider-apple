@@ -14,6 +14,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -45,6 +46,8 @@ type installResult struct {
 func newSigningInstallCommand(a *app) *cobra.Command {
 	var (
 		document         string
+		terraformDir     string
+		outputName       string
 		keyArgs          []string
 		keyDir           string
 		keychainPath     string
@@ -56,7 +59,7 @@ func newSigningInstallCommand(a *app) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "install --from FILE",
+		Use:   "install (--from FILE | --terraform DIR)",
 		Short: "Install provisioning profiles and signing identities from a signing document",
 		Long: "Reads a signing document, which is the JSON of a Terraform output shaped like this:\n\n" +
 			"  {\n" +
@@ -66,6 +69,10 @@ func newSigningInstallCommand(a *app) *cobra.Command {
 			"  }\n\n" +
 			"profiles may also be a list of objects carrying \"name\". `terraform output -json <name>`\n" +
 			"prints exactly that; --from - reads it from stdin.\n\n" +
+			"--terraform DIR runs `terraform -chdir=DIR output -json signing` and reads that instead,\n" +
+			"so no copy of the document is left on disk to go stale or be committed. Terraform does\n" +
+			"the backend login, whatever the backend is. --terraform-output names another output.\n" +
+			"--from stays for someone without access to the state, who can be sent the file.\n\n" +
 			"Every profile is installed under its UUID, replacing older copies of the same profile.\n" +
 			"Every certificate whose private key is found is imported as a signing identity. A role's\n" +
 			"key is the first of:\n\n" +
@@ -84,15 +91,23 @@ func newSigningInstallCommand(a *app) *cobra.Command {
 			if profilesOnly && certificatesOnly {
 				return usageError("--profiles-only and --certificates-only exclude each other")
 			}
-			if document == "" {
-				return usageError("--from names the signing document, or - for stdin")
+			if document != "" && terraformDir != "" {
+				return usageError("--from and --terraform exclude each other")
+			}
+			if document == "" && terraformDir == "" {
+				return usageError("--from names the signing document, or - for stdin; --terraform reads it from a configuration's output")
 			}
 			keys, err := parseKeyArgs(keyArgs)
 			if err != nil {
 				return err
 			}
 
-			data, err := readInput(cmd.InOrStdin(), document)
+			var data []byte
+			if terraformDir != "" {
+				data, err = a.terraformOutput(terraformDir, outputName)
+			} else {
+				data, err = readInput(cmd.InOrStdin(), document)
+			}
 			if err != nil {
 				return err
 			}
@@ -163,6 +178,8 @@ func newSigningInstallCommand(a *app) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&document, "from", "", "the signing document, or - for stdin")
+	cmd.Flags().StringVar(&terraformDir, "terraform", "", "the Terraform configuration whose output is the signing document")
+	cmd.Flags().StringVar(&outputName, "terraform-output", "signing", "the output --terraform reads")
 	cmd.Flags().StringArrayVar(&keyArgs, "key", nil, "ROLE=PATH, the private key for ROLE; repeatable")
 	cmd.Flags().StringVar(&keyDir, "key-dir", "", "a directory of <role>.key or <role>.key.enc files")
 	cmd.Flags().StringVar(&keychainPath, "keychain", "", "the keychain to import into (default: login, or a temporary one with --ephemeral-keychain)")
@@ -293,6 +310,25 @@ func readInput(stdin io.Reader, path string) ([]byte, error) {
 		return nil, usageError("no file %s", path)
 	}
 	return data, nil
+}
+
+// terraformOutputJSON runs `terraform output`, which reads state and changes
+// nothing, so whatever backend and login the configuration uses apply as they
+// would at a prompt. Stdin is left unset so a login prompt fails rather than
+// hangs.
+func terraformOutputJSON(dir, name string) ([]byte, error) {
+	binary, err := exec.LookPath("terraform")
+	if err != nil {
+		return nil, errors.New("terraform is not on PATH; run `terraform output -json` yourself and pass --from")
+	}
+	var stderr bytes.Buffer
+	cmd := exec.Command(binary, "-chdir="+dir, "output", "-no-color", "-json", name)
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("terraform output %s in %s: %s", name, dir, strings.TrimSpace(stderr.String()))
+	}
+	return out, nil
 }
 
 func checkCertificateExpiry(a *app, doc *signingDocument, days int) error {

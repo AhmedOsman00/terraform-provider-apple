@@ -15,6 +15,11 @@ Reads a signing document, which is the JSON of a Terraform output shaped like th
 profiles may also be a list of objects carrying "name". `terraform output -json <name>`
 prints exactly that; --from - reads it from stdin.
 
+--terraform DIR runs `terraform -chdir=DIR output -json signing` and reads that instead,
+so no copy of the document is left on disk to go stale or be committed. Terraform does
+the backend login, whatever the backend is. --terraform-output names another output.
+--from stays for someone without access to the state, who can be sent the file.
+
 Every profile is installed under its UUID, replacing older copies of the same profile.
 Every certificate whose private key is found is imported as a signing identity. A role's
 key is the first of:
@@ -29,7 +34,7 @@ intermediate, imports into it and lets codesign use the keys without a prompt: w
 CI runner needs. `apple signing clean` removes it.
 
 ```
-apple signing install --from FILE [flags]
+apple signing install (--from FILE | --terraform DIR) [flags]
 ```
 
 ### Options
@@ -45,6 +50,8 @@ apple signing install --from FILE [flags]
       --keychain string           the keychain to import into (default: login, or a temporary one with --ephemeral-keychain) (env APPLE_KEYCHAIN)
       --profile-dir stringArray   where to install profiles, repeatable (default: the two directories Xcode reads) (env APPLE_PROFILE_DIR)
       --profiles-only             skip the certificates (env APPLE_PROFILES_ONLY)
+      --terraform string          the Terraform configuration whose output is the signing document (env APPLE_TERRAFORM)
+      --terraform-output string   the output --terraform reads (env APPLE_TERRAFORM_OUTPUT) (default "signing")
 ```
 
 ### Options inherited from parent commands
