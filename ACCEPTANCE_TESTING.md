@@ -453,6 +453,29 @@ Groups, and possibly a `de-DE` entry under Test Information. Neither blocks a
 re-run: group names are randomised, and the localizations are adopted rather
 than created.
 
+## Xcode Cloud
+
+`TestAccCiWorkflowResource_basic` requires existing records identified by
+`APPLE_TEST_CI_PRODUCT_ID`, `APPLE_TEST_CI_REPOSITORY_ID`,
+`APPLE_TEST_CI_XCODE_VERSION_ID` and `APPLE_TEST_CI_MAC_OS_VERSION_ID`, plus
+`APPLE_TEST_CI_CONTAINER_FILE_PATH` and `APPLE_TEST_CI_SCHEME` for that repository.
+It creates only a disposable **disabled**, manual-only workflow. It never runs
+builds or modifies an existing workflow. An interrupted run can leave a workflow
+named `Terraform Disposable …`; remove it in the product's Xcode Cloud workflows.
+
+| Test | Impact | What it does | What remains |
+|---|---|---|---|
+| `TestAccCiWorkflowResource_basic` | No active residue — opt-in | Creates a disabled workflow, updates its description, imports by ID and deletes it. Checks deletion against the product's paginated workflows collection. | No active workflow. Apple may retain the deleted record when queried by ID. |
+| `TestAccCiDataSources` | Read-only | Lists CI products, connected repositories, Xcode versions and macOS versions. Requires credentials only. | No change. |
+
+These automated tests do not verify preservation of UI-only settings. In a separate
+live check, the operator added a dummy environment variable (`TF_PATCH_PROBE=keep-me`)
+and an email-notification post-action to a disabled, manual-only workflow. After a
+description-only update through this resource and a no-change follow-up plan, the
+operator confirmed in the UI that both settings remained. The workflow was then
+deleted. Other post-actions, secret variables and other kinds of update remain
+unverified.
+
 ## Team members (Users and Access)
 
 **These are the only tests in the suite that can take somebody's access away**,

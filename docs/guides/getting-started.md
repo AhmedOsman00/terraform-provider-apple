@@ -375,6 +375,7 @@ them. Anything whose parent cannot be read back takes a composite ID:
 | `apple_in_app_purchase_review_screenshot` | `<in_app_purchase_id>` |
 | `apple_user` | Apple ID, or the address the member signs in with |
 | `apple_user_invitation` | Apple ID, or the address it was sent to |
+| `apple_ci_workflow` | Apple workflow ID |
 
 ```bash
 terraform import apple_bundle_id.app com.example.myapp
