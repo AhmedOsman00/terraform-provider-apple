@@ -453,6 +453,28 @@ Groups, and possibly a `de-DE` entry under Test Information. Neither blocks a
 re-run: group names are randomised, and the localizations are adopted rather
 than created.
 
+## Xcode Cloud
+
+**The workflow test needs Xcode Cloud set up first.** Set
+`APPLE_TEST_CI_PRODUCT_ID`, `APPLE_TEST_CI_REPOSITORY_ID`,
+`APPLE_TEST_CI_XCODE_VERSION_ID` and `APPLE_TEST_CI_MAC_OS_VERSION_ID` to existing
+records, and `APPLE_TEST_CI_CONTAINER_FILE_PATH` and `APPLE_TEST_CI_SCHEME` to the
+project and shared scheme in that repository.
+
+| Test | Residue | Creates at Apple | What you see in the portal |
+|---|---|---|---|
+| `TestAccCiWorkflowResource_basic` | Net zero — opt-in | One disabled, manual-only workflow; updates its description; imports by ID. No builds are started. | A workflow named `Terraform Disposable …` appears under Xcode Cloud, then is deleted. |
+| `TestAccCiDataSources` | No writes | Nothing. Lists products, repositories, Xcode versions and macOS versions. Needs only credentials. | No change. |
+
+An interrupted run can leave a disabled workflow to delete in Xcode Cloud.
+Apple may retain deleted workflows when read by ID, so the destroy check uses
+the product's active workflow list.
+
+A separate manual test confirmed that an environment variable and an email
+notification survived a description-only update. Other post-actions, secrets and
+update types have not been tested. The automated tests cannot check these:
+Apple's API does not return the settings.
+
 ## Team members (Users and Access)
 
 **These are the only tests in the suite that can take somebody's access away**,

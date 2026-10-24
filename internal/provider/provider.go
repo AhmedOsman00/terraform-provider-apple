@@ -14,6 +14,7 @@ import (
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/beta"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/bundle"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/certificate"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/ci"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/device"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/inapppurchase"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/merchant"
@@ -305,6 +306,10 @@ func (p *appleProvider) DataSources(_ context.Context) []func() datasource.DataS
 		inapppurchase.NewInAppPurchasePricePointsDataSource,
 		territory.NewTerritoriesDataSource,
 		user.NewUsersDataSource,
+		ci.NewCiProductsDataSource,
+		ci.NewScmRepositoriesDataSource,
+		ci.NewCiXcodeVersionsDataSource,
+		ci.NewCiMacOsVersionsDataSource,
 	}
 }
 
@@ -347,6 +352,7 @@ func (p *appleProvider) Resources(_ context.Context) []func() resource.Resource 
 		inapppurchase.NewInAppPurchasePriceScheduleResource,
 		inapppurchase.NewInAppPurchaseAvailabilityResource,
 		inapppurchase.NewInAppPurchaseReviewScreenshotResource,
+		ci.NewCiWorkflowResource,
 		user.NewUserResource,
 		user.NewUserInvitationResource,
 	}

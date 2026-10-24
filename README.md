@@ -123,8 +123,8 @@ resource "apple_profile" "development" {
 
 ## Resources and data sources
 
-Every resource has a matching plural data source that lists the collection with
-in-memory filtering, `sort_by`, `sort_order`, and `limit`.
+Developer Portal resources have matching plural data sources with in-memory
+filtering, `sort_by`, `sort_order`, and `limit`.
 
 | Resource | Data source | Manages |
 |---|---|---|
@@ -164,6 +164,20 @@ and there is deliberately no `apple_app` resource.
 | `apple_in_app_purchase_localization` | — | Customer-facing purchase name and description |
 | `apple_in_app_purchase_price_schedule` | `apple_in_app_purchase_price_points` | The price of a one-time purchase |
 | `apple_in_app_purchase_availability` | — | The territories a one-time purchase sells in |
+
+Xcode Cloud workflows use an existing product and connected SCM repository:
+
+| Resource | Data source | Manages |
+|---|---|---|
+| `apple_ci_workflow` | — | Workflow actions, start conditions and build environment |
+| — | `apple_ci_products` | Existing Xcode Cloud products |
+| — | `apple_scm_repositories` | Connected SCM repositories |
+| — | `apple_ci_xcode_versions` | Available Xcode versions and test destinations |
+| — | `apple_ci_mac_os_versions` | Available macOS versions |
+
+Post-actions and environment variables stay in Xcode or App Store Connect —
+Apple's API does not expose them. Archive eligibility is managed here; TestFlight
+distribution is not. See [the workflow example](examples/resources/apple_ci_workflow).
 
 Behaviour worth knowing before you plan against a real team:
 
