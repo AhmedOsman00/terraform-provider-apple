@@ -3,12 +3,12 @@
 page_title: "apple_ci_mac_os_versions Data Source - apple"
 subcategory: ""
 description: |-
-  Lists available Xcode Cloud records, following all pages. Set up Xcode Cloud and its SCM connection in Xcode/App Store Connect first. IDs can be passed to apple_ci_workflow; Apple validates Xcode/macOS compatibility when writing the workflow.
+  Lists macOS versions available in Xcode Cloud. Use the ID as mac_os_version_id on apple_ci_workflow. Apple checks compatibility with the selected Xcode version when the workflow is saved.
 ---
 
 # apple_ci_mac_os_versions (Data Source)
 
-Lists available Xcode Cloud records, following all pages. Set up Xcode Cloud and its SCM connection in Xcode/App Store Connect first. IDs can be passed to `apple_ci_workflow`; Apple validates Xcode/macOS compatibility when writing the workflow.
+Lists macOS versions available in Xcode Cloud. Use the ID as `mac_os_version_id` on `apple_ci_workflow`. Apple checks compatibility with the selected Xcode version when the workflow is saved.
 
 ## Example Usage
 
@@ -25,13 +25,13 @@ output "versions" {
 
 ### Read-Only
 
-- `versions` (Attributes List) Available records in Apple's order. (see [below for nested schema](#nestedatt--versions))
+- `versions` (Attributes List) The records returned by Apple. (see [below for nested schema](#nestedatt--versions))
 
 <a id="nestedatt--versions"></a>
 ### Nested Schema for `versions`
 
 Read-Only:
 
-- `id` (String) Apple record ID.
+- `id` (String) The Apple-generated ID.
 - `name` (String) Version display name.
 - `version` (String) Version number.

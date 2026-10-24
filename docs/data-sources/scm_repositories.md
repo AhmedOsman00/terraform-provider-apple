@@ -3,12 +3,12 @@
 page_title: "apple_scm_repositories Data Source - apple"
 subcategory: ""
 description: |-
-  Lists available Xcode Cloud records, following all pages. Set up Xcode Cloud and its SCM connection in Xcode/App Store Connect first. IDs can be passed to apple_ci_workflow; Apple validates Xcode/macOS compatibility when writing the workflow.
+  Lists repositories connected to Xcode Cloud. Use the repository's ID as repository_id on apple_ci_workflow. The SCM connection must already be set up in Xcode or App Store Connect.
 ---
 
 # apple_scm_repositories (Data Source)
 
-Lists available Xcode Cloud records, following all pages. Set up Xcode Cloud and its SCM connection in Xcode/App Store Connect first. IDs can be passed to `apple_ci_workflow`; Apple validates Xcode/macOS compatibility when writing the workflow.
+Lists repositories connected to Xcode Cloud. Use the repository's ID as `repository_id` on `apple_ci_workflow`. The SCM connection must already be set up in Xcode or App Store Connect.
 
 ## Example Usage
 
@@ -25,7 +25,7 @@ output "repositories" {
 
 ### Read-Only
 
-- `repositories` (Attributes List) Available records in Apple's order. (see [below for nested schema](#nestedatt--repositories))
+- `repositories` (Attributes List) The records returned by Apple. (see [below for nested schema](#nestedatt--repositories))
 
 <a id="nestedatt--repositories"></a>
 ### Nested Schema for `repositories`
@@ -33,7 +33,7 @@ output "repositories" {
 Read-Only:
 
 - `http_clone_url` (String) HTTPS clone URL.
-- `id` (String) Apple record ID.
+- `id` (String) The Apple-generated ID.
 - `last_accessed_date` (String) Last access date.
 - `owner_name` (String) Repository owner.
 - `repository_name` (String) Repository name.

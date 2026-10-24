@@ -123,8 +123,8 @@ resource "apple_profile" "development" {
 
 ## Resources and data sources
 
-Developer Portal resources have matching plural data sources that list the collection with
-in-memory filtering, `sort_by`, `sort_order`, and `limit`.
+Developer Portal resources have matching plural data sources with in-memory
+filtering, `sort_by`, `sort_order`, and `limit`.
 
 | Resource | Data source | Manages |
 |---|---|---|
@@ -175,11 +175,9 @@ Xcode Cloud workflows use an existing product and connected SCM repository:
 | — | `apple_ci_xcode_versions` | Available Xcode versions and test destinations |
 | — | `apple_ci_mac_os_versions` | Available macOS versions |
 
-Configure workflow post-actions and environment variables/secrets in the UI.
-An operator UI check confirmed that a dummy environment variable and an email-notification
-post-action survived a description-only update on a disabled workflow. Other UI-only
-settings and update types remain unverified.
-See [the workflow example](examples/resources/apple_ci_workflow).
+Post-actions and environment variables stay in Xcode or App Store Connect —
+Apple's API does not expose them. Archive eligibility is managed here; TestFlight
+distribution is not. See [the workflow example](examples/resources/apple_ci_workflow).
 
 Behaviour worth knowing before you plan against a real team:
 

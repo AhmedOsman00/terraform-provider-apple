@@ -455,26 +455,25 @@ than created.
 
 ## Xcode Cloud
 
-`TestAccCiWorkflowResource_basic` requires existing records identified by
+**The workflow test needs Xcode Cloud set up first.** Set
 `APPLE_TEST_CI_PRODUCT_ID`, `APPLE_TEST_CI_REPOSITORY_ID`,
-`APPLE_TEST_CI_XCODE_VERSION_ID` and `APPLE_TEST_CI_MAC_OS_VERSION_ID`, plus
-`APPLE_TEST_CI_CONTAINER_FILE_PATH` and `APPLE_TEST_CI_SCHEME` for that repository.
-It creates only a disposable **disabled**, manual-only workflow. It never runs
-builds or modifies an existing workflow. An interrupted run can leave a workflow
-named `Terraform Disposable …`; remove it in the product's Xcode Cloud workflows.
+`APPLE_TEST_CI_XCODE_VERSION_ID` and `APPLE_TEST_CI_MAC_OS_VERSION_ID` to existing
+records, and `APPLE_TEST_CI_CONTAINER_FILE_PATH` and `APPLE_TEST_CI_SCHEME` to the
+project and shared scheme in that repository.
 
-| Test | Impact | What it does | What remains |
+| Test | Residue | Creates at Apple | What you see in the portal |
 |---|---|---|---|
-| `TestAccCiWorkflowResource_basic` | No active residue — opt-in | Creates a disabled workflow, updates its description, imports by ID and deletes it. Checks deletion against the product's paginated workflows collection. | No active workflow. Apple may retain the deleted record when queried by ID. |
-| `TestAccCiDataSources` | Read-only | Lists CI products, connected repositories, Xcode versions and macOS versions. Requires credentials only. | No change. |
+| `TestAccCiWorkflowResource_basic` | Net zero — opt-in | One disabled, manual-only workflow; updates its description; imports by ID. No builds are started. | A workflow named `Terraform Disposable …` appears under Xcode Cloud, then is deleted. |
+| `TestAccCiDataSources` | No writes | Nothing. Lists products, repositories, Xcode versions and macOS versions. Needs only credentials. | No change. |
 
-These automated tests do not verify preservation of UI-only settings. In a separate
-live check, the operator added a dummy environment variable (`TF_PATCH_PROBE=keep-me`)
-and an email-notification post-action to a disabled, manual-only workflow. After a
-description-only update through this resource and a no-change follow-up plan, the
-operator confirmed in the UI that both settings remained. The workflow was then
-deleted. Other post-actions, secret variables and other kinds of update remain
-unverified.
+An interrupted run can leave a disabled workflow to delete in Xcode Cloud.
+Apple may retain deleted workflows when read by ID, so the destroy check uses
+the product's active workflow list.
+
+A separate manual test confirmed that an environment variable and an email
+notification survived a description-only update. Other post-actions, secrets and
+update types have not been tested. The automated tests cannot check these:
+Apple's API does not return the settings.
 
 ## Team members (Users and Access)
 

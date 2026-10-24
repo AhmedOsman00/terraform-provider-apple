@@ -3,12 +3,12 @@
 page_title: "apple_ci_products Data Source - apple"
 subcategory: ""
 description: |-
-  Lists available Xcode Cloud records, following all pages. Set up Xcode Cloud and its SCM connection in Xcode/App Store Connect first. IDs can be passed to apple_ci_workflow; Apple validates Xcode/macOS compatibility when writing the workflow.
+  Lists Xcode Cloud products. Create the product in Xcode first, then use its ID as product_id on apple_ci_workflow.
 ---
 
 # apple_ci_products (Data Source)
 
-Lists available Xcode Cloud records, following all pages. Set up Xcode Cloud and its SCM connection in Xcode/App Store Connect first. IDs can be passed to `apple_ci_workflow`; Apple validates Xcode/macOS compatibility when writing the workflow.
+Lists Xcode Cloud products. Create the product in Xcode first, then use its ID as `product_id` on `apple_ci_workflow`.
 
 ## Example Usage
 
@@ -25,7 +25,7 @@ output "products" {
 
 ### Read-Only
 
-- `products` (Attributes List) Available records in Apple's order. (see [below for nested schema](#nestedatt--products))
+- `products` (Attributes List) The records returned by Apple. (see [below for nested schema](#nestedatt--products))
 
 <a id="nestedatt--products"></a>
 ### Nested Schema for `products`
@@ -33,6 +33,6 @@ output "products" {
 Read-Only:
 
 - `created_date` (String) Creation date.
-- `id` (String) Apple record ID.
+- `id` (String) The Apple-generated ID.
 - `name` (String) Product name.
 - `product_type` (String) `APP` or `FRAMEWORK`.

@@ -49,30 +49,35 @@ func (d *catalogueDataSource) collection() string {
 	}
 }
 func (d *catalogueDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
-	attributes := map[string]schema.Attribute{"id": computedString("Apple record ID.")}
+	attributes := map[string]schema.Attribute{"id": computedString("The Apple-generated ID.")}
+	description := ""
 	switch d.kind {
 	case "ci_products":
+		description = "Lists Xcode Cloud products. Create the product in Xcode first, then use its ID as `product_id` on `apple_ci_workflow`."
 		attributes["name"] = computedString("Product name.")
 		attributes["created_date"] = computedString("Creation date.")
 		attributes["product_type"] = computedString("`APP` or `FRAMEWORK`.")
 	case "scm_repositories":
+		description = "Lists repositories connected to Xcode Cloud. Use the repository's ID as `repository_id` on `apple_ci_workflow`. The SCM connection must already be set up in Xcode or App Store Connect."
 		attributes["repository_name"] = computedString("Repository name.")
 		attributes["owner_name"] = computedString("Repository owner.")
 		attributes["http_clone_url"] = computedString("HTTPS clone URL.")
 		attributes["ssh_clone_url"] = computedString("SSH clone URL.")
 		attributes["last_accessed_date"] = computedString("Last access date.")
 	case "ci_xcode_versions", "ci_mac_os_versions":
+		description = "Lists macOS versions available in Xcode Cloud. Use the ID as `mac_os_version_id` on `apple_ci_workflow`. Apple checks compatibility with the selected Xcode version when the workflow is saved."
 		attributes["name"] = computedString("Version display name.")
 		attributes["version"] = computedString("Version number.")
 		if d.kind == "ci_xcode_versions" {
+			description = "Lists Xcode versions available in Xcode Cloud, with their test devices and runtimes. Use the ID as `xcode_version_id` on `apple_ci_workflow` and the destination identifiers in its test actions."
 			attributes["test_destinations"] = schema.ListNestedAttribute{Computed: true, MarkdownDescription: "Supported test devices and runtimes.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 				"device_type_name": computedString("Device display name."), "device_type_identifier": computedString("Device type identifier."), "kind": computedString("`SIMULATOR` or `MAC`."),
 				"available_runtimes": schema.ListNestedAttribute{Computed: true, MarkdownDescription: "Available runtimes for this device.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"runtime_name": computedString("Runtime display name."), "runtime_identifier": computedString("Runtime identifier.")}}},
 			}}}
 		}
 	}
-	resp.Schema = schema.Schema{MarkdownDescription: "Lists available Xcode Cloud records, following all pages. Set up Xcode Cloud and its SCM connection in Xcode/App Store Connect first. IDs can be passed to `apple_ci_workflow`; Apple validates Xcode/macOS compatibility when writing the workflow.", Attributes: map[string]schema.Attribute{
-		d.collection(): schema.ListNestedAttribute{Computed: true, MarkdownDescription: "Available records in Apple's order.", NestedObject: schema.NestedAttributeObject{Attributes: attributes}},
+	resp.Schema = schema.Schema{MarkdownDescription: description, Attributes: map[string]schema.Attribute{
+		d.collection(): schema.ListNestedAttribute{Computed: true, MarkdownDescription: "The records returned by Apple.", NestedObject: schema.NestedAttributeObject{Attributes: attributes}},
 	}}
 }
 func (d *catalogueDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {

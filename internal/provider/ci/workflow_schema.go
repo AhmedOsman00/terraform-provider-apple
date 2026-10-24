@@ -50,11 +50,11 @@ func conditionAttribute(kind string) schema.SingleNestedAttribute {
 		attributes["auto_cancel"] = schema.BoolAttribute{Optional: true, MarkdownDescription: "Cancel an earlier running build when a new change matches."}
 		attributes["files_and_folders_rule"] = filesRuleAttribute()
 	}
-	return schema.SingleNestedAttribute{Optional: true, MarkdownDescription: "Start condition. Omit to disable this trigger; removing it sends an explicit null to Apple.", Attributes: attributes}
+	return schema.SingleNestedAttribute{Optional: true, MarkdownDescription: "When to start builds. Removing this condition disables the trigger.", Attributes: attributes}
 }
 func actionAttribute() schema.ListNestedAttribute {
 	return schema.ListNestedAttribute{Required: true, MarkdownDescription: "Ordered workflow actions. Supports build, test, analyze and archive.", Validators: []validator.List{listvalidator.SizeAtLeast(1)}, NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
-		"name":                        schema.StringAttribute{Computed: true, MarkdownDescription: "Apple-reported action display name, for example `Build - iOS`. The provider treats this normalized name as computed and omits it on writes."},
+		"name":                        schema.StringAttribute{Computed: true, MarkdownDescription: "The action's display name, normalized by Apple — for example, `Build - iOS`."},
 		"action_type":                 schema.StringAttribute{Required: true, MarkdownDescription: "`BUILD`, `TEST`, `ANALYZE` or `ARCHIVE`.", Validators: []validator.String{stringvalidator.OneOf("BUILD", "TEST", "ANALYZE", "ARCHIVE")}},
 		"scheme":                      schema.StringAttribute{Required: true, MarkdownDescription: "Shared Xcode scheme."},
 		"platform":                    optionalString("`MACOS`, `IOS`, `TVOS`, `WATCHOS` or `VISIONOS`.", "MACOS", "IOS", "TVOS", "WATCHOS", "VISIONOS"),
@@ -75,7 +75,7 @@ func (r *workflowResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 		"id":                  schema.StringAttribute{Computed: true, MarkdownDescription: "Apple workflow ID.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 		"name":                schema.StringAttribute{Required: true, MarkdownDescription: "Workflow name."},
 		"description":         schema.StringAttribute{Required: true, MarkdownDescription: "Workflow description; may be empty."},
-		"is_enabled":          schema.BoolAttribute{Required: true, MarkdownDescription: "Whether the workflow can start builds. Use false for a disposable workflow."},
+		"is_enabled":          schema.BoolAttribute{Required: true, MarkdownDescription: "Whether the workflow can start builds."},
 		"clean":               schema.BoolAttribute{Required: true, MarkdownDescription: "Start builds with a clean environment."},
 		"container_file_path": schema.StringAttribute{Required: true, MarkdownDescription: "Repository-relative `.xcodeproj` or `.xcworkspace` path."},
 		"actions":             actionAttribute(),
@@ -100,5 +100,5 @@ func (r *workflowResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 		}
 		attributes[name] = a
 	}
-	resp.Schema = schema.Schema{MarkdownDescription: "Manages an Xcode Cloud workflow. Import an active workflow using its Apple ID. The provider treats action display names as computed because Apple can normalize them. Deleting a workflow removes it from its product's active workflows, but Apple may retain its record by ID; refresh checks active product membership. The product and SCM connection must already exist; configure them in Xcode/App Store Connect first.\n\nPost-actions (including TestFlight distribution, App Store deployment and notifications) and environment variables/secrets are not exposed by Apple's published App Store Connect API 4.5.1 workflow schema and must be configured in the UI. Distribution audience on an archive action is not a distribution post-action. In a live check on a disabled workflow, the operator confirmed in the UI that a dummy environment variable and an email-notification post-action survived a description-only PATCH through this resource. Other post-actions, secret variables and other kinds of update remain unverified; review UI-only settings after updates. This resource never starts builds.", Attributes: attributes}
+	resp.Schema = schema.Schema{MarkdownDescription: "Manages an Xcode Cloud workflow: its actions, start conditions and Xcode/macOS versions. The product and SCM connection must already exist in Xcode Cloud.\n\n~> **Post-actions and environment variables are not managed.** Apple's API does not expose them. Configure TestFlight distribution, notifications and environment variables in Xcode or App Store Connect. `build_distribution_audience` controls archive eligibility, not distribution.\n\nA manual test confirmed that an environment variable and an email notification survived a description-only update. Other UI-only settings and update types have not been tested.", Attributes: attributes}
 }

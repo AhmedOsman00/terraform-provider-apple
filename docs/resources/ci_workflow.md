@@ -3,15 +3,18 @@
 page_title: "apple_ci_workflow Resource - apple"
 subcategory: ""
 description: |-
-  Manages an Xcode Cloud workflow. Import an active workflow using its Apple ID. The provider treats action display names as computed because Apple can normalize them. Deleting a workflow removes it from its product's active workflows, but Apple may retain its record by ID; refresh checks active product membership. The product and SCM connection must already exist; configure them in Xcode/App Store Connect first.
-  Post-actions (including TestFlight distribution, App Store deployment and notifications) and environment variables/secrets are not exposed by Apple's published App Store Connect API 4.5.1 workflow schema and must be configured in the UI. Distribution audience on an archive action is not a distribution post-action. In a live check on a disabled workflow, the operator confirmed in the UI that a dummy environment variable and an email-notification post-action survived a description-only PATCH through this resource. Other post-actions, secret variables and other kinds of update remain unverified; review UI-only settings after updates. This resource never starts builds.
+  Manages an Xcode Cloud workflow: its actions, start conditions and Xcode/macOS versions. The product and SCM connection must already exist in Xcode Cloud.
+  ~> Post-actions and environment variables are not managed. Apple's API does not expose them. Configure TestFlight distribution, notifications and environment variables in Xcode or App Store Connect. build_distribution_audience controls archive eligibility, not distribution.
+  A manual test confirmed that an environment variable and an email notification survived a description-only update. Other UI-only settings and update types have not been tested.
 ---
 
 # apple_ci_workflow (Resource)
 
-Manages an Xcode Cloud workflow. Import an active workflow using its Apple ID. The provider treats action display names as computed because Apple can normalize them. Deleting a workflow removes it from its product's active workflows, but Apple may retain its record by ID; refresh checks active product membership. The product and SCM connection must already exist; configure them in Xcode/App Store Connect first.
+Manages an Xcode Cloud workflow: its actions, start conditions and Xcode/macOS versions. The product and SCM connection must already exist in Xcode Cloud.
 
-Post-actions (including TestFlight distribution, App Store deployment and notifications) and environment variables/secrets are not exposed by Apple's published App Store Connect API 4.5.1 workflow schema and must be configured in the UI. Distribution audience on an archive action is not a distribution post-action. In a live check on a disabled workflow, the operator confirmed in the UI that a dummy environment variable and an email-notification post-action survived a description-only PATCH through this resource. Other post-actions, secret variables and other kinds of update remain unverified; review UI-only settings after updates. This resource never starts builds.
+~> **Post-actions and environment variables are not managed.** Apple's API does not expose them. Configure TestFlight distribution, notifications and environment variables in Xcode or App Store Connect. `build_distribution_audience` controls archive eligibility, not distribution.
+
+A manual test confirmed that an environment variable and an email notification survived a description-only update. Other UI-only settings and update types have not been tested.
 
 ## Example Usage
 
@@ -129,7 +132,7 @@ resource "apple_ci_workflow" "main" {
 - `clean` (Boolean) Start builds with a clean environment.
 - `container_file_path` (String) Repository-relative `.xcodeproj` or `.xcworkspace` path.
 - `description` (String) Workflow description; may be empty.
-- `is_enabled` (Boolean) Whether the workflow can start builds. Use false for a disposable workflow.
+- `is_enabled` (Boolean) Whether the workflow can start builds.
 - `mac_os_version_id` (String) Apple relationship ID.
 - `name` (String) Workflow name.
 - `product_id` (String) Apple relationship ID.
@@ -138,13 +141,13 @@ resource "apple_ci_workflow" "main" {
 
 ### Optional
 
-- `branch_start_condition` (Attributes) Start condition. Omit to disable this trigger; removing it sends an explicit null to Apple. (see [below for nested schema](#nestedatt--branch_start_condition))
-- `manual_branch_start_condition` (Attributes) Start condition. Omit to disable this trigger; removing it sends an explicit null to Apple. (see [below for nested schema](#nestedatt--manual_branch_start_condition))
-- `manual_pull_request_start_condition` (Attributes) Start condition. Omit to disable this trigger; removing it sends an explicit null to Apple. (see [below for nested schema](#nestedatt--manual_pull_request_start_condition))
-- `manual_tag_start_condition` (Attributes) Start condition. Omit to disable this trigger; removing it sends an explicit null to Apple. (see [below for nested schema](#nestedatt--manual_tag_start_condition))
-- `pull_request_start_condition` (Attributes) Start condition. Omit to disable this trigger; removing it sends an explicit null to Apple. (see [below for nested schema](#nestedatt--pull_request_start_condition))
+- `branch_start_condition` (Attributes) When to start builds. Removing this condition disables the trigger. (see [below for nested schema](#nestedatt--branch_start_condition))
+- `manual_branch_start_condition` (Attributes) When to start builds. Removing this condition disables the trigger. (see [below for nested schema](#nestedatt--manual_branch_start_condition))
+- `manual_pull_request_start_condition` (Attributes) When to start builds. Removing this condition disables the trigger. (see [below for nested schema](#nestedatt--manual_pull_request_start_condition))
+- `manual_tag_start_condition` (Attributes) When to start builds. Removing this condition disables the trigger. (see [below for nested schema](#nestedatt--manual_tag_start_condition))
+- `pull_request_start_condition` (Attributes) When to start builds. Removing this condition disables the trigger. (see [below for nested schema](#nestedatt--pull_request_start_condition))
 - `scheduled_start_condition` (Attributes) Scheduled branch builds. Omit to disable scheduled starts. (see [below for nested schema](#nestedatt--scheduled_start_condition))
-- `tag_start_condition` (Attributes) Start condition. Omit to disable this trigger; removing it sends an explicit null to Apple. (see [below for nested schema](#nestedatt--tag_start_condition))
+- `tag_start_condition` (Attributes) When to start builds. Removing this condition disables the trigger. (see [below for nested schema](#nestedatt--tag_start_condition))
 
 ### Read-Only
 
@@ -168,7 +171,7 @@ Optional:
 
 Read-Only:
 
-- `name` (String) Apple-reported action display name, for example `Build - iOS`. The provider treats this normalized name as computed and omits it on writes.
+- `name` (String) The action's display name, normalized by Apple — for example, `Build - iOS`.
 
 <a id="nestedatt--actions--test_configuration"></a>
 ### Nested Schema for `actions.test_configuration`
