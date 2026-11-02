@@ -139,7 +139,7 @@ func testAccAPIClient() (*apple.Client, error) {
 		os.Getenv("APPLE_APP_STORE_CONNECT_ISSUER_ID"),
 		os.Getenv("APPLE_APP_STORE_CONNECT_API_KEY"),
 		os.Getenv("APPLE_APP_STORE_CONNECT_PRIVATE_KEY"),
-		nil,
+		apple.ClientOptions{},
 	)
 }
 
