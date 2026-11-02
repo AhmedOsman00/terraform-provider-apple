@@ -1,0 +1,40 @@
+// Copyright (c) AO Studio
+// SPDX-License-Identifier: MPL-2.0
+
+package ci
+
+var jsonNames = map[string]string{
+	"action_type":                         "actionType",
+	"auto_cancel":                         "autoCancel",
+	"available_runtimes":                  "availableRuntimes",
+	"branch_start_condition":              "branchStartCondition",
+	"build_distribution_audience":         "buildDistributionAudience",
+	"container_file_path":                 "containerFilePath",
+	"created_date":                        "createdDate",
+	"device_type_identifier":              "deviceTypeIdentifier",
+	"device_type_name":                    "deviceTypeName",
+	"file_extension":                      "fileExtension",
+	"file_name":                           "fileName",
+	"files_and_folders_rule":              "filesAndFoldersRule",
+	"http_clone_url":                      "httpCloneUrl",
+	"is_all_match":                        "isAllMatch",
+	"is_enabled":                          "isEnabled",
+	"is_prefix":                           "isPrefix",
+	"is_required_to_pass":                 "isRequiredToPass",
+	"last_accessed_date":                  "lastAccessedDate",
+	"manual_branch_start_condition":       "manualBranchStartCondition",
+	"manual_pull_request_start_condition": "manualPullRequestStartCondition",
+	"manual_tag_start_condition":          "manualTagStartCondition",
+	"owner_name":                          "ownerName",
+	"product_type":                        "productType",
+	"pull_request_start_condition":        "pullRequestStartCondition",
+	"repository_name":                     "repositoryName",
+	"runtime_identifier":                  "runtimeIdentifier",
+	"runtime_name":                        "runtimeName",
+	"scheduled_start_condition":           "scheduledStartCondition",
+	"ssh_clone_url":                       "sshCloneUrl",
+	"tag_start_condition":                 "tagStartCondition",
+	"test_configuration":                  "testConfiguration",
+	"test_destinations":                   "testDestinations",
+	"test_plan_name":                      "testPlanName",
+}
