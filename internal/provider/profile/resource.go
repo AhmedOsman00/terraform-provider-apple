@@ -483,10 +483,19 @@ func (r *profileResource) ImportState(ctx context.Context, req resource.ImportSt
 		"import_id": req.ID,
 	})
 
-	// Try to import by Profile ID first
+	// Try to import by Profile ID first. Apple answers anything that is not a
+	// profile ID -- a name included -- with a 404, so only a 404 means "try the
+	// name". Any other failure is reported as it is: falling back on a 500 or a
+	// 401 hid it behind "profile with name ... not found".
 	profile, err := r.client.GetProfile(req.ID)
+	if err != nil && !strings.Contains(err.Error(), "status 404") {
+		resp.Diagnostics.AddError(
+			"Error Importing Profile",
+			fmt.Sprintf("Could not read Profile '%s': %s", req.ID, err.Error()),
+		)
+		return
+	}
 	if err != nil {
-		// If not found by ID, try by name
 		profile, err = r.client.GetProfileByName(req.ID)
 		if err != nil {
 			resp.Diagnostics.AddError(
