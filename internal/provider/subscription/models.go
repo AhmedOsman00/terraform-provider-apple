@@ -119,6 +119,35 @@ type subscriptionAvailabilityModel struct {
 	AvailableTerritories      []types.String `tfsdk:"available_territories"`
 }
 
+// subscriptionIntroductoryOfferModel maps the per-territory introductory offer
+// schema.
+type subscriptionIntroductoryOfferModel struct {
+	ID                         types.String `tfsdk:"id"`
+	SubscriptionID             types.String `tfsdk:"subscription_id"`
+	TerritoryID                types.String `tfsdk:"territory_id"`
+	OfferMode                  types.String `tfsdk:"offer_mode"`
+	Duration                   types.String `tfsdk:"duration"`
+	NumberOfPeriods            types.Int64  `tfsdk:"number_of_periods"`
+	PricePointID               types.String `tfsdk:"price_point_id"`
+	StartDate                  types.String `tfsdk:"start_date"`
+	EndDate                    types.String `tfsdk:"end_date"`
+	TargetSubscriptionPlanType types.String `tfsdk:"target_subscription_plan_type"`
+}
+
+// introductoryOfferValues is the configurable part of one introductory offer,
+// apart from the subscription it belongs to: what the resource converts itself
+// to for the client's input, and what an offer read from Apple is turned into.
+type introductoryOfferValues struct {
+	TerritoryID                types.String `tfsdk:"territory_id"`
+	OfferMode                  types.String `tfsdk:"offer_mode"`
+	Duration                   types.String `tfsdk:"duration"`
+	NumberOfPeriods            types.Int64  `tfsdk:"number_of_periods"`
+	PricePointID               types.String `tfsdk:"price_point_id"`
+	StartDate                  types.String `tfsdk:"start_date"`
+	EndDate                    types.String `tfsdk:"end_date"`
+	TargetSubscriptionPlanType types.String `tfsdk:"target_subscription_plan_type"`
+}
+
 // subscriptionGroupsDataSourceModel maps the listing data source for groups.
 type subscriptionGroupsDataSourceModel struct {
 	// Scope
@@ -228,6 +257,12 @@ var (
 	// PlanTypeValidator validates the price plan type.
 	PlanTypeValidator = stringvalidator.OneOf(models.ValidSubscriptionPlanTypes...)
 
+	// OfferModeValidator validates an introductory offer mode.
+	OfferModeValidator = stringvalidator.OneOf(models.ValidSubscriptionOfferModes...)
+
+	// OfferDurationValidator validates an introductory offer duration.
+	OfferDurationValidator = stringvalidator.OneOf(models.ValidSubscriptionOfferDurations...)
+
 	// LocaleValidator validates an App Store locale code.
 	//
 	// Apple's locales are BCP 47-ish but not uniformly so: "en-US", "es-MX",
@@ -244,6 +279,13 @@ var (
 	StartDateValidator = stringvalidator.RegexMatches(
 		regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`),
 		"Start date must be a plain date in YYYY-MM-DD form, not a timestamp",
+	)
+
+	// EndDateValidator is StartDateValidator for an end date, so the error
+	// names the attribute the user set.
+	EndDateValidator = stringvalidator.RegexMatches(
+		regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`),
+		"End date must be a plain date in YYYY-MM-DD form, not a timestamp",
 	)
 
 	// TerritoryValidator validates a territory code.

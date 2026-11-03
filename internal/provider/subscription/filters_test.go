@@ -545,3 +545,80 @@ func TestReconcileSchedulePricesSkipsPricesWithoutAPricePoint(t *testing.T) {
 		t.Fatalf("got %d prices, want 0: neither reported a price point", len(reconciled))
 	}
 }
+
+func strPtr(s string) *string { return &s }
+
+// apiOffer builds an offer as Apple reports it.
+func apiOffer(id, territory string, mode models.SubscriptionOfferMode, duration models.SubscriptionOfferDuration, periods int, pricePoint string) models.SubscriptionIntroductoryOffer {
+	offer := models.SubscriptionIntroductoryOffer{
+		ID: id,
+		Attributes: models.SubscriptionIntroductoryOfferAttributes{
+			OfferMode:       &mode,
+			Duration:        &duration,
+			NumberOfPeriods: &periods,
+		},
+		Relationships: &models.SubscriptionIntroductoryOfferRelationships{
+			Territory: &models.ResourceIdentifier{Data: models.ResourceData{Type: "territories", ID: territory}},
+		},
+	}
+	if pricePoint != "" {
+		offer.Relationships.SubscriptionPricePoint = &models.ResourceIdentifier{
+			Data: models.ResourceData{Type: "subscriptionPricePoints", ID: pricePoint},
+		}
+	}
+	return offer
+}
+
+func TestIntroductoryOfferPricePointProblem(t *testing.T) {
+	tests := []struct {
+		mode          string
+		hasPricePoint bool
+		wantProblem   bool
+	}{
+		{"FREE_TRIAL", false, false},
+		{"FREE_TRIAL", true, true},
+		{"PAY_AS_YOU_GO", true, false},
+		{"PAY_AS_YOU_GO", false, true},
+		{"PAY_UP_FRONT", true, false},
+		{"PAY_UP_FRONT", false, true},
+	}
+	for _, tt := range tests {
+		got := introductoryOfferPricePointProblem(tt.mode, tt.hasPricePoint) != ""
+		if got != tt.wantProblem {
+			t.Errorf("%s with price point %v: problem = %v, want %v", tt.mode, tt.hasPricePoint, got, tt.wantProblem)
+		}
+	}
+}
+
+// TestIntroductoryOfferEntryFromAPI covers what an import records: Apple's own
+// values, with a free trial's price point null rather than "", so that it
+// matches a configuration that leaves price_point_id unset.
+func TestIntroductoryOfferEntryFromAPI(t *testing.T) {
+	trial := apiOffer("usa", "USA", models.SubscriptionOfferModeFreeTrial, models.SubscriptionOfferDurationOneWeek, 1, "")
+	trial.Attributes.StartDate = strPtr("2026-10-29")
+	planType := models.SubscriptionPlanTypeUpfront
+	trial.Attributes.TargetSubscriptionPlanType = &planType
+
+	got := introductoryOfferEntryFromAPI(trial)
+	if got.TerritoryID.ValueString() != "USA" || got.OfferMode.ValueString() != "FREE_TRIAL" ||
+		got.Duration.ValueString() != "ONE_WEEK" || got.NumberOfPeriods.ValueInt64() != 1 {
+		t.Errorf("identifying attributes = %+v", got)
+	}
+	if !got.PricePointID.IsNull() {
+		t.Errorf("free trial price_point_id = %s, want null", got.PricePointID)
+	}
+	if got.StartDate.ValueString() != "2026-10-29" {
+		t.Errorf("start_date = %s, want Apple's 2026-10-29", got.StartDate)
+	}
+	if !got.EndDate.IsNull() {
+		t.Errorf("end_date = %s, want null", got.EndDate)
+	}
+	if got.TargetSubscriptionPlanType.ValueString() != "UPFRONT" {
+		t.Errorf("target_subscription_plan_type = %s, want UPFRONT", got.TargetSubscriptionPlanType)
+	}
+
+	paid := apiOffer("gbr", "GBR", models.SubscriptionOfferModePayAsYouGo, models.SubscriptionOfferDurationOneMonth, 3, "point-gbr")
+	if got := introductoryOfferEntryFromAPI(paid); got.PricePointID.ValueString() != "point-gbr" {
+		t.Errorf("paid price_point_id = %s, want point-gbr", got.PricePointID)
+	}
+}
