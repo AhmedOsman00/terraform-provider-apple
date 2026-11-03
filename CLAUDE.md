@@ -160,6 +160,10 @@ Rules that are easy to undo by accident:
   `apple_beta_build_localization` are left out with a note.
 - **An internal beta group gets no `public_link_*` attribute**, even a false
   one: `ValidateConfig` rejects any on an internal group.
+- One subscription or subscription group localization per locale. Editing an
+  approved one makes Apple list a `PREPARE_FOR_SUBMISSION` copy beside the
+  `APPROVED` one until the edit is approved; `editableLocalizations` keeps the
+  edit and drops the approved copy, which cannot be written to.
 - One `apple_app_store_version` per platform: the editable one, or the newest
   when none is.
 - Strings go through `hclwrite`, which escapes `${` and `%{`. Apple text is

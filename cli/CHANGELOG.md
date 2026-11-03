@@ -7,6 +7,13 @@ BUG FIXES:
   or a stalled request are now retried with backoff instead of failing the
   command. Creates are retried on 429 only.
 
+* **`apple terraform export` writes one localization per locale.** Editing an
+  approved subscription or subscription group localization makes Apple add a
+  `PREPARE_FOR_SUBMISSION` copy beside the `APPROVED` one, and the export wrote
+  both: two resources for one locale, one of which could not be written to.
+  Where a locale has an edit, the edit is exported and the approved copy is
+  named in `EXPORT_NOTES.md`.
+
 ## 0.3.0 (October 21, 2026)
 
 FEATURES:

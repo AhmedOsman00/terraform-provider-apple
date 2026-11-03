@@ -238,3 +238,48 @@ func TestCredentialFailureStopsTheExport(t *testing.T) {
 		t.Fatalf("Run = %v, want a fatal error rather than a note per record", err)
 	}
 }
+
+func TestEditedLocalizationsExportOnlyTheEdit(t *testing.T) {
+	result, _ := runFake(t, Options{Domains: []Domain{DomainProducts}})
+	products := string(result.Files["com_example_app_products.tf"])
+
+	for _, approved := range []string{"GRPLOC0", "SUBLOC0"} {
+		if strings.Contains(products, approved) {
+			t.Errorf("approved copy %s exported beside its edit:\n%s", approved, products)
+		}
+	}
+	for _, edit := range []string{"GRPLOC1", "SUBLOC1"} {
+		if !strings.Contains(products, edit) {
+			t.Errorf("edit %s not exported:\n%s", edit, products)
+		}
+	}
+}
+
+func TestEditableLocalizationsKeepsOnePerLocale(t *testing.T) {
+	type record struct {
+		id, locale string
+		approved   bool
+	}
+	records := []record{
+		{"A", "en-US", true},
+		{"B", "de-DE", true},
+		{"C", "en-US", false},
+		{"D", "ar-SA", false},
+		{"E", "ar-SA", true},
+	}
+
+	kept, shadowed := editableLocalizations(records,
+		func(r record) string { return r.locale },
+		func(r record) bool { return r.approved })
+
+	var ids []string
+	for _, r := range kept {
+		ids = append(ids, r.id)
+	}
+	if got, want := strings.Join(ids, ","), "B,C,D"; got != want {
+		t.Errorf("kept %s, want %s", got, want)
+	}
+	if got, want := strings.Join(shadowed, ","), "en-US,ar-SA"; got != want {
+		t.Errorf("shadowed %s, want %s", got, want)
+	}
+}

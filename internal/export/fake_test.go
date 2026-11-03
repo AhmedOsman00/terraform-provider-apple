@@ -175,7 +175,12 @@ func (f *fakeAccount) GetSubscriptionGroups(string) ([]models.SubscriptionGroup,
 }
 
 func (f *fakeAccount) GetSubscriptionGroupLocalizations(string) ([]models.SubscriptionGroupLocalization, error) {
-	return []models.SubscriptionGroupLocalization{{ID: "GRPLOC1", Attributes: models.SubscriptionGroupLocalizationAttributes{Locale: "en-US", Name: "Example Premium"}}}, nil
+	// An edited localization: Apple lists the approved copy and the edit
+	// waiting beside it, and only the edit can be written to.
+	return []models.SubscriptionGroupLocalization{
+		{ID: "GRPLOC0", Attributes: models.SubscriptionGroupLocalizationAttributes{Locale: "en-US", Name: "Example Plus", State: ptr(models.SubscriptionGroupLocalizationStateApproved)}},
+		{ID: "GRPLOC1", Attributes: models.SubscriptionGroupLocalizationAttributes{Locale: "en-US", Name: "Example Premium", State: ptr(models.SubscriptionGroupLocalizationStatePrepareForSubmission)}},
+	}, nil
 }
 
 func (f *fakeAccount) GetSubscriptions(string) ([]models.Subscription, error) {
@@ -186,7 +191,10 @@ func (f *fakeAccount) GetSubscriptions(string) ([]models.Subscription, error) {
 }
 
 func (f *fakeAccount) GetSubscriptionLocalizations(string) ([]models.SubscriptionLocalization, error) {
-	return []models.SubscriptionLocalization{{ID: "SUBLOC1", Attributes: models.SubscriptionLocalizationAttributes{Locale: "en-US", Name: "Monthly", Description: ptr("Everything, monthly.")}}}, nil
+	return []models.SubscriptionLocalization{
+		{ID: "SUBLOC0", Attributes: models.SubscriptionLocalizationAttributes{Locale: "en-US", Name: "Monthly", Description: ptr("All of it, monthly."), State: ptr(models.SubscriptionLocalizationStateApproved)}},
+		{ID: "SUBLOC1", Attributes: models.SubscriptionLocalizationAttributes{Locale: "en-US", Name: "Monthly", Description: ptr("Everything, monthly."), State: ptr(models.SubscriptionLocalizationStatePrepareForSubmission)}},
+	}, nil
 }
 
 func (f *fakeAccount) GetSubscriptionPrices(string) ([]models.SubscriptionPrice, error) {
