@@ -17,8 +17,10 @@ FEATURES:
   ```
 
   Apple keeps one offer per territory, so an offer in every storefront is a
-  `for_each` over `data.apple_territories.all.ids`. `price_point_id` is
-  required for the two paid modes and rejected for a free trial, at plan time.
+  `for_each` over `data.apple_territories.all.ids`. The subscription needs an
+  `apple_subscription_availability` first, though it doesn't have to list the
+  offer's territory. `price_point_id` is required for the two paid modes and
+  rejected for a free trial, at plan time.
   Only `end_date` changes in place; any other change replaces the offer.
   Import is `<subscription_id>/<offer_id>`.
 

@@ -82,10 +82,10 @@ func (r *subscriptionIntroductoryOfferResource) Schema(_ context.Context, _ reso
 			"update request carries nothing else.\n\n" +
 			"An offer in every storefront is a `for_each` over `data.apple_territories.all.ids`: one " +
 			"resource, and one `POST`, per territory.\n\n" +
-			"Creating offers after the subscription's `apple_subscription_availability` and price is the " +
-			"safe order. Apple requires an availability before a subscription can be priced; whether it " +
-			"requires either before an introductory offer is unverified. Nothing in an offer references " +
-			"them, so declare the order with `depends_on`.",
+			"~> **An `apple_subscription_availability` has to exist first.** Apple refuses an offer on a " +
+			"subscription with none. The availability does not have to list the offer's territory, and the " +
+			"subscription needs no price. Nothing in an offer references the availability, so declare the " +
+			"order with `depends_on`.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -432,13 +432,15 @@ func addIntroductoryOfferWriteError(diags *diag.Diagnostics, subscriptionID stri
 				"apple_subscription_price_points data source scoped to subscription '%s'.",
 				summary, errMsg, subscriptionID),
 		)
-	case strings.Contains(errMsg, "processing the pricing information"):
+	case strings.Contains(errMsg, "set up availabilities first"):
+		// Apple's whole answer is "You need to set up availabilities first",
+		// which names neither the subscription nor the resource that sets it.
 		diags.AddError(
-			"Error Writing Subscription Introductory Offer",
+			"Subscription Has No Availability",
 			fmt.Sprintf("%s: %s\n\n"+
-				"Apple answers a subscription price with this message when the subscription has no "+
-				"availability record. If subscription '%s' has none, add an apple_subscription_availability "+
-				"and make this resource depend on it.",
+				"Apple refuses an introductory offer on a subscription with no availability. Add an "+
+				"apple_subscription_availability for subscription '%s' and make this resource depend on "+
+				"it. It does not have to list the offer's territory.",
 				summary, errMsg, subscriptionID),
 		)
 	default:

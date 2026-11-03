@@ -617,8 +617,8 @@ type SubscriptionIntroductoryOfferUpdateRequest struct {
 //
 // It is deliberately not omitempty: an end date removed from a configuration is
 // sent as an explicit null, where an omitted member would leave the old date in
-// place. Whether Apple accepts a null endDate is unverified against the live
-// API.
+// place. Apple accepts the null and clears the date, which the single-offer
+// acceptance test checks.
 type SubscriptionIntroductoryOfferUpdateAttributes struct {
 	EndDate *string `json:"endDate"`
 }

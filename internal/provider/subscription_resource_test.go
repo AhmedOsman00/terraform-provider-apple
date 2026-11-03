@@ -1015,7 +1015,7 @@ resource "apple_subscription_introductory_offer" "test" {
   duration          = "ONE_WEEK"
   number_of_periods = 1%[1]s
 
-  depends_on = [apple_subscription_availability.test, apple_subscription_price.test]
+  depends_on = [apple_subscription_availability.test]
 }
 `, end)
 }
