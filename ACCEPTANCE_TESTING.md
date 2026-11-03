@@ -288,8 +288,10 @@ removes it.
 The introductory offer test checks Apple's offer count rather than state,
 because Apple publishes no `GET` for a single offer: the resource reads by
 listing the subscription's offers, so a lookup that silently matched nothing
-would look the same as success. Its update step is the only check that Apple
-accepts a `PATCH` of `endDate`.
+would look the same as success. Its two update steps, which set an `endDate`
+and then clear it with an explicit `null`, are the only check that Apple
+accepts either `PATCH`. The clear is checked against Apple rather than state,
+because `Read` does not adopt an end date once state holds none.
 
 ## In-app purchases
 

@@ -916,6 +916,12 @@ func TestAccSubscriptionIntroductoryOfferResource_basic(t *testing.T) {
 	productID := testAccSubscriptionProductID()
 	name := testAccProductName("Pro Intro")
 	var offerID string
+	sameOffer := resource.TestCheckResourceAttrWith("apple_subscription_introductory_offer.test", "id", func(value string) error {
+		if value != offerID {
+			return fmt.Errorf("offer replaced: id %s, was %s", value, offerID)
+		}
+		return nil
+	})
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckSubscription(t) },
@@ -949,12 +955,19 @@ func TestAccSubscriptionIntroductoryOfferResource_basic(t *testing.T) {
 				Config: testAccSubscriptionIntroductoryOfferConfig(referenceName, productID, name, "2030-12-31"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("apple_subscription_introductory_offer.test", "end_date", "2030-12-31"),
-					resource.TestCheckResourceAttrWith("apple_subscription_introductory_offer.test", "id", func(value string) error {
-						if value != offerID {
-							return fmt.Errorf("offer replaced: id %s, was %s", value, offerID)
-						}
-						return nil
-					}),
+					sameOffer,
+					testAccCheckIntroductoryOfferEndDate("apple_subscription_introductory_offer.test", "2030-12-31"),
+				),
+			},
+			// Removing it sends an explicit "endDate": null. State alone cannot
+			// show whether Apple cleared it, because Read does not adopt an end
+			// date once state holds none, so the check asks Apple.
+			{
+				Config: testAccSubscriptionIntroductoryOfferConfig(referenceName, productID, name, ""),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("apple_subscription_introductory_offer.test", "end_date"),
+					sameOffer,
+					testAccCheckIntroductoryOfferEndDate("apple_subscription_introductory_offer.test", ""),
 				),
 			},
 		},
@@ -1005,6 +1018,37 @@ resource "apple_subscription_introductory_offer" "test" {
   depends_on = [apple_subscription_availability.test, apple_subscription_price.test]
 }
 `, end)
+}
+
+// testAccCheckIntroductoryOfferEndDate asks Apple for the offer's end date,
+// where "" means it has none.
+func testAccCheckIntroductoryOfferEndDate(resourceName, want string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, err := testAccStateResource(s, resourceName)
+		if err != nil {
+			return err
+		}
+
+		client, err := testAccAPIClient()
+		if err != nil {
+			return fmt.Errorf("could not build API client: %w", err)
+		}
+
+		offer, err := client.GetSubscriptionIntroductoryOffer(rs.Attributes["subscription_id"], rs.Attributes["territory_id"], rs.ID)
+		if err != nil {
+			return fmt.Errorf("reading introductory offer %s: %w", rs.ID, err)
+		}
+
+		got := ""
+		if offer.Attributes.EndDate != nil {
+			got = *offer.Attributes.EndDate
+		}
+		if got != want {
+			return fmt.Errorf("introductory offer %s has end date %q at Apple, want %q", rs.ID, got, want)
+		}
+
+		return nil
+	}
 }
 
 // testAccCheckIntroductoryOfferCount asks Apple how many introductory offers
