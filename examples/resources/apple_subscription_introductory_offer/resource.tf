@@ -14,9 +14,9 @@ resource "apple_subscription" "pro_monthly" {
   subscription_period = "ONE_MONTH"
 }
 
-# An offer is for one territory, and the subscription has to be available
-# there. Nothing in an offer references the availability, so the dependency is
-# declared by hand below.
+# Apple requires an availability before a subscription can be priced. Creating
+# offers after it is the safe order, and nothing in an offer references it, so
+# the dependency is declared by hand below.
 resource "apple_subscription_availability" "pro_monthly" {
   subscription_id       = apple_subscription.pro_monthly.id
   available_territories = ["USA", "GBR"]

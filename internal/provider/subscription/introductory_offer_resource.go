@@ -82,8 +82,10 @@ func (r *subscriptionIntroductoryOfferResource) Schema(_ context.Context, _ reso
 			"update request carries nothing else.\n\n" +
 			"An offer in every storefront is a `for_each` over `data.apple_territories.all.ids`: one " +
 			"resource, and one `POST`, per territory.\n\n" +
-			"~> **An `apple_subscription_availability` covering the territory has to exist first.** " +
-			"Nothing in an offer references one, so declare the ordering with `depends_on`.",
+			"Creating offers after the subscription's `apple_subscription_availability` and price is the " +
+			"safe order. Apple requires an availability before a subscription can be priced; whether it " +
+			"requires either before an introductory offer is unverified. Nothing in an offer references " +
+			"them, so declare the order with `depends_on`.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -434,9 +436,9 @@ func addIntroductoryOfferWriteError(diags *diag.Diagnostics, subscriptionID stri
 		diags.AddError(
 			"Error Writing Subscription Introductory Offer",
 			fmt.Sprintf("%s: %s\n\n"+
-				"Apple answers with this message when the subscription has no availability record, which "+
-				"it requires before any pricing. Add an apple_subscription_availability for subscription "+
-				"'%s' covering the offer's territory, and make this resource depend on it.",
+				"Apple answers a subscription price with this message when the subscription has no "+
+				"availability record. If subscription '%s' has none, add an apple_subscription_availability "+
+				"and make this resource depend on it.",
 				summary, errMsg, subscriptionID),
 		)
 	default:
@@ -444,9 +446,8 @@ func addIntroductoryOfferWriteError(diags *diag.Diagnostics, subscriptionID stri
 			"Error Writing Subscription Introductory Offer",
 			fmt.Sprintf("%s: %s\n\n"+
 				"A territory holds one introductory offer at a time, so an offer whose dates overlap "+
-				"another in the same territory is refused. The subscription also has to be available in "+
-				"the territory, and Apple validates the duration and number of periods against the offer "+
-				"mode and the subscription's period.", summary, errMsg),
+				"another in the same territory is refused. Apple also validates the duration and number "+
+				"of periods against the offer mode and the subscription's period.", summary, errMsg),
 		)
 	}
 }

@@ -7,7 +7,7 @@ description: |-
   An introductory offer is what a new subscriber pays at first — a free trial, a reduced price per period, or a reduced price paid once — before the subscription's own price applies. Apple keeps one record per territory.
   Only end_date changes in place; every other attribute forces replacement, because Apple's update request carries nothing else.
   An offer in every storefront is a for_each over data.apple_territories.all.ids: one resource, and one POST, per territory.
-  ~> An apple_subscription_availability covering the territory has to exist first. Nothing in an offer references one, so declare the ordering with depends_on.
+  Creating offers after the subscription's apple_subscription_availability and price is the safe order. Apple requires an availability before a subscription can be priced; whether it requires either before an introductory offer is unverified. Nothing in an offer references them, so declare the order with depends_on.
 ---
 
 # apple_subscription_introductory_offer (Resource)
@@ -20,7 +20,7 @@ Only `end_date` changes in place; every other attribute forces replacement, beca
 
 An offer in every storefront is a `for_each` over `data.apple_territories.all.ids`: one resource, and one `POST`, per territory.
 
-~> **An `apple_subscription_availability` covering the territory has to exist first.** Nothing in an offer references one, so declare the ordering with `depends_on`.
+Creating offers after the subscription's `apple_subscription_availability` and price is the safe order. Apple requires an availability before a subscription can be priced; whether it requires either before an introductory offer is unverified. Nothing in an offer references them, so declare the order with `depends_on`.
 
 ## Example Usage
 
@@ -41,9 +41,9 @@ resource "apple_subscription" "pro_monthly" {
   subscription_period = "ONE_MONTH"
 }
 
-# An offer is for one territory, and the subscription has to be available
-# there. Nothing in an offer references the availability, so the dependency is
-# declared by hand below.
+# Apple requires an availability before a subscription can be priced. Creating
+# offers after it is the safe order, and nothing in an offer references it, so
+# the dependency is declared by hand below.
 resource "apple_subscription_availability" "pro_monthly" {
   subscription_id       = apple_subscription.pro_monthly.id
   available_territories = ["USA", "GBR"]
