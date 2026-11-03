@@ -6,6 +6,7 @@ description: |-
   Manages an app's name, subtitle and privacy policy link in one language.
   This is the half of the localized metadata that survives a release. The description, keywords and promotional text belong to a particular version and live on apple_app_store_version_localization instead — a split Apple makes in the API and App Store Connect hides in its editor.
   ~> Writes only land while a version is being prepared. These records hang off the app's AppInfo, which Apple freezes once it is in review or distributed.
+  Apple sometimes adds a language to the AppInfo itself, alongside the version's. When the editable AppInfo already has one for locale, it is adopted rather than recreated.
   The localization for the app's primary language cannot be deleted: every app must have a name in the language it was created in. Destroying that one warns and drops it from state rather than failing the whole destroy.
 ---
 
@@ -16,6 +17,8 @@ Manages an app's name, subtitle and privacy policy link in one language.
 This is the half of the localized metadata that survives a release. The description, keywords and promotional text belong to a particular version and live on `apple_app_store_version_localization` instead — a split Apple makes in the API and App Store Connect hides in its editor.
 
 ~> **Writes only land while a version is being prepared.** These records hang off the app's AppInfo, which Apple freezes once it is in review or distributed.
+
+Apple sometimes adds a language to the AppInfo itself, alongside the version's. When the editable AppInfo already has one for `locale`, it is adopted rather than recreated.
 
 The localization for the app's primary language cannot be deleted: every app must have a name in the language it was created in. Destroying that one warns and drops it from state rather than failing the whole destroy.
 

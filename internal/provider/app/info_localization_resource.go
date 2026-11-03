@@ -11,6 +11,7 @@ import (
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -49,6 +50,8 @@ func (r *appInfoLocalizationResource) Schema(_ context.Context, _ resource.Schem
 			"Store Connect hides in its editor.\n\n" +
 			"~> **Writes only land while a version is being prepared.** These records hang off the app's " +
 			"AppInfo, which Apple freezes once it is in review or distributed.\n\n" +
+			"Apple sometimes adds a language to the AppInfo itself, alongside the version's. When the " +
+			"editable AppInfo already has one for `locale`, it is adopted rather than recreated.\n\n" +
 			"The localization for the app's primary language cannot be deleted: every app must have a " +
 			"name in the language it was created in. Destroying that one warns and drops it from state " +
 			"rather than failing the whole destroy.",
@@ -140,6 +143,44 @@ func (r *appInfoLocalizationResource) Create(ctx context.Context, req resource.C
 			"No Editable App Info",
 			fmt.Sprintf("Could not resolve an app info record to write for app '%s': %s", appID, err.Error()),
 		)
+		return
+	}
+
+	// Apple can add a locale to the editable AppInfo by itself -- a release that
+	// gives the version a new language arrives with that language here already
+	// -- so the one this resource is asked for may exist before it is created.
+	existing, err := r.client.GetAppInfoLocalizations(info.ID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Reading App Info Localizations",
+			fmt.Sprintf("Could not check whether app '%s' already has a '%s' localization: %s",
+				appID, locale, err.Error()),
+		)
+		return
+	}
+	for i := range existing {
+		if existing[i].Attributes.Locale != locale {
+			continue
+		}
+
+		tflog.Debug(ctx, "Adopting existing app info localization", map[string]interface{}{"localization_id": existing[i].ID})
+
+		var current appInfoLocalizationModel
+		applyAppInfoLocalization(&current, &existing[i])
+
+		localization, err := r.client.UpdateAppInfoLocalization(existing[i].ID, infoLocalizationUpdate(plan, current), nil)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error Adopting App Info Localization",
+				fmt.Sprintf("App '%s' already has a '%s' localization, and it could not be updated to match "+
+					"the configuration: %s", appID, locale, err.Error()),
+			)
+			return
+		}
+
+		plan.AppInfoID = types.StringValue(info.ID)
+		applyAppInfoLocalization(&plan, localization)
+		resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 		return
 	}
 
@@ -266,13 +307,7 @@ func (r *appInfoLocalizationResource) Update(ctx context.Context, req resource.U
 	localizationID := state.ID.ValueString()
 	ctx = tflog.SetField(ctx, "localization_id", localizationID)
 
-	localization, err := r.client.UpdateAppInfoLocalization(localizationID, models.AppInfoLocalizationUpdateAttributes{
-		Name:              stringOrNil(plan.Name),
-		Subtitle:          stringOrNil(plan.Subtitle),
-		PrivacyPolicyURL:  stringOrNil(plan.PrivacyPolicyURL),
-		PrivacyChoicesURL: stringOrNil(plan.PrivacyChoicesURL),
-		PrivacyPolicyText: stringOrNil(plan.PrivacyPolicyText),
-	}, nil)
+	localization, err := r.client.UpdateAppInfoLocalization(localizationID, infoLocalizationUpdate(plan, state), nil)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating App Info Localization",
@@ -445,4 +480,34 @@ func applyAppInfoLocalization(model *appInfoLocalizationModel, localization *mod
 	model.PrivacyPolicyURL = stringOrNull(localization.Attributes.PrivacyPolicyURL)
 	model.PrivacyChoicesURL = stringOrNull(localization.Attributes.PrivacyChoicesURL)
 	model.PrivacyPolicyText = stringOrNull(localization.Attributes.PrivacyPolicyText)
+}
+
+// infoLocalizationUpdate builds the update that makes Apple's record match the
+// plan: whatever the plan sets, plus an explicit null for anything the record
+// holds that the plan leaves out, so the state read back agrees with the plan.
+func infoLocalizationUpdate(plan, current appInfoLocalizationModel) models.AppInfoLocalizationUpdateAttributes {
+	attributes := models.AppInfoLocalizationUpdateAttributes{
+		Name:              stringOrNil(plan.Name),
+		Subtitle:          stringOrNil(plan.Subtitle),
+		PrivacyPolicyURL:  stringOrNil(plan.PrivacyPolicyURL),
+		PrivacyChoicesURL: stringOrNil(plan.PrivacyChoicesURL),
+		PrivacyPolicyText: stringOrNil(plan.PrivacyPolicyText),
+	}
+
+	fields := []struct {
+		name          string
+		plan, current attr.Value
+	}{
+		{"subtitle", plan.Subtitle, current.Subtitle},
+		{"privacyPolicyUrl", plan.PrivacyPolicyURL, current.PrivacyPolicyURL},
+		{"privacyChoicesUrl", plan.PrivacyChoicesURL, current.PrivacyChoicesURL},
+		{"privacyPolicyText", plan.PrivacyPolicyText, current.PrivacyPolicyText},
+	}
+	for _, field := range fields {
+		if field.plan.IsNull() && !field.current.IsNull() && !field.current.IsUnknown() {
+			attributes.Clear = append(attributes.Clear, field.name)
+		}
+	}
+
+	return attributes
 }
