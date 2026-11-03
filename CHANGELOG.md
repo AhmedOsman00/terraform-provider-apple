@@ -78,6 +78,12 @@ BUG FIXES:
   public link. It now replaces only an internal group; on an external one the
   change is recorded in place.
 
+* **An `apple_profile` import reports why it failed.** The import looked a
+  profile up by ID and, on any error, tried the import ID as a name instead,
+  so a 500 or a credentials failure was reported as "profile with name ...
+  not found" -- blaming an ID that was correct. It now tries the name only
+  when Apple answers the ID with a 404, which is how it answers a name.
+
 * **`apple_app_info_localization` adopts a locale Apple already added.**
   Creating a version localization in a new language can make Apple add the
   same language to the editable AppInfo, so the first apply with a new language
