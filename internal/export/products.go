@@ -6,6 +6,7 @@ package export
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 	"github.com/zclconf/go-cty/cty"
@@ -63,6 +64,12 @@ func (e *exporter) exportSubscriptionGroup(f *file, app models.App, group models
 			return err
 		}
 	}
+	localizations, approved := editableLocalizations(localizations,
+		func(l models.SubscriptionGroupLocalization) string { return l.Attributes.Locale },
+		func(l models.SubscriptionGroupLocalization) bool {
+			return l.Attributes.State != nil && *l.Attributes.State == models.SubscriptionGroupLocalizationStateApproved
+		})
+	e.noteApprovedCopies(fmt.Sprintf("subscription group %q", name), approved)
 	for _, localization := range localizations {
 		locale := localization.Attributes.Locale
 		l, _ := e.resource(f, "apple_subscription_group_localization", localization.ID,
@@ -109,6 +116,12 @@ func (e *exporter) exportSubscription(f *file, group address, subscription model
 			return err
 		}
 	}
+	localizations, approved := editableLocalizations(localizations,
+		func(l models.SubscriptionLocalization) string { return l.Attributes.Locale },
+		func(l models.SubscriptionLocalization) bool {
+			return l.Attributes.State != nil && *l.Attributes.State == models.SubscriptionLocalizationStateApproved
+		})
+	e.noteApprovedCopies(productID, approved)
 	for _, localization := range localizations {
 		locale := localization.Attributes.Locale
 		l, _ := e.resource(f, "apple_subscription_localization", localization.ID,
@@ -428,4 +441,42 @@ func boolOr(v *bool, fallback bool) bool {
 		return fallback
 	}
 	return *v
+}
+
+// editableLocalizations keeps one localization per locale. Editing an
+// approved subscription or group localization does not change it: Apple adds a
+// PREPARE_FOR_SUBMISSION copy beside the APPROVED one, and lists both until the
+// edit is approved. Exporting both writes two resources for one locale, and the
+// approved one cannot be written to. So where a locale has a copy that is not
+// APPROVED, that copy is kept, and the approved locales it shadows are
+// returned. Apple's order is kept otherwise.
+func editableLocalizations[T any](records []T, locale func(T) string, approved func(T) bool) ([]T, []string) {
+	chosen := map[string]int{}
+	for i, record := range records {
+		current, seen := chosen[locale(record)]
+		if !seen || (approved(records[current]) && !approved(record)) {
+			chosen[locale(record)] = i
+		}
+	}
+
+	kept := make([]T, 0, len(chosen))
+	var shadowed []string
+	for i, record := range records {
+		if chosen[locale(record)] == i {
+			kept = append(kept, record)
+		} else {
+			shadowed = append(shadowed, locale(record))
+		}
+	}
+	return kept, shadowed
+}
+
+// noteApprovedCopies says which approved localizations were left out in favour
+// of the unapproved edit beside them.
+func (e *exporter) noteApprovedCopies(owner string, locales []string) {
+	if len(locales) == 0 {
+		return
+	}
+	e.note(Skipped, "", "%s: the approved localizations for %s were left out. Each has an edit beside it that Apple has not approved yet, and the edit is what was exported: it is the copy that can be changed, and it replaces the approved one once Apple approves it.",
+		owner, strings.Join(locales, ", "))
 }
