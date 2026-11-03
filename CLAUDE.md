@@ -45,7 +45,7 @@ cannot be used for this: it makes `terraform init` refuse to run.
 
 `tfplugindocs` builds `docs/` from provider/resource/data-source `MarkdownDescription` strings plus the matching files under `examples/`. CI (`.github/workflows/test.yml`) fails the `generate` job if `make generate` produces a diff, so regenerate and commit whenever a schema, example, or guide changes.
 
-`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All sixty-six pages are checked in: `index.md`, forty under `resources/`, twenty-three under `data-sources/`, and two under `guides/`.
+`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All sixty-seven pages are checked in: `index.md`, forty-one under `resources/`, twenty-three under `data-sources/`, and two under `guides/`.
 
 Hand-written prose lives in `templates/`, which is the only part of the docs pipeline a human edits directly. `templates/guides/<name>.md.tmpl` renders to `docs/guides/<name>.md`; a `templates/` directory does not suppress the auto-generated resource and data-source pages, which are still built from the schemas into a temporary directory. Two guides exist: `getting-started` (credentials, installing the provider from the Registry and overriding it with a local build, first configuration, import IDs per resource) and `code-signing` (the `fastlane match` replacement, the state-vs-bundle distribution model, adopting a match certificate).
 
@@ -144,7 +144,12 @@ Rules that are easy to undo by accident:
 - **One `apple_subscription_price_schedule` per subscription**, never
   `apple_subscription_price` as well: they write the same set and fight. It
   carries `depends_on` the subscription's availability, which Apple requires
-  first.
+  first. Introductory offers follow the same rule: one
+  `apple_subscription_introductory_offer_schedule` per subscription that has
+  any, never `apple_subscription_introductory_offer`, because the schedule
+  removes the offers it does not list. It `depends_on` the availability, which
+  Apple requires before any offer, and not the price schedule, which it does
+  not.
 - **Screenshots and review screenshots are left out.** The paths cannot be
   recovered and Apple's checksum would not match a re-downloaded file.
 - **Demo account passwords are sensitive variables defaulting to null.** The
@@ -194,11 +199,11 @@ Each domain lives in its own package (`bundle`, `certificate`, `device`, `mercha
 
 `bundle` additionally carries `capability_*.go` for the `apple_bundle_id_capability` resource/data source, where `capability_models.go` holds `SettingsFromAPI`/`SettingsToAPI` and `OptionsFromAPI`/`OptionsToAPI` to convert nested capability settings between API structs and `types.List`.
 
-`subscription` carries nine resources rather than one, so it prefixes by kind
+`subscription` carries ten resources rather than one, so it prefixes by kind
 the way `bundle` does: `group_*.go` (which covers both the group and its
 localization), `localization_*.go`, `price_resource.go`,
 `price_schedule_resource.go`, `availability_resource.go`,
-`introductory_offer_resource.go`,
+`introductory_offer_resource.go`, `introductory_offer_schedule_resource.go`,
 `review_screenshot_resource.go`, `price_point_data_source.go` and
 `price_point_equalizations_data_source.go`
 alongside the unprefixed `resource.go` / `data_source.go` for
@@ -619,6 +624,45 @@ cross-variable validation.
   offer's territory, and the subscription needs no price, for a free trial or a
   paid offer alike. Unlike a price's 409, this message is clear, so there is no
   "processing the pricing information" special case here.
+- **`apple_subscription_introductory_offer_schedule`**: the bulk counterpart,
+  the way `apple_subscription_price_schedule` is for prices. `id` mirrors
+  `subscription_id` and the import ID is the subscription ID. The nested
+  offers carry no computed attributes, for the price schedule's reason. Four
+  things shape it:
+  - Offers are matched to Apple's records by content (`introductoryOfferMatches`
+    and `planIntroductoryOffers` in `filters.go`). Territory, mode, duration,
+    periods and price point always count. `start_date` and plan type count only
+    when configured, and `end_date` never counts, because it is the field that
+    can change.
+  - A write **deletes the unmatched offers first**, since a territory cannot hold
+    two at once. It then `PATCH`es changed end dates one by one, and creates
+    everything new in **one** `PATCH /v1/subscriptions/{id}` carrying the offers
+    inline under `${offer0}` placeholders (`AddSubscriptionIntroductoryOffers`).
+  - That `introductoryOffers` relationship names **only the new offers**. Apple
+    treats it as additions, unlike `prices`, which it treats as the complete
+    set: an existing offer stays without being named, and naming one makes
+    Apple answer 500 "An unexpected error occurred", whatever the new offers
+    are. Both were checked against the live API. Do not add the kept offers
+    back to it.
+  - `Create` **refuses a subscription that already has offers**, naming the
+    import ID, the way `apple_beta_tester` refuses to adopt a membership. A
+    write deletes every offer the plan does not match, and a plan for a create
+    shows only an addition, so creating over live offers would delete them
+    unseen. An import goes through `ImportState`, not `Create`.
+  - Unlike the price schedule, `Delete` really deletes: Apple allows an offer to
+    be withdrawn. It deletes the offers state names, which after the refresh
+    before a destroy includes any added by hand.
+  - A write clears an end date only on an offer whose end date the **prior
+    state** held (`managedEndDateOffers`). `Read` does not adopt an end date the
+    configuration never set, so clearing one would change something no plan
+    showed. A write that fails after it has deleted or changed an offer
+    **records what Apple now holds** (`recordCurrent`) rather than the plan or
+    the prior state. Neither would be true, because the deletions happen before
+    the create that failed.
+  - `ValidateConfig` reads `offers` through `types.Set` and checks element by
+    element, skipping only whole unknown elements: a set built by a `for` over
+    a data source is unknown at validation time, which `make validate-examples`
+    caught.
 - **Customer-facing text is validated in characters, not bytes.** `GetNameValidator` and `GetDescriptionValidator` in `subscription` and `inapppurchase`, `GetAppNameValidator`, `GetSubtitleValidator`, `GetVersionDescriptionValidator`, `GetPromotionalTextValidator` and `GetWhatsNewValidator` in `app`, and `GetBetaGroupNameValidator`, `GetBetaDescriptionValidator`, `GetWhatsNewValidator` and `GetReviewNotesValidator` in `beta`, all use `stringvalidator.UTF8LengthBetween`, not `LengthBetween`. Apple's 30- and 45-character limits are character counts, while `LengthBetween` counts bytes, which rejected a legal 27-character Arabic description at "49". Any new customer-visible string field must follow this.
 - **`apple_in_app_purchase`**: the one-time purchase side of the App Store — `CONSUMABLE`, `NON_CONSUMABLE`, `NON_RENEWING_SUBSCRIPTION` — on `/v2/inAppPurchases`, and a different Apple resource from `apple_subscription`. `app_id` is worse than write-once: `InAppPurchaseV2` has **no app relationship at all** and no `include` produces one, so the app can never be read back, `Read` keeps the configured value, and `ImportState` accepts only `<app_id>/<in_app_purchase_id>` — confirming ownership by listing the app's collection, which is the only check the API offers. `product_id` and `in_app_purchase_type` are `RequiresReplace` because Apple's update request has neither member, and replacing either is expensive: Apple never releases a product identifier. `Read` never refreshes `app_id`.
 - **`apple_in_app_purchase_localization`**: localizations hang off an **in-app purchase version**, not the purchase. Apple moved them there in App Store Connect API 4.4.1 and deprecated the v1 endpoints that hid it, so the provider writes to `/v2/inAppPurchaseLocalizations` against a version resolved by `EnsureEditableInAppPurchaseVersion`: it picks the highest-numbered version in `PREPARE_FOR_SUBMISSION`, `DEVELOPER_REJECTED` or `REJECTED`, and creates one when every version is in review or approved — which is what App Store Connect's UI does when you edit approved metadata. Versions have no `DELETE`, so one created that way outlives the localization. The resolved version is reported as the computed `version_id`. Unlike a subscription localization there is **no `state`**: `InAppPurchaseLocalizationV2` has none, because the state lives on the version. Import accepts a bare ID — the parent is resolved in two hops, localization → version → purchase — or the composite `<in_app_purchase_id>/<localization_id>`. **Delete tolerates Apple's 409 `Cannot delete the last localization`**: a version must keep at least one, so destroying the only localization warns and drops state rather than erroring — erroring failed the whole destroy and left the purchase behind, and the record goes away with the purchase anyway. `ImportState` sets `review_note` itself instead of going through `applyPurchaseAttributes`, which skips it so that a null in configuration survives a `Read`; an import has no configuration to contradict, and leaving it null dropped a value Apple holds.
@@ -927,12 +971,12 @@ The CLI releases from `cli-v*` tags through `.github/workflows/cli-release.yml`,
 
 Two tiers:
 
-- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`, `internal/apple/uploads_test.go`, `internal/apple/buildUploads_test.go`, `internal/apple/profiles_test.go`, `internal/apple/retry_test.go`, `internal/export/export_test.go`, `internal/provider/media/files_test.go`, `internal/provider/media/schema_test.go`, `internal/provider/plan_modifier_order_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`. `uploads_test.go` sets `HTTPClient` and `UploadHTTPClient` to two counting transports over one `httptest.NewTLSServer` and asserts which network carried each request and that no part carried an `Authorization` header — that test is the guarantee the two networks stay separate. It shortens `assetPollInterval`/`assetPollAttempts` rather than waiting.
+- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`, `internal/apple/uploads_test.go`, `internal/apple/buildUploads_test.go`, `internal/apple/profiles_test.go`, `internal/apple/retry_test.go`, `internal/export/export_test.go`, `internal/provider/media/files_test.go`, `internal/provider/media/schema_test.go`, `internal/provider/subscription/introductory_offer_schedule_resource_test.go`, `internal/provider/plan_modifier_order_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`. `uploads_test.go` sets `HTTPClient` and `UploadHTTPClient` to two counting transports over one `httptest.NewTLSServer` and asserts which network carried each request and that no part carried an `Authorization` header — that test is the guarantee the two networks stay separate. It shortens `assetPollInterval`/`assetPollAttempts` rather than waiting.
 - **Acceptance** (`internal/provider/*_test.go`, package `provider`): `terraform-plugin-testing` against the real API. `testAccPreCheck` skips when credentials are absent.
 
 The CLI's credential-free tests (`internal/cli/*_test.go`) drive whole commands through `run` against `fakeConnect`, an `httptest` App Store Connect whose build state advances on each look, with a fake clock so waits finish at once. `internal/cli/acceptance_test.go` only reads, and needs `APPLE_TEST_BUNDLE_ID`.
 
-All forty resources now have acceptance coverage. `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go` and `internal/provider/user/schema_test.go` are a second, cheaper net under the app listing, TestFlight and team membership resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
+All forty-one resources now have acceptance coverage. `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go` and `internal/provider/user/schema_test.go` are a second, cheaper net under the app listing, TestFlight and team membership resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
 
 Two things constrain what the acceptance tier is allowed to do:
 

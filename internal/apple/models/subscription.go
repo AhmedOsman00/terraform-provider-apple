@@ -622,3 +622,33 @@ type SubscriptionIntroductoryOfferUpdateRequest struct {
 type SubscriptionIntroductoryOfferUpdateAttributes struct {
 	EndDate *string `json:"endDate"`
 }
+
+// SubscriptionIntroductoryOffersUpdateRequest adds introductory offers to a
+// subscription in one request.
+//
+// The same shape as SubscriptionPricesUpdateRequest, and a separate type from
+// SubscriptionUpdateRequest for the same reason: that one sends a non-optional
+// attributes member. The new offers travel inline in "included" under
+// placeholder IDs of the form "${offer0}".
+type SubscriptionIntroductoryOffersUpdateRequest struct {
+	Data     SubscriptionIntroductoryOffersUpdateData    `json:"data"`
+	Included []SubscriptionIntroductoryOfferInlineCreate `json:"included,omitempty"`
+}
+
+type SubscriptionIntroductoryOffersUpdateData struct {
+	Type          string                                            `json:"type"`
+	ID            string                                            `json:"id"`
+	Relationships SubscriptionIntroductoryOffersUpdateRelationships `json:"relationships"`
+}
+
+type SubscriptionIntroductoryOffersUpdateRelationships struct {
+	IntroductoryOffers ResourceIdentifiers `json:"introductoryOffers"`
+}
+
+// SubscriptionIntroductoryOfferInlineCreate is one offer inside "included".
+type SubscriptionIntroductoryOfferInlineCreate struct {
+	Type          string                                           `json:"type"`
+	ID            string                                           `json:"id"`
+	Attributes    SubscriptionIntroductoryOfferCreateAttributes    `json:"attributes"`
+	Relationships SubscriptionIntroductoryOfferCreateRelationships `json:"relationships"`
+}

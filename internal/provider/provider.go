@@ -422,6 +422,7 @@ func (p *appleProvider) Resources(_ context.Context) []func() resource.Resource 
 		subscription.NewSubscriptionPriceScheduleResource,
 		subscription.NewSubscriptionAvailabilityResource,
 		subscription.NewSubscriptionIntroductoryOfferResource,
+		subscription.NewSubscriptionIntroductoryOfferScheduleResource,
 		subscription.NewSubscriptionReviewScreenshotResource,
 		inapppurchase.NewInAppPurchaseResource,
 		inapppurchase.NewInAppPurchaseLocalizationResource,

@@ -134,9 +134,20 @@ type subscriptionIntroductoryOfferModel struct {
 	TargetSubscriptionPlanType types.String `tfsdk:"target_subscription_plan_type"`
 }
 
-// introductoryOfferValues is the configurable part of one introductory offer,
-// apart from the subscription it belongs to: what the resource converts itself
-// to for the client's input, and what an offer read from Apple is turned into.
+// subscriptionIntroductoryOfferScheduleModel maps the bulk schedule: every
+// introductory offer of one subscription.
+type subscriptionIntroductoryOfferScheduleModel struct {
+	ID             types.String              `tfsdk:"id"`
+	SubscriptionID types.String              `tfsdk:"subscription_id"`
+	Offers         []introductoryOfferValues `tfsdk:"offers"`
+}
+
+// introductoryOfferValues is the configurable part of one introductory offer:
+// what the singular resource converts itself to, and the element type of the
+// schedule's offers set.
+//
+// It carries no id, for the reason subscriptionSchedulePriceModel carries none:
+// a computed attribute inside a set makes the element unknown at plan time.
 type introductoryOfferValues struct {
 	TerritoryID                types.String `tfsdk:"territory_id"`
 	OfferMode                  types.String `tfsdk:"offer_mode"`
