@@ -57,6 +57,14 @@ BUG FIXES:
   record and repeating it would create a second one. `401` and other client
   errors are never retried.
   
+* **Importing an external `apple_beta_group` no longer plans its replacement.**
+  Apple ignores `has_access_to_all_builds` on an external group and reports it
+  as null, whatever the group was created with, so an imported external group
+  held null against a configuration saying `true` -- and the attribute forced
+  replacement, which would delete the group, its testers' access and its
+  public link. It now replaces only an internal group; on an external one the
+  change is recorded in place.
+
 * **`apple_app_info_localization` adopts a locale Apple already added.**
   Creating a version localization in a new language can make Apple add the
   same language to the editable AppInfo, so the first apply with a new language

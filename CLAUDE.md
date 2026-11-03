@@ -288,9 +288,10 @@ and survives every build, `apple_beta_build_localization` hangs off a build and
 is replaced with it. Do not fold them together; they are two Apple records.
 
 Internal and external groups are **not one flag**. `isInternalGroup` and
-`hasAccessToAllBuilds` are absent from Apple's `BetaGroupUpdateRequest`, so both
-are `RequiresReplace`, and the two kinds accept disjoint attribute sets — only an
-external group can carry a public link. `ValidateConfig` rejects
+`hasAccessToAllBuilds` are absent from Apple's `BetaGroupUpdateRequest`, so
+neither changes in place, and the two kinds accept disjoint attribute sets — only
+an external group can carry a public link, and only an internal group's
+`hasAccessToAllBuilds` means anything. `ValidateConfig` rejects
 `public_link_*` on an internal group at plan time rather than letting Apple
 refuse it with a message that names the attribute and not the reason.
 
@@ -846,10 +847,17 @@ cross-variable validation.
   not churn the plan.
 - **`apple_beta_group`**: the only TestFlight resource with a real create and a
   real delete. `is_internal_group` and `has_access_to_all_builds` are
-  `Optional+Computed+RequiresReplace` with `UseStateForUnknown` — absent from
-  Apple's update request, so neither can change in place, and neither carries a
-  Terraform `Default`: a default would make an imported internal group plan a
-  replacement the moment the configuration stayed silent about it. The remaining
+  `Optional+Computed` with `UseStateForUnknown` and are absent from Apple's update
+  request. `is_internal_group` is `RequiresReplace`; `has_access_to_all_builds`
+  is `RequiresReplaceIf` (`allBuildsRequiresReplace`) and replaces **only an
+  internal group**. Apple ignores it on an external group and reports it as null
+  whatever the group was created with, so an imported external group holds null
+  against a configuration saying `true`, and replacing it would delete the group,
+  its testers' access and its public link for nothing. On an external group the
+  change is recorded in place, and `adoptBool` keeps it against Apple's null.
+  Neither carries a Terraform `Default`: a default would make an imported
+  internal group plan a replacement the moment the configuration stayed silent
+  about it. The remaining
   booleans are `Optional+Computed` and go through `adoptBool`/`adoptInt64` in
   `applyBetaGroup` rather than being assigned outright, because an attribute
   Apple omits from a response must neither blank a value the plan holds (an
