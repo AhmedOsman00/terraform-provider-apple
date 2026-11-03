@@ -3,6 +3,8 @@
 
 package models
 
+import "encoding/json"
+
 // App info state enumeration.
 //
 // An app carries several AppInfo records at once: the one backing the version
@@ -190,10 +192,34 @@ type AppInfoLocalizationUpdateRequest struct {
 // AppInfoLocalizationUpdateAttributes omits locale: it identifies the record
 // and is absent from Apple's update request, the same shape every other
 // localization in this provider has.
+//
+// A nil field is left out and Apple keeps what it holds. Clear names the JSON
+// properties to send as an explicit null instead, which is how Apple empties
+// one.
 type AppInfoLocalizationUpdateAttributes struct {
-	Name              *string `json:"name,omitempty"`
-	Subtitle          *string `json:"subtitle,omitempty"`
-	PrivacyPolicyURL  *string `json:"privacyPolicyUrl,omitempty"`
-	PrivacyChoicesURL *string `json:"privacyChoicesUrl,omitempty"`
-	PrivacyPolicyText *string `json:"privacyPolicyText,omitempty"`
+	Name              *string  `json:"name,omitempty"`
+	Subtitle          *string  `json:"subtitle,omitempty"`
+	PrivacyPolicyURL  *string  `json:"privacyPolicyUrl,omitempty"`
+	PrivacyChoicesURL *string  `json:"privacyChoicesUrl,omitempty"`
+	PrivacyPolicyText *string  `json:"privacyPolicyText,omitempty"`
+	Clear             []string `json:"-"`
+}
+
+// MarshalJSON writes each name in Clear as null.
+func (a AppInfoLocalizationUpdateAttributes) MarshalJSON() ([]byte, error) {
+	type plain AppInfoLocalizationUpdateAttributes
+	body, err := json.Marshal(plain(a))
+	if err != nil || len(a.Clear) == 0 {
+		return body, err
+	}
+
+	fields := map[string]json.RawMessage{}
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return nil, err
+	}
+	for _, name := range a.Clear {
+		fields[name] = json.RawMessage("null")
+	}
+
+	return json.Marshal(fields)
 }
