@@ -1,5 +1,29 @@
 ## Unreleased
 
+FEATURES:
+
+* **`apple_subscription_introductory_offer`.** Introductory offers on an
+  auto-renewable subscription: a free trial, a reduced price per period, or a
+  reduced price paid once, one territory per resource (#14).
+
+  ```terraform
+  resource "apple_subscription_introductory_offer" "trial" {
+    subscription_id   = apple_subscription.pro_monthly.id
+    territory_id      = "USA"
+    offer_mode        = "FREE_TRIAL"
+    duration          = "ONE_WEEK"
+    number_of_periods = 1
+  }
+  ```
+
+  Apple keeps one offer per territory, so an offer in every storefront is a
+  `for_each` over `data.apple_territories.all.ids`. The subscription needs an
+  `apple_subscription_availability` first, though it doesn't have to list the
+  offer's territory. `price_point_id` is required for the two paid modes and
+  rejected for a free trial, at plan time.
+  Only `end_date` changes in place; any other change replaces the offer.
+  Import is `<subscription_id>/<offer_id>`.
+  
 ENHANCEMENTS:
 
 * **Provider: `max_retries` and `request_timeout`.** `max_retries` (default

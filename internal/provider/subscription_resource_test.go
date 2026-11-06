@@ -908,3 +908,174 @@ func testAccCheckImportedPriceCount(want int) resource.ImportStateCheckFunc {
 		return nil
 	}
 }
+
+// --- introductory offers ---
+
+func TestAccSubscriptionIntroductoryOfferResource_basic(t *testing.T) {
+	referenceName := "Terraform Intro " + acctest.RandString(6)
+	productID := testAccSubscriptionProductID()
+	name := testAccProductName("Pro Intro")
+	var offerID string
+	sameOffer := resource.TestCheckResourceAttrWith("apple_subscription_introductory_offer.test", "id", func(value string) error {
+		if value != offerID {
+			return fmt.Errorf("offer replaced: id %s, was %s", value, offerID)
+		}
+		return nil
+	})
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckSubscription(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: testAccCheckDestroyAll(
+			testAccCheckSubscriptionDestroy,
+			testAccCheckSubscriptionGroupDestroy,
+		),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSubscriptionIntroductoryOfferConfig(referenceName, productID, name, ""),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIntroductoryOfferCount("apple_subscription_introductory_offer.test", 1),
+					resource.TestCheckResourceAttr("apple_subscription_introductory_offer.test", "offer_mode", "FREE_TRIAL"),
+					resource.TestCheckNoResourceAttr("apple_subscription_introductory_offer.test", "price_point_id"),
+					resource.TestCheckResourceAttrWith("apple_subscription_introductory_offer.test", "id", func(value string) error {
+						offerID = value
+						return nil
+					}),
+				),
+			},
+			{
+				ResourceName:      "apple_subscription_introductory_offer.test",
+				ImportState:       true,
+				ImportStateIdFunc: testAccSubscriptionPriceImportID("apple_subscription_introductory_offer.test"),
+				ImportStateVerify: true,
+			},
+			// end_date is the one attribute Apple's update request carries, so
+			// setting it must keep the offer rather than replace it.
+			{
+				Config: testAccSubscriptionIntroductoryOfferConfig(referenceName, productID, name, "2030-12-31"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("apple_subscription_introductory_offer.test", "end_date", "2030-12-31"),
+					sameOffer,
+					testAccCheckIntroductoryOfferEndDate("apple_subscription_introductory_offer.test", "2030-12-31"),
+				),
+			},
+			// Removing it sends an explicit "endDate": null. State alone cannot
+			// show whether Apple cleared it, because Read does not adopt an end
+			// date once state holds none, so the check asks Apple.
+			{
+				Config: testAccSubscriptionIntroductoryOfferConfig(referenceName, productID, name, ""),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("apple_subscription_introductory_offer.test", "end_date"),
+					sameOffer,
+					testAccCheckIntroductoryOfferEndDate("apple_subscription_introductory_offer.test", ""),
+				),
+			},
+		},
+	})
+}
+
+// TestAccSubscriptionIntroductoryOfferResource_freeTrialRejectsPricePoint is a
+// plan-time refusal, so it writes nothing.
+func TestAccSubscriptionIntroductoryOfferResource_freeTrialRejectsPricePoint(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccProviderConfig + `
+resource "apple_subscription_introductory_offer" "test" {
+  subscription_id   = "6740021496"
+  territory_id      = "USA"
+  offer_mode        = "FREE_TRIAL"
+  duration          = "ONE_WEEK"
+  number_of_periods = 1
+  price_point_id    = "eyJzIjoiNjc0MDAyMTQ5NiJ9"
+}
+`,
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile("Price Point Does Not Fit The Offer Mode"),
+			},
+		},
+	})
+}
+
+// testAccSubscriptionIntroductoryOfferConfig adds a USA free trial to a
+// complete subscription, optionally with an end date.
+func testAccSubscriptionIntroductoryOfferConfig(referenceName, productID, name, endDate string) string {
+	end := ""
+	if endDate != "" {
+		end = fmt.Sprintf("\n  end_date = %q", endDate)
+	}
+
+	return testAccSubscriptionCompleteConfig(referenceName, productID, name) + fmt.Sprintf(`
+resource "apple_subscription_introductory_offer" "test" {
+  subscription_id   = apple_subscription.test.id
+  territory_id      = "USA"
+  offer_mode        = "FREE_TRIAL"
+  duration          = "ONE_WEEK"
+  number_of_periods = 1%[1]s
+
+  depends_on = [apple_subscription_availability.test]
+}
+`, end)
+}
+
+// testAccCheckIntroductoryOfferEndDate asks Apple for the offer's end date,
+// where "" means it has none.
+func testAccCheckIntroductoryOfferEndDate(resourceName, want string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, err := testAccStateResource(s, resourceName)
+		if err != nil {
+			return err
+		}
+
+		client, err := testAccAPIClient()
+		if err != nil {
+			return fmt.Errorf("could not build API client: %w", err)
+		}
+
+		offer, err := client.GetSubscriptionIntroductoryOffer(rs.Attributes["subscription_id"], rs.Attributes["territory_id"], rs.ID)
+		if err != nil {
+			return fmt.Errorf("reading introductory offer %s: %w", rs.ID, err)
+		}
+
+		got := ""
+		if offer.Attributes.EndDate != nil {
+			got = *offer.Attributes.EndDate
+		}
+		if got != want {
+			return fmt.Errorf("introductory offer %s has end date %q at Apple, want %q", rs.ID, got, want)
+		}
+
+		return nil
+	}
+}
+
+// testAccCheckIntroductoryOfferCount asks Apple how many introductory offers
+// the subscription actually carries, rather than trusting state.
+func testAccCheckIntroductoryOfferCount(resourceName string, want int) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, err := testAccStateResource(s, resourceName)
+		if err != nil {
+			return err
+		}
+
+		client, err := testAccAPIClient()
+		if err != nil {
+			return fmt.Errorf("could not build API client: %w", err)
+		}
+
+		subscriptionID := rs.Attributes["subscription_id"]
+		offers, err := client.GetSubscriptionIntroductoryOffers(subscriptionID, nil)
+		if err != nil {
+			return fmt.Errorf("reading introductory offers of subscription %s: %w", subscriptionID, err)
+		}
+
+		if len(offers) != want {
+			return fmt.Errorf("subscription %s has %d introductory offers at Apple, want %d",
+				subscriptionID, len(offers), want)
+		}
+
+		return nil
+	}
+}

@@ -9,7 +9,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 // SubscriptionGroupFilters represents the filtering configuration for groups.
@@ -233,4 +236,97 @@ func PricePointIDsByTerritory(points []models.SubscriptionPricePoint) map[string
 	}
 
 	return ids
+}
+
+// introductoryOfferPricePointProblem reports what is wrong with an offer's price
+// point for its mode, or "" when nothing is.
+//
+// A free trial charges nothing and so references no price point; the two paid
+// modes are a reduced price, and a price is always a price point. Apple refuses
+// both mistakes, but at apply time and without naming the mode.
+func introductoryOfferPricePointProblem(mode string, hasPricePoint bool) string {
+	switch models.SubscriptionOfferMode(mode) {
+	case models.SubscriptionOfferModeFreeTrial:
+		if hasPricePoint {
+			return "A FREE_TRIAL offer charges nothing, so it takes no price_point_id. Remove price_point_id, " +
+				"or use PAY_AS_YOU_GO or PAY_UP_FRONT for a reduced price."
+		}
+	case models.SubscriptionOfferModePayAsYouGo, models.SubscriptionOfferModePayUpFront:
+		if !hasPricePoint {
+			return fmt.Sprintf("A %s offer is a reduced price, and a price is always a price point. Set "+
+				"price_point_id to a point from the apple_subscription_price_points data source for this "+
+				"subscription and territory, or use FREE_TRIAL.", mode)
+		}
+	}
+	return ""
+}
+
+// offerTerritory reads an offer's territory, or "" when Apple did not populate it.
+func offerTerritory(offer models.SubscriptionIntroductoryOffer) string {
+	if offer.Relationships == nil {
+		return ""
+	}
+	return territoryID(offer.Relationships.Territory).ValueString()
+}
+
+// offerPricePoint reads an offer's price point, or "" for a free trial.
+func offerPricePoint(offer models.SubscriptionIntroductoryOffer) string {
+	if offer.Relationships == nil || offer.Relationships.SubscriptionPricePoint == nil {
+		return ""
+	}
+	return offer.Relationships.SubscriptionPricePoint.Data.ID
+}
+
+// introductoryOfferEntryFromAPI records an offer with Apple's own values, as an
+// import does. A free trial's price point is null rather than "".
+func introductoryOfferEntryFromAPI(offer models.SubscriptionIntroductoryOffer) introductoryOfferValues {
+	attributes := offer.Attributes
+
+	entry := introductoryOfferValues{
+		TerritoryID:                types.StringNull(),
+		OfferMode:                  types.StringNull(),
+		Duration:                   types.StringNull(),
+		NumberOfPeriods:            types.Int64Null(),
+		PricePointID:               types.StringNull(),
+		StartDate:                  stringOrNull(attributes.StartDate),
+		EndDate:                    stringOrNull(attributes.EndDate),
+		TargetSubscriptionPlanType: types.StringNull(),
+	}
+	if territory := offerTerritory(offer); territory != "" {
+		entry.TerritoryID = types.StringValue(territory)
+	}
+	if point := offerPricePoint(offer); point != "" {
+		entry.PricePointID = types.StringValue(point)
+	}
+	if attributes.OfferMode != nil {
+		entry.OfferMode = types.StringValue(string(*attributes.OfferMode))
+	}
+	if attributes.Duration != nil {
+		entry.Duration = types.StringValue(string(*attributes.Duration))
+	}
+	if attributes.NumberOfPeriods != nil {
+		entry.NumberOfPeriods = types.Int64Value(int64(*attributes.NumberOfPeriods))
+	}
+	if attributes.TargetSubscriptionPlanType != nil {
+		entry.TargetSubscriptionPlanType = types.StringValue(string(*attributes.TargetSubscriptionPlanType))
+	}
+	return entry
+}
+
+// introductoryOfferInput converts an offer's values to the client's input.
+func introductoryOfferInput(entry introductoryOfferValues) apple.SubscriptionIntroductoryOfferInput {
+	input := apple.SubscriptionIntroductoryOfferInput{
+		TerritoryID:     entry.TerritoryID.ValueString(),
+		OfferMode:       models.SubscriptionOfferMode(entry.OfferMode.ValueString()),
+		Duration:        models.SubscriptionOfferDuration(entry.Duration.ValueString()),
+		NumberOfPeriods: int(entry.NumberOfPeriods.ValueInt64()),
+		PricePointID:    entry.PricePointID.ValueString(),
+		StartDate:       stringOrNil(entry.StartDate),
+		EndDate:         stringOrNil(entry.EndDate),
+	}
+	if planType := stringOrNil(entry.TargetSubscriptionPlanType); planType != nil {
+		t := models.SubscriptionPlanType(*planType)
+		input.TargetPlanType = &t
+	}
+	return input
 }
