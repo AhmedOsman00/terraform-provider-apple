@@ -23,9 +23,28 @@ FEATURES:
   rejected for a free trial, at plan time.
   Only `end_date` changes in place; any other change replaces the offer.
   Import is `<subscription_id>/<offer_id>`.
+  
+ENHANCEMENTS:
+
+* **Provider: `max_retries` and `request_timeout`.** `max_retries` (default
+  `4`, `0` to turn retries off) and `request_timeout` (default `30s`, per
+  attempt) can be set in the provider block or through
+  `APPLE_APP_STORE_CONNECT_MAX_RETRIES` and
+  `APPLE_APP_STORE_CONNECT_REQUEST_TIMEOUT`.
 
 BUG FIXES:
 
+* **Transient App Store Connect failures no longer fail the run.** Apple
+  answers an occasional request with a 500, or stalls it past the 30-second
+  timeout, and every such failure failed the whole plan or apply — on a
+  configuration of a dozen or more resources, most runs, and an initial import
+  worst of all. Reads, updates and deletes are now retried with backoff on
+  `429`, `500`, `502`, `503`, `504`, a timeout or a dropped connection, and
+  `Retry-After` is honoured. A request that creates something is retried on
+  `429` only, because a 500 or a timeout may arrive after Apple created the
+  record and repeating it would create a second one. `401` and other client
+  errors are never retried.
+  
 * **`apple_app_info_localization` adopts a locale Apple already added.**
   Creating a version localization in a new language can make Apple add the
   same language to the editable AppInfo, so the first apply with a new language

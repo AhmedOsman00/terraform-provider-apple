@@ -20,9 +20,10 @@ const (
 	// certificate -- issuing the same request repeatedly fails at random.
 	// Terraform surfaces that as a failed apply, so the create is retried.
 	//
-	// Only profile creation retries. Everything else this client does either
-	// succeeds or fails deterministically, and a blanket retry would hide real
-	// errors and repeat non-idempotent writes.
+	// doRequest retries reads, updates and deletes on a 5xx itself, but never
+	// a POST: a create that failed with a 500 may have succeeded, and
+	// repeating it blindly would duplicate the record (see retry.go). This
+	// create can be retried only because it looks for the profile first.
 	profileCreateAttempts = 3
 	profileCreateBackoff  = 2 * time.Second
 )

@@ -1,3 +1,12 @@
+## Unreleased
+
+BUG FIXES:
+
+* **Transient App Store Connect failures are retried.** The CLI shares the
+  provider's API client, so reads, updates and deletes that meet a 500, a 429
+  or a stalled request are now retried with backoff instead of failing the
+  command. Creates are retried on 429 only.
+
 ## 0.3.0 (October 21, 2026)
 
 FEATURES:
