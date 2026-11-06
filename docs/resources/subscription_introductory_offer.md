@@ -6,7 +6,7 @@ description: |-
   Manages one introductory offer of an auto-renewable subscription, in one territory.
   An introductory offer is what a new subscriber pays at first — a free trial, a reduced price per period, or a reduced price paid once — before the subscription's own price applies. Apple keeps one record per territory.
   Only end_date changes in place; every other attribute forces replacement, because Apple's update request carries nothing else.
-  An offer in every storefront is a for_each over data.apple_territories.all.ids: one resource, and one POST, per territory.
+  ~> Use apple_subscription_introductory_offer_schedule for more than a handful of territories. This resource is one POST per territory, so a free trial in all 175 storefronts is 175 resources. The schedule writes them in one request. Do not point both at the same subscription: the schedule removes any offer it does not list.
   ~> An apple_subscription_availability has to exist first. Apple refuses an offer on a subscription with none. The availability does not have to list the offer's territory, and the subscription needs no price. Nothing in an offer references the availability, so declare the order with depends_on.
 ---
 
@@ -18,7 +18,7 @@ An introductory offer is what a new subscriber pays at first — a free trial, a
 
 Only `end_date` changes in place; every other attribute forces replacement, because Apple's update request carries nothing else.
 
-An offer in every storefront is a `for_each` over `data.apple_territories.all.ids`: one resource, and one `POST`, per territory.
+~> **Use `apple_subscription_introductory_offer_schedule` for more than a handful of territories.** This resource is one `POST` per territory, so a free trial in all 175 storefronts is 175 resources. The schedule writes them in one request. Do not point both at the same subscription: the schedule removes any offer it does not list.
 
 ~> **An `apple_subscription_availability` has to exist first.** Apple refuses an offer on a subscription with none. The availability does not have to list the offer's territory, and the subscription needs no price. Nothing in an offer references the availability, so declare the order with `depends_on`.
 

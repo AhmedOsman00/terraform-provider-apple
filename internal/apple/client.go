@@ -26,8 +26,9 @@ type Client struct {
 	// WriteHTTPClient is nil. NewClient builds it to retry transient failures
 	// (see retry.go); a plain *http.Client, as tests use, makes one attempt.
 	HTTPClient *http.Client
-	// WriteHTTPClient carries POST, under the narrower policy a create needs:
-	// a 500 or a timeout may arrive after Apple created the record.
+	// WriteHTTPClient carries POST and anything else asCreate marks, under the
+	// narrower policy a create needs: a 500 or a timeout may arrive after Apple
+	// created the record.
 	WriteHTTPClient *http.Client
 	// UploadHTTPClient delivers media file parts to the presigned URLs Apple
 	// hands out for them. It is deliberately not HTTPClient -- see uploads.go.
@@ -161,7 +162,7 @@ func (c *Client) doRequest(req *http.Request, authToken *string) ([]byte, error)
 // the retrying client as it goes, and stays zero under a plain one.
 func (c *Client) send(req *http.Request, attempts *int) ([]byte, error) {
 	client := c.HTTPClient
-	if req.Method == http.MethodPost && c.WriteHTTPClient != nil {
+	if createsRecords(req) && c.WriteHTTPClient != nil {
 		client = c.WriteHTTPClient
 	}
 

@@ -44,8 +44,8 @@ func (r *subscriptionIntroductoryOfferResource) Metadata(_ context.Context, req 
 	resp.TypeName = req.ProviderTypeName + "_subscription_introductory_offer"
 }
 
-// introductoryOfferDescriptions holds the descriptions of the attributes that
-// describe an offer, as opposed to the ones that identify it.
+// introductoryOfferDescriptions holds the attribute descriptions the singular
+// resource and the schedule share.
 var introductoryOfferDescriptions = map[string]string{
 	"territory_id": "The three-letter Apple territory code the offer applies in, for example `USA`, `GBR` " +
 		"or `EGY`. An introductory offer is always for one territory, and a territory holds one " +
@@ -80,8 +80,10 @@ func (r *subscriptionIntroductoryOfferResource) Schema(_ context.Context, _ reso
 			"Apple keeps one record per territory.\n\n" +
 			"Only `end_date` changes in place; every other attribute forces replacement, because Apple's " +
 			"update request carries nothing else.\n\n" +
-			"An offer in every storefront is a `for_each` over `data.apple_territories.all.ids`: one " +
-			"resource, and one `POST`, per territory.\n\n" +
+			"~> **Use `apple_subscription_introductory_offer_schedule` for more than a handful of " +
+			"territories.** This resource is one `POST` per territory, so a free trial in all 175 " +
+			"storefronts is 175 resources. The schedule writes them in one request. Do not point both " +
+			"at the same subscription: the schedule removes any offer it does not list.\n\n" +
 			"~> **An `apple_subscription_availability` has to exist first.** Apple refuses an offer on a " +
 			"subscription with none. The availability does not have to list the offer's territory, and the " +
 			"subscription needs no price. Nothing in an offer references the availability, so declare the " +

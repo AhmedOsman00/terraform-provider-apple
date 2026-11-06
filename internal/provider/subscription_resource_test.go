@@ -999,6 +999,54 @@ resource "apple_subscription_introductory_offer" "test" {
 	})
 }
 
+func TestAccSubscriptionIntroductoryOfferScheduleResource_basic(t *testing.T) {
+	referenceName := "Terraform Intro Schedule " + acctest.RandString(6)
+	productID := testAccSubscriptionProductID()
+	name := testAccProductName("Pro Intro Schedule")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckSubscription(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: testAccCheckDestroyAll(
+			testAccCheckSubscriptionDestroy,
+			testAccCheckSubscriptionGroupDestroy,
+		),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSubscriptionIntroductoryOfferScheduleConfig(referenceName, productID, name, false),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair(
+						"apple_subscription_introductory_offer_schedule.test", "id",
+						"apple_subscription.test", "id"),
+					resource.TestCheckResourceAttr("apple_subscription_introductory_offer_schedule.test", "offers.#", "2"),
+					// Both offers reached Apple in a single PATCH.
+					testAccCheckIntroductoryOfferCount("apple_subscription_introductory_offer_schedule.test", 2),
+				),
+			},
+			{
+				ResourceName:      "apple_subscription_introductory_offer_schedule.test",
+				ImportState:       true,
+				ImportStateIdFunc: testAccSubscriptionParentID("apple_subscription_introductory_offer_schedule.test"),
+				ImportStateCheck:  testAccCheckImportedOfferCount(2),
+			},
+			// The GBR offer changes mode, which Apple cannot do in place: the
+			// old one has to be deleted before the new one is created, since a
+			// territory holds one introductory offer at a time.
+			{
+				Config: testAccSubscriptionIntroductoryOfferScheduleConfig(referenceName, productID, name, true),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("apple_subscription_introductory_offer_schedule.test", "offers.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs("apple_subscription_introductory_offer_schedule.test", "offers.*", map[string]string{
+						"territory_id": "GBR",
+						"offer_mode":   "PAY_UP_FRONT",
+					}),
+					testAccCheckIntroductoryOfferCount("apple_subscription_introductory_offer_schedule.test", 2),
+				),
+			},
+		},
+	})
+}
+
 // testAccSubscriptionIntroductoryOfferConfig adds a USA free trial to a
 // complete subscription, optionally with an end date.
 func testAccSubscriptionIntroductoryOfferConfig(referenceName, productID, name, endDate string) string {
@@ -1051,8 +1099,82 @@ func testAccCheckIntroductoryOfferEndDate(resourceName, want string) resource.Te
 	}
 }
 
+// testAccSubscriptionIntroductoryOfferScheduleConfig prices a subscription in
+// USA and GBR and gives it a free trial in one and a paid offer in the other.
+func testAccSubscriptionIntroductoryOfferScheduleConfig(referenceName, productID, name string, payUpFront bool) string {
+	gbrOffer := `{
+      territory_id      = "GBR"
+      offer_mode        = "PAY_AS_YOU_GO"
+      duration          = "ONE_MONTH"
+      number_of_periods = 2
+      price_point_id    = data.apple_subscription_price_point_equalizations.test.price_point_ids["GBR"]
+    }`
+	if payUpFront {
+		gbrOffer = `{
+      territory_id      = "GBR"
+      offer_mode        = "PAY_UP_FRONT"
+      duration          = "THREE_MONTHS"
+      number_of_periods = 1
+      price_point_id    = data.apple_subscription_price_point_equalizations.test.price_point_ids["GBR"]
+    }`
+	}
+
+	return testAccSubscriptionConfig(referenceName, productID, name, "ONE_MONTH") + fmt.Sprintf(`
+data "apple_subscription_price_points" "test" {
+  subscription_id = apple_subscription.test.id
+  territories     = ["USA"]
+  customer_price  = "0.99"
+  limit           = 1
+}
+
+data "apple_subscription_price_point_equalizations" "test" {
+  price_point_id = data.apple_subscription_price_points.test.price_points[0].id
+  territories    = ["GBR"]
+}
+
+resource "apple_subscription_availability" "test" {
+  subscription_id       = apple_subscription.test.id
+  available_territories = ["USA", "GBR"]
+}
+
+resource "apple_subscription_price_schedule" "test" {
+  subscription_id = apple_subscription.test.id
+
+  prices = [
+    {
+      territory_id   = "USA"
+      price_point_id = data.apple_subscription_price_points.test.price_points[0].id
+    },
+    {
+      territory_id   = "GBR"
+      price_point_id = data.apple_subscription_price_point_equalizations.test.price_point_ids["GBR"]
+    },
+  ]
+
+  depends_on = [apple_subscription_availability.test]
+}
+
+resource "apple_subscription_introductory_offer_schedule" "test" {
+  subscription_id = apple_subscription.test.id
+
+  offers = [
+    {
+      territory_id      = "USA"
+      offer_mode        = "FREE_TRIAL"
+      duration          = "ONE_WEEK"
+      number_of_periods = 1
+    },
+    %[1]s,
+  ]
+
+  depends_on = [apple_subscription_availability.test]
+}
+`, gbrOffer)
+}
+
 // testAccCheckIntroductoryOfferCount asks Apple how many introductory offers
-// the subscription actually carries, rather than trusting state.
+// the subscription actually carries, which is what catches a bulk write Apple
+// committed partially, or an append that left an old offer behind.
 func testAccCheckIntroductoryOfferCount(resourceName string, want int) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, err := testAccStateResource(s, resourceName)
@@ -1074,6 +1196,21 @@ func testAccCheckIntroductoryOfferCount(resourceName string, want int) resource.
 		if len(offers) != want {
 			return fmt.Errorf("subscription %s has %d introductory offers at Apple, want %d",
 				subscriptionID, len(offers), want)
+		}
+
+		return nil
+	}
+}
+
+// testAccCheckImportedOfferCount asserts the shape of an imported schedule.
+func testAccCheckImportedOfferCount(want int) resource.ImportStateCheckFunc {
+	return func(states []*terraform.InstanceState) error {
+		if len(states) != 1 {
+			return fmt.Errorf("imported %d instances, want 1", len(states))
+		}
+
+		if got := states[0].Attributes["offers.#"]; got != fmt.Sprint(want) {
+			return fmt.Errorf("imported schedule has %q offers, want %d", got, want)
 		}
 
 		return nil

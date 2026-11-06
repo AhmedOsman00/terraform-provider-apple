@@ -23,7 +23,19 @@ FEATURES:
   rejected for a free trial, at plan time.
   Only `end_date` changes in place; any other change replaces the offer.
   Import is `<subscription_id>/<offer_id>`.
-  
+
+* **`apple_subscription_introductory_offer_schedule`.** Every introductory
+  offer of a subscription in one resource, the way
+  `apple_subscription_price_schedule` holds every price. New offers are created
+  in a single request, which is the practical way to offer a trial in all 175
+  storefronts. Removing an offer deletes it, and changing an `end_date` updates
+  it in place. Import is the subscription ID, and a subscription that already
+  has offers has to be imported: creating the resource over them is refused,
+  because the write would delete the ones the configuration doesn't match. Do
+  not manage the same subscription with both offer resources: the schedule
+  removes any offer it does not list. `apple terraform export` writes a
+  schedule for every subscription that has offers.
+
 ENHANCEMENTS:
 
 * **Provider: `max_retries` and `request_timeout`.** `max_retries` (default

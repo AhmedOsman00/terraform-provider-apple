@@ -63,8 +63,8 @@ func (c *Client) GetSubscriptionIntroductoryOffer(subscriptionID, territoryID, o
 // SubscriptionIntroductoryOfferInput is one introductory offer to create.
 //
 // It is an input helper rather than a wire type, the way SubscriptionManualPrice
-// is: the request is assembled from it, so callers never build the JSON:API
-// envelope or the optional relationships themselves.
+// is: the single create and the bulk inline create carry the same members in
+// different envelopes, and both are assembled from this.
 type SubscriptionIntroductoryOfferInput struct {
 	TerritoryID     string
 	OfferMode       models.SubscriptionOfferMode
@@ -186,5 +186,70 @@ func (c *Client) DeleteSubscriptionIntroductoryOffer(offerID string, authToken *
 	}
 
 	_, err = c.doRequest(req, authToken)
+	return err
+}
+
+// AddSubscriptionIntroductoryOffers creates several introductory offers in one
+// request.
+//
+// POST /v1/subscriptionIntroductoryOffers takes one offer in one territory, so a
+// free trial in every storefront through it is one request per territory. The
+// bulk form hangs off the subscription, as SetSubscriptionPrices does:
+// PATCH /v1/subscriptions/{id} with an "introductoryOffers" relationship whose
+// new members travel inline in "included".
+//
+// The relationship names only the new offers. Apple treats it as additions,
+// not as the complete set the way it treats "prices": an offer already on the
+// subscription stays without being named, and naming one makes Apple answer
+// 500 "An unexpected error occurred", whatever the new offers are. Both were
+// checked against the live API.
+//
+// Because it adds, this is the one PATCH that is not safe to repeat, so it goes
+// out under the POST retry policy -- see asCreate. The response is the
+// subscription rather than the offers, so it is not decoded: failing on it would
+// report offers Apple has created as a failed write. Read them back through
+// GetSubscriptionIntroductoryOffers.
+func (c *Client) AddSubscriptionIntroductoryOffers(
+	subscriptionID string,
+	offers []SubscriptionIntroductoryOfferInput,
+	authToken *string,
+) error {
+	linkage := make([]models.ResourceData, 0, len(offers))
+
+	included := make([]models.SubscriptionIntroductoryOfferInlineCreate, 0, len(offers))
+	for i, offer := range offers {
+		placeholderID := fmt.Sprintf("${offer%d}", i)
+
+		linkage = append(linkage, models.ResourceData{Type: "subscriptionIntroductoryOffers", ID: placeholderID})
+		included = append(included, models.SubscriptionIntroductoryOfferInlineCreate{
+			Type:          "subscriptionIntroductoryOffers",
+			ID:            placeholderID,
+			Attributes:    offer.attributes(),
+			Relationships: offer.relationships(subscriptionID),
+		})
+	}
+
+	requestData := models.SubscriptionIntroductoryOffersUpdateRequest{
+		Data: models.SubscriptionIntroductoryOffersUpdateData{
+			Type: "subscriptions",
+			ID:   subscriptionID,
+			Relationships: models.SubscriptionIntroductoryOffersUpdateRelationships{
+				IntroductoryOffers: models.ResourceIdentifiers{Data: linkage},
+			},
+		},
+		Included: included,
+	}
+
+	rb, err := json.Marshal(requestData)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/subscriptions/%s", c.HostURL, subscriptionID), strings.NewReader(string(rb)))
+	if err != nil {
+		return err
+	}
+
+	_, err = c.doRequest(asCreate(req), authToken)
 	return err
 }

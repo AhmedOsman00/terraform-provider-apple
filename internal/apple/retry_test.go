@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
 
 const apple500 = `{"errors":[{"status":"500","code":"UNEXPECTED_ERROR","title":"An unexpected error occurred.","detail":"An unexpected error occurred on the server side."}]}`
@@ -125,6 +127,43 @@ func TestRetryPostIsRepeatedOnTooManyRequests(t *testing.T) {
 	if got := calls.Load(); got != 2 {
 		t.Errorf("requests = %d, want 2", got)
 	}
+}
+
+// TestRetryBulkOfferCreateFollowsThePostPolicy covers the one PATCH that is not
+// safe to repeat: it adds offers, so a 500 that arrived after Apple created them
+// must not send them again, while a 429 is refused before Apple acts on it.
+func TestRetryBulkOfferCreateFollowsThePostPolicy(t *testing.T) {
+	offers := []SubscriptionIntroductoryOfferInput{{
+		TerritoryID:     "USA",
+		OfferMode:       models.SubscriptionOfferModeFreeTrial,
+		Duration:        models.SubscriptionOfferDurationOneWeek,
+		NumberOfPeriods: 1,
+	}}
+
+	t.Run("not repeated on a server error", func(t *testing.T) {
+		var calls atomic.Int32
+		srv := scripted(t, &calls, 500, 200)
+
+		err := newRetryTestClient(srv, 4, time.Second).AddSubscriptionIntroductoryOffers("sub-1", offers, nil)
+		if err == nil || !strings.Contains(err.Error(), "status 500") {
+			t.Fatalf("error = %v, want the 500", err)
+		}
+		if got := calls.Load(); got != 1 {
+			t.Errorf("requests = %d, want 1: a 500 may have created the offers", got)
+		}
+	})
+
+	t.Run("repeated on too many requests", func(t *testing.T) {
+		var calls atomic.Int32
+		srv := scripted(t, &calls, 429, 200)
+
+		if err := newRetryTestClient(srv, 4, time.Second).AddSubscriptionIntroductoryOffers("sub-1", offers, nil); err != nil {
+			t.Fatalf("after a 429: %v", err)
+		}
+		if got := calls.Load(); got != 2 {
+			t.Errorf("requests = %d, want 2", got)
+		}
+	})
 }
 
 func TestRetryNeverRepeatsClientErrors(t *testing.T) {
