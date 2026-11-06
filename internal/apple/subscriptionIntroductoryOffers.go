@@ -203,6 +203,9 @@ func (c *Client) DeleteSubscriptionIntroductoryOffer(offerID string, authToken *
 // subscription stays without being named, and naming one makes Apple answer
 // 500 "An unexpected error occurred", whatever the new offers are. Both were
 // checked against the live API.
+//
+// Because it adds, this is the one PATCH that is not safe to repeat, so it goes
+// out under the POST retry policy -- see asCreate.
 func (c *Client) AddSubscriptionIntroductoryOffers(
 	subscriptionID string,
 	offers []SubscriptionIntroductoryOfferInput,
@@ -244,7 +247,7 @@ func (c *Client) AddSubscriptionIntroductoryOffers(
 		return nil, err
 	}
 
-	body, err := c.doRequest(req, authToken)
+	body, err := c.doRequest(asCreate(req), authToken)
 	if err != nil {
 		return nil, err
 	}

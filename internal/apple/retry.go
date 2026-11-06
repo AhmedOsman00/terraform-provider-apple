@@ -32,13 +32,13 @@ import (
 // and the error, not the request, and a timed-out request has no response.
 //
 //   - GET, PATCH and DELETE retry on 429, on 500/502/503/504 and on a timeout
-//     or dropped connection. Every PATCH this client sends is a full set of
-//     attributes or a whole relationship, so repeating one is harmless.
-//   - POST retries on 429 alone. A 429 is refused before Apple acts on it; a
-//     500 or a timeout may land after Apple created the record, and repeating
-//     the create would duplicate it or send a second invitation. Where a
-//     create is known to fail transiently, the caller looks before retrying
-//     itself -- see CreateProfile.
+//     or dropped connection. A PATCH is a full set of attributes or a whole
+//     relationship, so repeating one is harmless, unless asCreate marks it.
+//   - POST retries on 429 alone, as does a request asCreate marks. A 429 is
+//     refused before Apple acts on it; a 500 or a timeout may land after Apple
+//     created the record, and repeating the create would duplicate it or send
+//     a second invitation. Where a create is known to fail transiently, the
+//     caller looks before retrying itself -- see CreateProfile.
 //   - 401 and every other 4xx are never retried: they are answers, not
 //     accidents.
 const (
@@ -171,6 +171,24 @@ func retryBackoff(waitMin, waitMax time.Duration, attempt int, resp *http.Respon
 	}
 
 	return half + rand.N(half+1)
+}
+
+// createRequestKey marks a request that creates records under a method other
+// than POST.
+type createRequestKey struct{}
+
+// asCreate marks a request as one that creates records, so it is sent under the
+// POST policy whatever its method. AddSubscriptionIntroductoryOffers needs it:
+// its PATCH carries new offers inline, and Apple adds them to the ones already
+// there, so repeating it after a 500 or a timeout would create them again.
+func asCreate(req *http.Request) *http.Request {
+	return req.WithContext(context.WithValue(req.Context(), createRequestKey{}, true))
+}
+
+// createsRecords reports whether a request goes under the POST policy.
+func createsRecords(req *http.Request) bool {
+	marked, _ := req.Context().Value(createRequestKey{}).(bool)
+	return marked || req.Method == http.MethodPost
 }
 
 // attemptCounterKey carries a *int through the request context, which

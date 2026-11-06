@@ -486,6 +486,9 @@ func (r *subscriptionIntroductoryOfferScheduleResource) write(ctx context.Contex
 			inputs = append(inputs, introductoryOfferInput(entry))
 		}
 
+		// A 500 or a timeout here may arrive after Apple created the offers, so
+		// a failure has to go through recordCurrent even if nothing else changed.
+		touched = true
 		if _, err := r.client.AddSubscriptionIntroductoryOffers(subscriptionID, inputs, nil); err != nil {
 			addIntroductoryOfferWriteError(diags, subscriptionID, err,
 				fmt.Sprintf("Could not create %d introductory offer(s) for subscription '%s'", len(inputs), subscriptionID))
