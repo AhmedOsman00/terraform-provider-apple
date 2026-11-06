@@ -20,6 +20,14 @@ BUG FIXES:
   `429` only, because a 500 or a timeout may arrive after Apple created the
   record and repeating it would create a second one. `401` and other client
   errors are never retried.
+  
+* **`apple_app_info_localization` adopts a locale Apple already added.**
+  Creating a version localization in a new language can make Apple add the
+  same language to the editable AppInfo, so the first apply with a new language
+  failed with "App Info Localization Already Exists" and asked for an import.
+  Create now updates the existing record to match the configuration instead,
+  as `apple_app_store_version_localization` does, and an update clears an
+  attribute removed from the configuration rather than leaving Apple's value.
 
 * **Importing an `apple_profile` no longer plans its reissue.** The import
   recorded an empty `bundle_id`, `certificates` and `devices`, all of which

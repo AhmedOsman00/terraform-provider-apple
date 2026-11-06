@@ -37,8 +37,15 @@ func (c *Client) GetAppAvailability(appID string) (*models.AppAvailability, erro
 		return nil, err
 	}
 
+	// An app whose availability has never been set answers 404 ("There is no
+	// resource of type 'appAvailabilities'"). Both that and a null data member
+	// are reported as the same error, which SetAppAvailability relies on to
+	// fall back to a POST.
 	body, err := c.doRequest(req, nil)
 	if err != nil {
+		if strings.Contains(err.Error(), "status 404") {
+			return nil, fmt.Errorf("availability not found for app '%s'", appID)
+		}
 		return nil, err
 	}
 
@@ -47,8 +54,6 @@ func (c *Client) GetAppAvailability(appID string) (*models.AppAvailability, erro
 		return nil, err
 	}
 
-	// An app whose availability has never been set answers 200 with a null
-	// data member rather than 404.
 	if response.Data.ID == "" {
 		return nil, fmt.Errorf("availability not found for app '%s'", appID)
 	}
