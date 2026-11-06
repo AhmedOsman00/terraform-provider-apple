@@ -111,7 +111,7 @@ func clientFromEnvironment() (*apple.Client, error) {
 		values["APPLE_APP_STORE_CONNECT_ISSUER_ID"],
 		values["APPLE_APP_STORE_CONNECT_API_KEY"],
 		values["APPLE_APP_STORE_CONNECT_PRIVATE_KEY"],
-		nil,
+		apple.ClientOptions{},
 	)
 }
 

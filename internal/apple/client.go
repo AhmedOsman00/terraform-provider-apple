@@ -21,8 +21,14 @@ import (
 const HostURL string = "https://api.appstoreconnect.apple.com"
 
 type Client struct {
-	HostURL    string
+	HostURL string
+	// HTTPClient carries GET, PATCH and DELETE, and POST too when
+	// WriteHTTPClient is nil. NewClient builds it to retry transient failures
+	// (see retry.go); a plain *http.Client, as tests use, makes one attempt.
 	HTTPClient *http.Client
+	// WriteHTTPClient carries POST, under the narrower policy a create needs:
+	// a 500 or a timeout may arrive after Apple created the record.
+	WriteHTTPClient *http.Client
 	// UploadHTTPClient delivers media file parts to the presigned URLs Apple
 	// hands out for them. It is deliberately not HTTPClient -- see uploads.go.
 	// Left nil, a shared default with its own transport is used.
@@ -32,6 +38,17 @@ type Client struct {
 	KeyID            string
 }
 
+// ClientOptions configures NewClient. The zero value is the default.
+type ClientOptions struct {
+	// Scope restricts the token to named operations; see createToken.
+	Scope []string
+	// MaxRetries is how many times a transient failure is retried. Nil means
+	// DefaultMaxRetries; zero turns retries off.
+	MaxRetries *int
+	// RequestTimeout bounds each attempt. Zero means DefaultRequestTimeout.
+	RequestTimeout time.Duration
+}
+
 // NewClient creates a new Apple API client with a generated JWT token.
 //
 // The token is minted once here and is immutable for the life of the client.
@@ -39,15 +56,26 @@ type Client struct {
 // a single Terraform command: every operation this provider performs is one
 // fast REST call, and `plan` and `apply` run as separate processes that each
 // construct their own client. The signing key is therefore not retained.
-func NewClient(issuerID, keyID, privateKeyPEM string, scope []string) (*Client, error) {
-	token, err := createToken(keyID, issuerID, privateKeyPEM, scope)
+func NewClient(issuerID, keyID, privateKeyPEM string, opts ClientOptions) (*Client, error) {
+	token, err := createToken(keyID, issuerID, privateKeyPEM, opts.Scope)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token: %v", err)
 	}
 
+	maxRetries := DefaultMaxRetries
+	if opts.MaxRetries != nil {
+		maxRetries = *opts.MaxRetries
+	}
+
+	timeout := opts.RequestTimeout
+	if timeout <= 0 {
+		timeout = DefaultRequestTimeout
+	}
+
 	return &Client{
 		HostURL:          HostURL,
-		HTTPClient:       &http.Client{Timeout: 30 * time.Second},
+		HTTPClient:       newAPIHTTPClient(timeout, maxRetries, readRetryPolicy),
+		WriteHTTPClient:  newAPIHTTPClient(timeout, maxRetries, writeRetryPolicy),
 		UploadHTTPClient: newUploadHTTPClient(),
 		Token:            token,
 		IssuerID:         issuerID,
@@ -118,7 +146,26 @@ func (c *Client) doRequest(req *http.Request, authToken *string) ([]byte, error)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	res, err := c.HTTPClient.Do(req)
+	attempts := 0
+	req = req.WithContext(withAttemptCounter(req.Context(), &attempts))
+
+	body, err := c.send(req, &attempts)
+	if err != nil && attempts > 1 {
+		return nil, fmt.Errorf("%w (after %d attempts)", err, attempts)
+	}
+
+	return body, err
+}
+
+// send is one doRequest after the headers are set. attempts is filled in by
+// the retrying client as it goes, and stays zero under a plain one.
+func (c *Client) send(req *http.Request, attempts *int) ([]byte, error) {
+	client := c.HTTPClient
+	if req.Method == http.MethodPost && c.WriteHTTPClient != nil {
+		client = c.WriteHTTPClient
+	}
+
+	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +179,13 @@ func (c *Client) doRequest(req *http.Request, authToken *string) ([]byte, error)
 	// Handle different success status codes
 	if res.StatusCode >= 200 && res.StatusCode < 300 {
 		return body, nil
+	}
+
+	// A DELETE that timed out or met a 5xx may have gone through before the
+	// failure; the retry then finds nothing to delete. Reporting that 404
+	// would fail a destroy that worked.
+	if req.Method == http.MethodDelete && res.StatusCode == http.StatusNotFound && *attempts > 1 {
+		return nil, nil
 	}
 
 	// Prefer Apple's own structured error message when it supplies one.

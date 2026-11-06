@@ -5,9 +5,12 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/app"
@@ -24,9 +27,11 @@ import (
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/territory"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/user"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
@@ -128,6 +133,27 @@ func (p *appleProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp
 					listvalidator.SizeAtMost(10), // Reasonable limit
 				},
 			},
+			"max_retries": schema.Int64Attribute{
+				MarkdownDescription: fmt.Sprintf("How many times a request that failed transiently is retried, "+
+					"with exponential backoff. Defaults to `%d`; `0` turns retries off. "+
+					"Can also be set via the `APPLE_APP_STORE_CONNECT_MAX_RETRIES` environment variable. "+
+					"Reads, updates and deletes are retried on `429`, `500`, `502`, `503` and `504` and on a timeout "+
+					"or dropped connection. A request that creates something is retried on `429` only: a `500` or a "+
+					"timeout may arrive after Apple created the record, and repeating it would create a second one. "+
+					"`401` and other client errors are never retried. A `Retry-After` header is honoured up to 60 seconds.",
+					apple.DefaultMaxRetries),
+				Optional: true,
+				Validators: []validator.Int64{
+					int64validator.Between(0, 10),
+				},
+			},
+			"request_timeout": schema.StringAttribute{
+				MarkdownDescription: fmt.Sprintf("How long one attempt at a request may take, as a Go duration such "+
+					"as `60s` or `2m`. It bounds each attempt rather than the request with its retries. Defaults to `%s`. "+
+					"Can also be set via the `APPLE_APP_STORE_CONNECT_REQUEST_TIMEOUT` environment variable.",
+					apple.DefaultRequestTimeout),
+				Optional: true,
+			},
 		},
 	}
 }
@@ -137,6 +163,9 @@ type appleProviderModel struct {
 	APIKey     types.String `tfsdk:"api_key"`
 	PrivateKey types.String `tfsdk:"private_key"`
 	Scope      types.List   `tfsdk:"scope"`
+
+	MaxRetries     types.Int64  `tfsdk:"max_retries"`
+	RequestTimeout types.String `tfsdk:"request_timeout"`
 }
 
 func (p *appleProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
@@ -244,6 +273,12 @@ func (p *appleProvider) Configure(ctx context.Context, req provider.ConfigureReq
 		return
 	}
 
+	opts := apple.ClientOptions{Scope: scope}
+	p.configureRetries(config, &opts, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Add structured logging context (avoiding sensitive data)
 	ctx = tflog.SetField(ctx, "issuer_id_set", issuerID != "")
 	ctx = tflog.SetField(ctx, "api_key_set", apiKey != "")
@@ -253,7 +288,7 @@ func (p *appleProvider) Configure(ctx context.Context, req provider.ConfigureReq
 	tflog.Debug(ctx, "Creating Apple API client")
 
 	// Create Apple API client
-	client, err := apple.NewClient(issuerID, apiKey, privateKey, scope)
+	client, err := apple.NewClient(issuerID, apiKey, privateKey, opts)
 	if err != nil {
 		// Provide helpful error context based on the error message
 		var errorDetail string
@@ -282,6 +317,46 @@ func (p *appleProvider) Configure(ctx context.Context, req provider.ConfigureReq
 	// Make the Apple client available during DataSource and Resource Configure methods
 	resp.DataSourceData = client
 	resp.ResourceData = client
+}
+
+// configureRetries reads max_retries and request_timeout the way the
+// credentials are read: the environment first, explicit configuration over it.
+func (p *appleProvider) configureRetries(config appleProviderModel, opts *apple.ClientOptions, diags *diag.Diagnostics) {
+	if raw := strings.TrimSpace(os.Getenv("APPLE_APP_STORE_CONNECT_MAX_RETRIES")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 || n > 10 {
+			diags.AddAttributeError(
+				path.Root("max_retries"),
+				"Invalid Maximum Retries",
+				fmt.Sprintf("APPLE_APP_STORE_CONNECT_MAX_RETRIES must be a whole number between 0 and 10, got %q.", raw),
+			)
+		} else {
+			opts.MaxRetries = &n
+		}
+	}
+
+	if !config.MaxRetries.IsNull() && !config.MaxRetries.IsUnknown() {
+		n := int(config.MaxRetries.ValueInt64())
+		opts.MaxRetries = &n
+	}
+
+	timeout, source := strings.TrimSpace(os.Getenv("APPLE_APP_STORE_CONNECT_REQUEST_TIMEOUT")), "APPLE_APP_STORE_CONNECT_REQUEST_TIMEOUT"
+	if !config.RequestTimeout.IsNull() && !config.RequestTimeout.IsUnknown() {
+		timeout, source = config.RequestTimeout.ValueString(), "request_timeout"
+	}
+
+	if timeout != "" {
+		d, err := time.ParseDuration(timeout)
+		if err != nil || d < time.Second {
+			diags.AddAttributeError(
+				path.Root("request_timeout"),
+				"Invalid Request Timeout",
+				fmt.Sprintf("%s must be a Go duration of at least one second, such as \"60s\" or \"2m\", got %q.", source, timeout),
+			)
+			return
+		}
+		opts.RequestTimeout = d
+	}
 }
 
 // DataSources defines the data sources implemented in the provider.
