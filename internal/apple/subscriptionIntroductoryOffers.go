@@ -205,12 +205,15 @@ func (c *Client) DeleteSubscriptionIntroductoryOffer(offerID string, authToken *
 // checked against the live API.
 //
 // Because it adds, this is the one PATCH that is not safe to repeat, so it goes
-// out under the POST retry policy -- see asCreate.
+// out under the POST retry policy -- see asCreate. The response is the
+// subscription rather than the offers, so it is not decoded: failing on it would
+// report offers Apple has created as a failed write. Read them back through
+// GetSubscriptionIntroductoryOffers.
 func (c *Client) AddSubscriptionIntroductoryOffers(
 	subscriptionID string,
 	offers []SubscriptionIntroductoryOfferInput,
 	authToken *string,
-) (*models.Subscription, error) {
+) error {
 	linkage := make([]models.ResourceData, 0, len(offers))
 
 	included := make([]models.SubscriptionIntroductoryOfferInlineCreate, 0, len(offers))
@@ -239,23 +242,14 @@ func (c *Client) AddSubscriptionIntroductoryOffers(
 
 	rb, err := json.Marshal(requestData)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/subscriptions/%s", c.HostURL, subscriptionID), strings.NewReader(string(rb)))
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	body, err := c.doRequest(asCreate(req), authToken)
-	if err != nil {
-		return nil, err
-	}
-
-	response := models.Response[models.Subscription]{}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, err
-	}
-
-	return &response.Data, nil
+	_, err = c.doRequest(asCreate(req), authToken)
+	return err
 }

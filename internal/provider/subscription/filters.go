@@ -277,13 +277,6 @@ func offerPricePoint(offer models.SubscriptionIntroductoryOffer) string {
 	return offer.Relationships.SubscriptionPricePoint.Data.ID
 }
 
-func stringPtrValue(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
 // introductoryOfferMatches reports whether Apple's offer is the one a schedule
 // entry describes.
 //
@@ -310,7 +303,7 @@ func introductoryOfferMatches(entry introductoryOfferValues, offer models.Subscr
 	if entry.PricePointID.ValueString() != offerPricePoint(offer) {
 		return false
 	}
-	if !entry.StartDate.IsNull() && entry.StartDate.ValueString() != stringPtrValue(attributes.StartDate) {
+	if !entry.StartDate.IsNull() && entry.StartDate.ValueString() != stringOrNull(attributes.StartDate).ValueString() {
 		return false
 	}
 	if !entry.TargetSubscriptionPlanType.IsNull() {
@@ -328,11 +321,13 @@ func introductoryOfferMatches(entry introductoryOfferValues, offer models.Subscr
 // An unset start_date matches an offer with any start date, so an entry without
 // one, matched first, can claim the offer a dated entry in the same territory
 // describes, leaving the dated entry to be created again and its offer removed.
+// A start_date outweighs a plan type: it pins one offer in a territory, where a
+// plan type can fit several.
 func constrainedFirst(entries []introductoryOfferValues) []introductoryOfferValues {
 	constraints := func(entry introductoryOfferValues) int {
 		n := 0
 		if !entry.StartDate.IsNull() {
-			n++
+			n += 2
 		}
 		if !entry.TargetSubscriptionPlanType.IsNull() {
 			n++
@@ -345,6 +340,25 @@ func constrainedFirst(entries []introductoryOfferValues) []introductoryOfferValu
 		return constraints(ordered[i]) > constraints(ordered[j])
 	})
 	return ordered
+}
+
+// matchIntroductoryOffer finds the unclaimed offer an entry describes, or -1.
+//
+// An entry with no start_date can fit several offers in a territory. It takes
+// the earliest: Apple dates such an offer the day it was created, so any other
+// that fits is one scheduled behind it, and Apple's listing order says nothing.
+func matchIntroductoryOffer(entry introductoryOfferValues, offers []models.SubscriptionIntroductoryOffer, claimed []bool) int {
+	matched := -1
+	for i, offer := range offers {
+		if claimed[i] || !introductoryOfferMatches(entry, offer) {
+			continue
+		}
+		if matched < 0 ||
+			stringOrNull(offer.Attributes.StartDate).ValueString() < stringOrNull(offers[matched].Attributes.StartDate).ValueString() {
+			matched = i
+		}
+	}
+	return matched
 }
 
 // keptIntroductoryOffer is a schedule entry Apple already holds.
@@ -378,13 +392,7 @@ func planIntroductoryOffers(planned []introductoryOfferValues, existing []models
 	claimed := make([]bool, len(existing))
 
 	for _, entry := range constrainedFirst(planned) {
-		matched := -1
-		for i, offer := range existing {
-			if !claimed[i] && introductoryOfferMatches(entry, offer) {
-				matched = i
-				break
-			}
-		}
+		matched := matchIntroductoryOffer(entry, existing, claimed)
 		if matched < 0 {
 			plan.Create = append(plan.Create, entry)
 			continue
@@ -392,7 +400,7 @@ func planIntroductoryOffers(planned []introductoryOfferValues, existing []models
 
 		claimed[matched] = true
 		offer := existing[matched]
-		changed := entry.EndDate.ValueString() != stringPtrValue(offer.Attributes.EndDate)
+		changed := entry.EndDate.ValueString() != stringOrNull(offer.Attributes.EndDate).ValueString()
 		if entry.EndDate.IsNull() && !managedEndDates[offer.ID] {
 			changed = false
 		}
@@ -496,17 +504,15 @@ func reconcileIntroductoryOffers(state []introductoryOfferValues, reported []mod
 	reconciled := make([]introductoryOfferValues, 0, len(reported))
 
 	for _, entry := range constrainedFirst(state) {
-		for i, offer := range reported {
-			if claimed[i] || !introductoryOfferMatches(entry, offer) {
-				continue
-			}
-			claimed[i] = true
-			if !entry.EndDate.IsNull() {
-				entry.EndDate = stringOrNull(offer.Attributes.EndDate)
-			}
-			reconciled = append(reconciled, entry)
-			break
+		matched := matchIntroductoryOffer(entry, reported, claimed)
+		if matched < 0 {
+			continue
 		}
+		claimed[matched] = true
+		if !entry.EndDate.IsNull() {
+			entry.EndDate = stringOrNull(reported[matched].Attributes.EndDate)
+		}
+		reconciled = append(reconciled, entry)
 	}
 
 	for i, offer := range reported {

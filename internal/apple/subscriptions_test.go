@@ -840,7 +840,7 @@ func TestAddSubscriptionIntroductoryOffersRequestShape(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if _, err := newTestClient(srv).AddSubscriptionIntroductoryOffers("sub-1", []SubscriptionIntroductoryOfferInput{
+	if err := newTestClient(srv).AddSubscriptionIntroductoryOffers("sub-1", []SubscriptionIntroductoryOfferInput{
 		{TerritoryID: "USA", OfferMode: models.SubscriptionOfferModeFreeTrial, Duration: models.SubscriptionOfferDurationOneWeek, NumberOfPeriods: 1},
 		{TerritoryID: "GBR", OfferMode: models.SubscriptionOfferModePayUpFront, Duration: models.SubscriptionOfferDurationThreeMonths, NumberOfPeriods: 1, PricePointID: "point-gbr"},
 	}, nil); err != nil {

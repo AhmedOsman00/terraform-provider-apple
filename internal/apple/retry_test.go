@@ -144,7 +144,7 @@ func TestRetryBulkOfferCreateFollowsThePostPolicy(t *testing.T) {
 		var calls atomic.Int32
 		srv := scripted(t, &calls, 500, 200)
 
-		_, err := newRetryTestClient(srv, 4, time.Second).AddSubscriptionIntroductoryOffers("sub-1", offers, nil)
+		err := newRetryTestClient(srv, 4, time.Second).AddSubscriptionIntroductoryOffers("sub-1", offers, nil)
 		if err == nil || !strings.Contains(err.Error(), "status 500") {
 			t.Fatalf("error = %v, want the 500", err)
 		}
@@ -157,7 +157,7 @@ func TestRetryBulkOfferCreateFollowsThePostPolicy(t *testing.T) {
 		var calls atomic.Int32
 		srv := scripted(t, &calls, 429, 200)
 
-		if _, err := newRetryTestClient(srv, 4, time.Second).AddSubscriptionIntroductoryOffers("sub-1", offers, nil); err != nil {
+		if err := newRetryTestClient(srv, 4, time.Second).AddSubscriptionIntroductoryOffers("sub-1", offers, nil); err != nil {
 			t.Fatalf("after a 429: %v", err)
 		}
 		if got := calls.Load(); got != 2 {

@@ -4,6 +4,7 @@
 package subscription
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
@@ -708,6 +709,49 @@ func TestPlanIntroductoryOffers(t *testing.T) {
 		}
 	})
 
+	t.Run("an undated entry takes the earliest offer it fits", func(t *testing.T) {
+		live := apiOffer("live", "USA", free, week, 1, "")
+		live.Attributes.StartDate = strPtr("2026-10-29")
+		scheduled := apiOffer("scheduled", "USA", free, week, 1, "")
+		scheduled.Attributes.StartDate = strPtr("2027-02-01")
+
+		plan := planIntroductoryOffers(
+			[]introductoryOfferValues{offerEntry("USA", free, week, 1, "")},
+			[]models.SubscriptionIntroductoryOffer{scheduled, live},
+			nil,
+		)
+		if len(plan.Keep) != 1 || plan.Keep[0].ID != "live" {
+			t.Errorf("keep = %+v, want the live offer", plan.Keep)
+		}
+		if len(plan.Remove) != 1 || plan.Remove[0] != "scheduled" {
+			t.Errorf("remove = %v, want the scheduled offer", plan.Remove)
+		}
+	})
+
+	t.Run("a start date is matched before a plan type", func(t *testing.T) {
+		monthly := models.SubscriptionPlanType("MONTHLY")
+		first := apiOffer("first", "USA", free, week, 1, "")
+		first.Attributes.StartDate = strPtr("2026-10-29")
+		first.Attributes.TargetSubscriptionPlanType = &monthly
+		second := apiOffer("second", "USA", free, week, 1, "")
+		second.Attributes.StartDate = strPtr("2027-02-01")
+		second.Attributes.TargetSubscriptionPlanType = &monthly
+
+		typed := offerEntry("USA", free, week, 1, "")
+		typed.TargetSubscriptionPlanType = types.StringValue("MONTHLY")
+		dated := offerEntry("USA", free, week, 1, "")
+		dated.StartDate = types.StringValue("2026-10-29")
+
+		plan := planIntroductoryOffers(
+			[]introductoryOfferValues{typed, dated},
+			[]models.SubscriptionIntroductoryOffer{first, second},
+			nil,
+		)
+		if len(plan.Keep) != 2 || len(plan.Create) != 0 || len(plan.Remove) != 0 {
+			t.Errorf("plan = %+v, want both offers kept", plan)
+		}
+	})
+
 	t.Run("each offer satisfies one entry", func(t *testing.T) {
 		existing := []models.SubscriptionIntroductoryOffer{apiOffer("usa", "USA", free, week, 1, "")}
 		planned := []introductoryOfferValues{
@@ -759,6 +803,23 @@ func TestReconcileIntroductoryOffers(t *testing.T) {
 	}
 	if imported[0].StartDate.ValueString() != "2026-10-29" {
 		t.Errorf("imported start_date = %s, want Apple's", imported[0].StartDate)
+	}
+}
+
+func TestIntroductoryOfferGone(t *testing.T) {
+	tests := []struct {
+		err  error
+		want bool
+	}{
+		{errors.New("API error (status 404): Not Found - no such resource"), true},
+		{errors.New("HTTP error: status 404, body: "), true},
+		{errors.New("API error (status 500): Unexpected"), false},
+		{errors.New(`Get "https://api.appstoreconnect.apple.com/v1/subscriptions/6740404123/introductoryOffers": context deadline exceeded`), false},
+	}
+	for _, tt := range tests {
+		if got := introductoryOfferGone(tt.err); got != tt.want {
+			t.Errorf("introductoryOfferGone(%q) = %v, want %v", tt.err, got, tt.want)
+		}
 	}
 }
 

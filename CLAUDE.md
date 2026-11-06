@@ -627,13 +627,14 @@ cross-variable validation.
 - **`apple_subscription_introductory_offer_schedule`**: the bulk counterpart,
   the way `apple_subscription_price_schedule` is for prices. `id` mirrors
   `subscription_id` and the import ID is the subscription ID. The nested
-  offers carry no computed attributes, for the price schedule's reason. Four
+  offers carry no computed attributes, for the price schedule's reason. Seven
   things shape it:
   - Offers are matched to Apple's records by content (`introductoryOfferMatches`
     and `planIntroductoryOffers` in `filters.go`). Territory, mode, duration,
     periods and price point always count. `start_date` and plan type count only
     when configured, and `end_date` never counts, because it is the field that
-    can change.
+    can change. An entry with no `start_date` that fits several offers takes the
+    earliest (`matchIntroductoryOffer`), since Apple's listing order means nothing.
   - A write **deletes the unmatched offers first**, since a territory cannot hold
     two at once. It then `PATCH`es changed end dates one by one, and creates
     everything new in **one** `PATCH /v1/subscriptions/{id}` carrying the offers

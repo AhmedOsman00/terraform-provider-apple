@@ -60,9 +60,10 @@ func (r *subscriptionIntroductoryOfferScheduleResource) Schema(_ context.Context
 			"set). A change to any of those removes the old offer and creates a new one; a change to " +
 			"`end_date` alone updates the offer in place.\n\n" +
 			"Apple records a start date on every offer, the day it was created when none was given, and " +
-			"an import adopts it. After importing, set each `start_date` to Apple's value, or the first " +
-			"plan proposes removing them — an update that sends no requests, since an unset start date " +
-			"matches any.\n\n" +
+			"reports a plan type, and an import adopts both. After importing, set each `start_date` and " +
+			"`target_subscription_plan_type` to Apple's value, or the first plan proposes removing them — " +
+			"an update that changes nothing at Apple, since an unset value matches any. An imported " +
+			"`end_date` is different: leaving it out of the configuration clears it at Apple.\n\n" +
 			"~> **An `apple_subscription_availability` has to exist first.** Apple refuses an offer on a " +
 			"subscription with none. The availability does not have to list the offers' territories, and " +
 			"the subscription needs no price. Nothing in an offer references the availability, so declare " +
@@ -251,13 +252,14 @@ func (r *subscriptionIntroductoryOfferScheduleResource) Create(ctx context.Conte
 		return
 	}
 
-	if touched := r.write(ctx, &plan, nil, &resp.Diagnostics); resp.Diagnostics.HasError() {
-		if touched {
-			r.recordCurrent(ctx, plan, nil, &resp.State, &resp.Diagnostics)
-		}
+	// A 500 or a timeout may arrive after Apple created the offers, so a failure
+	// still has to record what Apple holds.
+	if r.createOffers(ctx, subscriptionID, plan.Offers, &resp.Diagnostics); resp.Diagnostics.HasError() {
+		r.recordCurrent(ctx, plan, nil, &resp.State, &resp.Diagnostics)
 		return
 	}
 
+	plan.ID = types.StringValue(subscriptionID)
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 }
@@ -278,7 +280,7 @@ func (r *subscriptionIntroductoryOfferScheduleResource) Read(ctx context.Context
 
 	offers, err := r.client.GetSubscriptionIntroductoryOffers(subscriptionID, nil)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "404") {
+		if introductoryOfferGone(err) {
 			tflog.Info(ctx, "Subscription not found, removing introductory offer schedule from state")
 			resp.State.RemoveResource(ctx)
 			return
@@ -324,7 +326,7 @@ func (r *subscriptionIntroductoryOfferScheduleResource) Update(ctx context.Conte
 		return
 	}
 
-	if touched := r.write(ctx, &plan, prior.Offers, &resp.Diagnostics); resp.Diagnostics.HasError() {
+	if touched := r.write(ctx, plan, prior.Offers, &resp.Diagnostics); resp.Diagnostics.HasError() {
 		if touched {
 			r.recordCurrent(ctx, plan, prior.Offers, &resp.State, &resp.Diagnostics)
 		}
@@ -350,7 +352,7 @@ func (r *subscriptionIntroductoryOfferScheduleResource) Delete(ctx context.Conte
 
 	offers, err := r.client.GetSubscriptionIntroductoryOffers(subscriptionID, nil)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "404") {
+		if introductoryOfferGone(err) {
 			tflog.Info(ctx, "Subscription already deleted, taking its introductory offers with it")
 			return
 		}
@@ -427,14 +429,14 @@ func (r *subscriptionIntroductoryOfferScheduleResource) ImportState(ctx context.
 // write brings Apple's offers in line with the plan, and reports whether it
 // changed anything at Apple before any error it hit.
 //
-// prior is the state the plan replaces, nil on create. It decides which end
-// dates a write may clear: see planIntroductoryOffers.
+// prior is the state the plan replaces. It decides which end dates a write may
+// clear: see planIntroductoryOffers.
 //
 // Offers no longer configured are deleted first: a territory holds one
 // introductory offer at a time, so a replacement offer in the same territory
 // would be refused while the old one still existed. End dates are then changed
 // in place, and whatever is new is created in one PATCH.
-func (r *subscriptionIntroductoryOfferScheduleResource) write(ctx context.Context, plan *subscriptionIntroductoryOfferScheduleModel, prior []introductoryOfferValues, diags *diag.Diagnostics) (touched bool) {
+func (r *subscriptionIntroductoryOfferScheduleResource) write(ctx context.Context, plan subscriptionIntroductoryOfferScheduleModel, prior []introductoryOfferValues, diags *diag.Diagnostics) (touched bool) {
 	subscriptionID := plan.SubscriptionID.ValueString()
 	ctx = tflog.SetField(ctx, "subscription_id", subscriptionID)
 
@@ -481,24 +483,26 @@ func (r *subscriptionIntroductoryOfferScheduleResource) write(ctx context.Contex
 	}
 
 	if len(changes.Create) > 0 {
-		inputs := make([]apple.SubscriptionIntroductoryOfferInput, 0, len(changes.Create))
-		for _, entry := range changes.Create {
-			inputs = append(inputs, introductoryOfferInput(entry))
-		}
-
 		// A 500 or a timeout here may arrive after Apple created the offers, so
 		// a failure has to go through recordCurrent even if nothing else changed.
-		touched = true
-		if _, err := r.client.AddSubscriptionIntroductoryOffers(subscriptionID, inputs, nil); err != nil {
-			addIntroductoryOfferWriteError(diags, subscriptionID, err,
-				fmt.Sprintf("Could not create %d introductory offer(s) for subscription '%s'", len(inputs), subscriptionID))
-			tflog.Error(ctx, "Failed to write subscription introductory offer schedule", map[string]interface{}{"error": err.Error()})
-			return touched
-		}
+		r.createOffers(ctx, subscriptionID, changes.Create, diags)
 	}
 
-	plan.ID = types.StringValue(subscriptionID)
 	return true
+}
+
+// createOffers creates the entries in one request.
+func (r *subscriptionIntroductoryOfferScheduleResource) createOffers(ctx context.Context, subscriptionID string, entries []introductoryOfferValues, diags *diag.Diagnostics) {
+	inputs := make([]apple.SubscriptionIntroductoryOfferInput, 0, len(entries))
+	for _, entry := range entries {
+		inputs = append(inputs, introductoryOfferInput(entry))
+	}
+
+	if err := r.client.AddSubscriptionIntroductoryOffers(subscriptionID, inputs, nil); err != nil {
+		addIntroductoryOfferWriteError(diags, subscriptionID, err,
+			fmt.Sprintf("Could not create %d introductory offer(s) for subscription '%s'", len(inputs), subscriptionID))
+		tflog.Error(ctx, "Failed to write subscription introductory offer schedule", map[string]interface{}{"error": err.Error()})
+	}
 }
 
 // recordCurrent writes what Apple holds after a write that failed partway.
@@ -549,7 +553,7 @@ func (r *subscriptionIntroductoryOfferScheduleResource) deleteOffer(id string, d
 	if err == nil {
 		return true
 	}
-	if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "404") {
+	if introductoryOfferGone(err) {
 		return false
 	}
 
@@ -558,4 +562,13 @@ func (r *subscriptionIntroductoryOfferScheduleResource) deleteOffer(id string, d
 		fmt.Sprintf("Could not delete introductory offer '%s': %s", id, err.Error()),
 	)
 	return false
+}
+
+// introductoryOfferGone reports whether Apple answered that the record does not
+// exist. It matches the status rather than a bare "404": a transport error
+// quotes the request URL, and a subscription or offer ID in it can hold those
+// digits, which would pass a timeout off as a deletion.
+func introductoryOfferGone(err error) bool {
+	message := err.Error()
+	return strings.Contains(message, "not found") || strings.Contains(message, "status 404")
 }
