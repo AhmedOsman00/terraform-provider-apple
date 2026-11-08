@@ -277,6 +277,184 @@ func offerPricePoint(offer models.SubscriptionIntroductoryOffer) string {
 	return offer.Relationships.SubscriptionPricePoint.Data.ID
 }
 
+// introductoryOfferMatches reports whether Apple's offer is the one a schedule
+// entry describes.
+//
+// Everything Apple refuses to change in place has to agree. start_date and
+// target_subscription_plan_type take part only when configured, because Apple
+// may report a value for either on an offer that never named one. end_date is
+// left out: it is the one attribute an existing offer can change, so a
+// different end date is an update to this offer rather than another offer.
+func introductoryOfferMatches(entry introductoryOfferValues, offer models.SubscriptionIntroductoryOffer) bool {
+	attributes := offer.Attributes
+
+	if entry.TerritoryID.ValueString() != offerTerritory(offer) {
+		return false
+	}
+	if attributes.OfferMode == nil || entry.OfferMode.ValueString() != string(*attributes.OfferMode) {
+		return false
+	}
+	if attributes.Duration == nil || entry.Duration.ValueString() != string(*attributes.Duration) {
+		return false
+	}
+	if attributes.NumberOfPeriods == nil || entry.NumberOfPeriods.ValueInt64() != int64(*attributes.NumberOfPeriods) {
+		return false
+	}
+	if entry.PricePointID.ValueString() != offerPricePoint(offer) {
+		return false
+	}
+	if !entry.StartDate.IsNull() && entry.StartDate.ValueString() != stringOrNull(attributes.StartDate).ValueString() {
+		return false
+	}
+	if !entry.TargetSubscriptionPlanType.IsNull() {
+		if attributes.TargetSubscriptionPlanType == nil ||
+			entry.TargetSubscriptionPlanType.ValueString() != string(*attributes.TargetSubscriptionPlanType) {
+			return false
+		}
+	}
+	return true
+}
+
+// constrainedFirst orders entries so that those naming a start_date or plan type
+// are matched before those that leave them unset.
+//
+// An unset start_date matches an offer with any start date, so an entry without
+// one, matched first, can claim the offer a dated entry in the same territory
+// describes, leaving the dated entry to be created again and its offer removed.
+// A start_date outweighs a plan type: it pins one offer in a territory, where a
+// plan type can fit several.
+func constrainedFirst(entries []introductoryOfferValues) []introductoryOfferValues {
+	constraints := func(entry introductoryOfferValues) int {
+		n := 0
+		if !entry.StartDate.IsNull() {
+			n += 2
+		}
+		if !entry.TargetSubscriptionPlanType.IsNull() {
+			n++
+		}
+		return n
+	}
+
+	ordered := append([]introductoryOfferValues(nil), entries...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return constraints(ordered[i]) > constraints(ordered[j])
+	})
+	return ordered
+}
+
+// matchIntroductoryOffer finds the unclaimed offer an entry describes, or -1.
+//
+// An entry with no start_date can fit several offers in a territory. It takes
+// the earliest: Apple dates such an offer the day it was created, so any other
+// that fits is one scheduled behind it, and Apple's listing order says nothing.
+func matchIntroductoryOffer(entry introductoryOfferValues, offers []models.SubscriptionIntroductoryOffer, claimed []bool) int {
+	matched := -1
+	for i, offer := range offers {
+		if claimed[i] || !introductoryOfferMatches(entry, offer) {
+			continue
+		}
+		if matched < 0 ||
+			stringOrNull(offer.Attributes.StartDate).ValueString() < stringOrNull(offers[matched].Attributes.StartDate).ValueString() {
+			matched = i
+		}
+	}
+	return matched
+}
+
+// keptIntroductoryOffer is a schedule entry Apple already holds.
+type keptIntroductoryOffer struct {
+	ID             string
+	Entry          introductoryOfferValues
+	EndDateChanged bool
+}
+
+// introductoryOfferPlan is what a schedule write has to do.
+type introductoryOfferPlan struct {
+	Keep   []keptIntroductoryOffer
+	Remove []string
+	Create []introductoryOfferValues
+}
+
+// planIntroductoryOffers matches planned entries against the offers Apple
+// holds, one for one.
+//
+// Each existing offer can satisfy at most one entry, so two identical entries
+// need two offers. An existing offer no entry claims is removed; an entry no
+// offer satisfies is created.
+//
+// managedEndDates names the offers whose end date state already held. An entry
+// with no end_date clears an offer's end date only when it is one of those:
+// Read does not adopt an end date the configuration never set, so one set in
+// App Store Connect is invisible to the plan, and clearing it on an unrelated
+// write would change something the plan never showed.
+func planIntroductoryOffers(planned []introductoryOfferValues, existing []models.SubscriptionIntroductoryOffer, managedEndDates map[string]bool) introductoryOfferPlan {
+	var plan introductoryOfferPlan
+	claimed := make([]bool, len(existing))
+
+	for _, entry := range constrainedFirst(planned) {
+		matched := matchIntroductoryOffer(entry, existing, claimed)
+		if matched < 0 {
+			plan.Create = append(plan.Create, entry)
+			continue
+		}
+
+		claimed[matched] = true
+		offer := existing[matched]
+		changed := entry.EndDate.ValueString() != stringOrNull(offer.Attributes.EndDate).ValueString()
+		if entry.EndDate.IsNull() && !managedEndDates[offer.ID] {
+			changed = false
+		}
+		plan.Keep = append(plan.Keep, keptIntroductoryOffer{
+			ID:             offer.ID,
+			Entry:          entry,
+			EndDateChanged: changed,
+		})
+	}
+
+	for i, offer := range existing {
+		if !claimed[i] {
+			plan.Remove = append(plan.Remove, offer.ID)
+		}
+	}
+
+	return plan
+}
+
+// managedEndDateOffers names the existing offers whose end date the prior
+// state held, which are the only ones a write may clear.
+func managedEndDateOffers(prior []introductoryOfferValues, existing []models.SubscriptionIntroductoryOffer) map[string]bool {
+	managed := map[string]bool{}
+	for _, kept := range planIntroductoryOffers(prior, existing, nil).Keep {
+		if !kept.Entry.EndDate.IsNull() {
+			managed[kept.ID] = true
+		}
+	}
+	return managed
+}
+
+// pendingEndDates returns the planned entries with Apple's end date restored
+// on each one whose clear has not happened yet: an entry with no end_date,
+// matched to an offer whose end date prior state held, that Apple still
+// reports with one. Reconciling against the result records those dates rather
+// than the null the plan asked for.
+func pendingEndDates(planned, prior []introductoryOfferValues, offers []models.SubscriptionIntroductoryOffer) []introductoryOfferValues {
+	endDates := make(map[string]*string, len(offers))
+	for _, offer := range offers {
+		endDates[offer.ID] = offer.Attributes.EndDate
+	}
+
+	changes := planIntroductoryOffers(planned, offers, managedEndDateOffers(prior, offers))
+	entries := make([]introductoryOfferValues, 0, len(planned))
+	for _, kept := range changes.Keep {
+		entry := kept.Entry
+		if kept.EndDateChanged && entry.EndDate.IsNull() {
+			entry.EndDate = stringOrNull(endDates[kept.ID])
+		}
+		entries = append(entries, entry)
+	}
+	return append(entries, changes.Create...)
+}
+
 // introductoryOfferEntryFromAPI records an offer with Apple's own values, as an
 // import does. A free trial's price point is null rather than "".
 func introductoryOfferEntryFromAPI(offer models.SubscriptionIntroductoryOffer) introductoryOfferValues {
@@ -311,6 +489,39 @@ func introductoryOfferEntryFromAPI(offer models.SubscriptionIntroductoryOffer) i
 		entry.TargetSubscriptionPlanType = types.StringValue(string(*attributes.TargetSubscriptionPlanType))
 	}
 	return entry
+}
+
+// reconcileIntroductoryOffers matches Apple's offers against what state holds.
+//
+// An entry state already knows about is kept as configured, the way
+// reconcileSchedulePrices keeps a price, except that a configured end_date is
+// refreshed: it is the one attribute that can change in place, so a date
+// changed in App Store Connect shows as drift. An offer Apple reports that state
+// does not know about is added with Apple's values, so an offer created by hand
+// surfaces rather than disappearing.
+func reconcileIntroductoryOffers(state []introductoryOfferValues, reported []models.SubscriptionIntroductoryOffer) []introductoryOfferValues {
+	claimed := make([]bool, len(reported))
+	reconciled := make([]introductoryOfferValues, 0, len(reported))
+
+	for _, entry := range constrainedFirst(state) {
+		matched := matchIntroductoryOffer(entry, reported, claimed)
+		if matched < 0 {
+			continue
+		}
+		claimed[matched] = true
+		if !entry.EndDate.IsNull() {
+			entry.EndDate = stringOrNull(reported[matched].Attributes.EndDate)
+		}
+		reconciled = append(reconciled, entry)
+	}
+
+	for i, offer := range reported {
+		if !claimed[i] {
+			reconciled = append(reconciled, introductoryOfferEntryFromAPI(offer))
+		}
+	}
+
+	return reconciled
 }
 
 // introductoryOfferInput converts an offer's values to the client's input.

@@ -819,3 +819,74 @@ func TestUpdateSubscriptionIntroductoryOfferEndDateSendsNull(t *testing.T) {
 		t.Errorf("body = %s, want an explicit null endDate", raw)
 	}
 }
+
+// TestAddSubscriptionIntroductoryOffersRequestShape pins the bulk offer write:
+// the relationship names only placeholders, each resolving to an included
+// member. Naming an offer that already exists makes Apple answer 500.
+func TestAddSubscriptionIntroductoryOffersRequestShape(t *testing.T) {
+	var (
+		body   map[string]any
+		method string
+		path   string
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path = r.Method, r.URL.Path
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding request body: %s", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":{"type":"subscriptions","id":"sub-1","attributes":{}}}`)
+	}))
+	defer srv.Close()
+
+	if err := newTestClient(srv).AddSubscriptionIntroductoryOffers("sub-1", []SubscriptionIntroductoryOfferInput{
+		{TerritoryID: "USA", OfferMode: models.SubscriptionOfferModeFreeTrial, Duration: models.SubscriptionOfferDurationOneWeek, NumberOfPeriods: 1},
+		{TerritoryID: "GBR", OfferMode: models.SubscriptionOfferModePayUpFront, Duration: models.SubscriptionOfferDurationThreeMonths, NumberOfPeriods: 1, PricePointID: "point-gbr"},
+	}, nil); err != nil {
+		t.Fatalf("AddSubscriptionIntroductoryOffers: %s", err)
+	}
+
+	if method != "PATCH" || path != "/v1/subscriptions/sub-1" {
+		t.Errorf("request = %s %s, want PATCH /v1/subscriptions/sub-1", method, path)
+	}
+
+	data, _ := body["data"].(map[string]any)
+	if _, present := data["attributes"]; present {
+		t.Errorf("attributes member sent on the subscription: %v", data["attributes"])
+	}
+	relationships, _ := data["relationships"].(map[string]any)
+	offersRel, _ := relationships["introductoryOffers"].(map[string]any)
+	linkage, _ := offersRel["data"].([]any)
+
+	var ids []string
+	for _, member := range linkage {
+		entry, _ := member.(map[string]any)
+		if entry["type"] != "subscriptionIntroductoryOffers" {
+			t.Errorf("linkage type = %v", entry["type"])
+		}
+		ids = append(ids, fmt.Sprint(entry["id"]))
+	}
+	if want := "${offer0},${offer1}"; strings.Join(ids, ",") != want {
+		t.Errorf("linkage = %v, want %s", ids, want)
+	}
+
+	included, _ := body["included"].([]any)
+	if len(included) != 2 {
+		t.Fatalf("got %d included members, want 2", len(included))
+	}
+	for i, member := range included {
+		entry, _ := member.(map[string]any)
+		if want := fmt.Sprintf("${offer%d}", i); entry["id"] != want {
+			t.Errorf("included %d id = %v, want %s", i, entry["id"], want)
+		}
+		rels, _ := entry["relationships"].(map[string]any)
+		if _, ok := rels["subscription"]; !ok {
+			t.Errorf("included %d is missing the subscription relationship", i)
+		}
+		_, hasPoint := rels["subscriptionPricePoint"]
+		if hasPoint != (i == 1) {
+			t.Errorf("included %d subscriptionPricePoint present = %v", i, hasPoint)
+		}
+	}
+}

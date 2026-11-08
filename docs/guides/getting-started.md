@@ -367,6 +367,8 @@ them. Anything whose parent cannot be read back takes a composite ID:
 | `apple_subscription_price` | `<subscription_id>/<price_id>` |
 | `apple_subscription_price_schedule` | `<subscription_id>` |
 | `apple_subscription_availability` | `<subscription_id>` |
+| `apple_subscription_introductory_offer` | `<subscription_id>/<offer_id>` |
+| `apple_subscription_introductory_offer_schedule` | `<subscription_id>` |
 | `apple_subscription_review_screenshot` | `<subscription_id>` |
 | `apple_in_app_purchase` | `<app_id>/<in_app_purchase_id>` |
 | `apple_in_app_purchase_localization` | Apple ID, or `<in_app_purchase_id>/<localization_id>` |
