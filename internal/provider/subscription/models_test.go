@@ -37,11 +37,11 @@ func TestLocalizationLimitsMatchAppStoreConnect(t *testing.T) {
 		{"name at 35", GetLocalizationNameValidator(), strings.Repeat("a", 35), true},
 		{"name at 36", GetLocalizationNameValidator(), strings.Repeat("a", 36), false},
 		{"name empty", GetLocalizationNameValidator(), "", false},
-		{"description at 49, as Apple stores it", GetDescriptionValidator(), "Your own dedicated IP for banking and work logins", true},
-		{"description at 55", GetDescriptionValidator(), strings.Repeat("a", 55), true},
-		{"description at 56", GetDescriptionValidator(), strings.Repeat("a", 56), false},
-		{"description of 55 multi-byte characters", GetDescriptionValidator(), strings.Repeat("ü", 55), true},
-		{"description empty", GetDescriptionValidator(), "", false},
+		{"description at 49, as Apple stores it", GetLocalizationDescriptionValidator(), "Your own dedicated IP for banking and work logins", true},
+		{"description at 55", GetLocalizationDescriptionValidator(), strings.Repeat("a", 55), true},
+		{"description at 56", GetLocalizationDescriptionValidator(), strings.Repeat("a", 56), false},
+		{"description of 55 multi-byte characters", GetLocalizationDescriptionValidator(), strings.Repeat("ü", 55), true},
+		{"description empty", GetLocalizationDescriptionValidator(), "", false},
 	}
 
 	for _, tt := range tests {

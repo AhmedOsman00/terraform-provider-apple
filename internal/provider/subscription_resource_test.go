@@ -61,7 +61,10 @@ func testAccSubscriptionProductID() string {
 // its subscription yet. That is a weaker constraint than the one on product
 // identifiers, which Apple never releases at all, but it needs the same fix.
 //
-// Names are capped at 30 characters, so base must leave room for " " plus six.
+// The names this is used for (apple_subscription and apple_in_app_purchase)
+// are capped at 30 characters, so base must leave room for " " plus six. A
+// subscription localization's display name allows 35, but nothing here
+// depends on that.
 func testAccProductName(base string) string {
 	return fmt.Sprintf("%s %s", base, acctest.RandString(6))
 }
@@ -446,6 +449,42 @@ resource "apple_subscription_localization" "test" {
 			})
 		})
 	}
+}
+
+// TestAccSubscriptionLocalizationResource_limits pins which validators the
+// localization's schema uses, which models_test.go cannot: it calls the
+// validator functions directly, so it would still pass if the resource went
+// back to the 30-character GetNameValidator. The limit in each message is what
+// identifies the validator. Every step is rejected at plan time, so this
+// creates nothing and needs no credentials.
+func TestAccSubscriptionLocalizationResource_limits(t *testing.T) {
+	config := func(name, description string) string {
+		return fmt.Sprintf(`
+resource "apple_subscription_localization" "test" {
+  subscription_id = "6739472901"
+  locale          = "en-US"
+  name            = %q
+  description     = %q
+}
+`, name, description)
+	}
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      config(strings.Repeat("a", 36), "Valid"),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`Attribute name UTF-8 character count must be between 1 and 35`),
+			},
+			{
+				// Multi-byte, so a byte count would reject it far earlier.
+				Config:      config("Valid", strings.Repeat("ü", 56)),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`Attribute description UTF-8 character count must be\s+between 1 and 55`),
+			},
+		},
+	})
 }
 
 // --- configurations ---
