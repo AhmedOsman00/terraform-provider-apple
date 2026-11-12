@@ -46,6 +46,13 @@ ENHANCEMENTS:
 
 BUG FIXES:
 
+* **`apple_subscription_localization` accepts App Store Connect's own
+  limits.** `name` was capped at 30 characters and `description` at 45, but
+  App Store Connect allows 35 and 55 for a subscription's display name and
+  description, so a localization made in the web UI could fail validation on
+  import or on the first plan. The 45-character limit is the in-app purchase
+  one; `apple_in_app_purchase_localization` keeps it.
+
 * **Transient App Store Connect failures no longer fail the run.** Apple
   answers an occasional request with a 500, or stalls it past the 30-second
   timeout, and every such failure failed the whole plan or apply — on a

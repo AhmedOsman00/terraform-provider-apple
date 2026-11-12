@@ -372,12 +372,25 @@ func GetReferenceNameValidator() []validator.String {
 	}
 }
 
-// GetDescriptionValidator returns validators for localization descriptions.
+// GetLocalizationNameValidator returns validators for a subscription
+// localization's display name.
 //
-// Counted in characters, not bytes -- see GetNameValidator.
+// App Store Connect allows 35 characters here, more than the 30 of
+// GetNameValidator. Counted in characters, not bytes -- see GetNameValidator.
+func GetLocalizationNameValidator() []validator.String {
+	return []validator.String{
+		stringvalidator.UTF8LengthBetween(1, 35),
+	}
+}
+
+// GetDescriptionValidator returns validators for subscription localization
+// descriptions.
+//
+// App Store Connect allows 55 characters, not the 45 of an in-app purchase
+// description. Counted in characters, not bytes -- see GetNameValidator.
 func GetDescriptionValidator() []validator.String {
 	return []validator.String{
-		stringvalidator.UTF8LengthBetween(1, 45),
+		stringvalidator.UTF8LengthBetween(1, 55),
 	}
 }
 

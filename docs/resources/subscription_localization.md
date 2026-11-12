@@ -61,12 +61,12 @@ resource "apple_subscription_localization" "pro_monthly_ar" {
 ### Required
 
 - `locale` (String) The App Store locale this localization applies to, for example `en-US`, `ar-SA` or `es-MX`. Apple permits only one localization per locale per subscription. Cannot be changed after creation — the locale identifies the record, and Apple's update request has no locale member.
-- `name` (String) The subscription name customers see in this locale. Limited to 30 characters. Can be updated in place, though a change on an approved subscription sends it back for review.
+- `name` (String) The subscription name customers see in this locale. Limited to 35 characters. Can be updated in place, though a change on an approved subscription sends it back for review.
 - `subscription_id` (String) The ID of the `apple_subscription` this localization describes. Cannot be changed after creation.
 
 ### Optional
 
-- `description` (String) The subscription description customers see in this locale. Limited to 45 characters. Optional, but Apple's review expects one on anything customer-facing. Can be updated in place.
+- `description` (String) The subscription description customers see in this locale. Limited to 55 characters. Optional, but Apple's review expects one on anything customer-facing. Can be updated in place.
 
 ### Read-Only
 

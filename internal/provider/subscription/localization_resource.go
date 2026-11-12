@@ -77,14 +77,14 @@ func (r *subscriptionLocalizationResource) Schema(_ context.Context, _ resource.
 				},
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "The subscription name customers see in this locale. Limited to 30 characters. " +
+				MarkdownDescription: "The subscription name customers see in this locale. Limited to 35 characters. " +
 					"Can be updated in place, though a change on an approved subscription sends it back for review.",
 				Required:   true,
-				Validators: GetNameValidator(),
+				Validators: GetLocalizationNameValidator(),
 			},
 			"description": schema.StringAttribute{
 				MarkdownDescription: "The subscription description customers see in this locale. Limited to " +
-					"45 characters. Optional, but Apple's review expects one on anything customer-facing. " +
+					"55 characters. Optional, but Apple's review expects one on anything customer-facing. " +
 					"Can be updated in place.",
 				Optional:   true,
 				Validators: GetDescriptionValidator(),
