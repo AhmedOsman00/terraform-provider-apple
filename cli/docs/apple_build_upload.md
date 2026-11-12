@@ -21,7 +21,7 @@ apple build upload PATH [flags]
 
 ```
       --bundle-id string    the app's bundle ID (env APPLE_BUNDLE_ID)
-  -h, --help                help for upload
+  -h, --help[=true|false]   help for upload
       --interval duration   how often to ask (env APPLE_INTERVAL) (default 15s)
       --platform string     IOS, MAC_OS, TV_OS or VISION_OS (env APPLE_PLATFORM) (default "IOS")
       --timeout duration    give up waiting for Apple's checks after this long (env APPLE_TIMEOUT) (default 20m0s)
@@ -30,7 +30,7 @@ apple build upload PATH [flags]
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

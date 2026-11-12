@@ -27,14 +27,14 @@ apple build verify PATH [flags]
       --build string              the CFBundleVersion to expect (env APPLE_BUILD)
       --bundle-id string          the CFBundleIdentifier to expect (env APPLE_BUNDLE_ID)
       --entitlement stringArray   an entitlement to expect, as KEY=VALUE; repeatable (env APPLE_ENTITLEMENT)
-  -h, --help                      help for verify
+  -h, --help[=true|false]         help for verify
       --version string            the CFBundleShortVersionString to expect (env APPLE_VERSION)
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

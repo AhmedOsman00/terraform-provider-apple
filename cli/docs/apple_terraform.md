@@ -5,13 +5,13 @@ Write Terraform configuration for what the account already holds
 ### Options
 
 ```
-  -h, --help   help for terraform
+  -h, --help[=true|false]   help for terraform
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

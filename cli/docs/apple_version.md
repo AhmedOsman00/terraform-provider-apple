@@ -5,13 +5,13 @@ Work out, read and set the marketing version and build number
 ### Options
 
 ```
-  -h, --help   help for version
+  -h, --help[=true|false]   help for version
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

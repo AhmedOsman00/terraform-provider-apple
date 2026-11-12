@@ -21,18 +21,18 @@ apple version next [VERSION] [flags]
 ### Options
 
 ```
-      --bundle-id string        the app's bundle ID (env APPLE_BUNDLE_ID)
-  -h, --help                    help for next
-      --keep-version            keep the project's version and only work out the next build, for a TestFlight build (env APPLE_KEEP_VERSION)
-      --platform string         IOS, MAC_OS, TV_OS or VISION_OS (env APPLE_PLATFORM) (default "IOS")
-      --project string          the .xcodeproj, read for --keep-version and before the first release (env APPLE_PROJECT)
-      --yearly-major-from int   the launch year; the first release of each later year takes the next major (env APPLE_YEARLY_MAJOR_FROM)
+      --bundle-id string            the app's bundle ID (env APPLE_BUNDLE_ID)
+  -h, --help[=true|false]           help for next
+      --keep-version[=true|false]   keep the project's version and only work out the next build, for a TestFlight build (env APPLE_KEEP_VERSION)
+      --platform string             IOS, MAC_OS, TV_OS or VISION_OS (env APPLE_PLATFORM) (default "IOS")
+      --project string              the .xcodeproj, read for --keep-version and before the first release (env APPLE_PROJECT)
+      --yearly-major-from int       the launch year; the first release of each later year takes the next major (env APPLE_YEARLY_MAJOR_FROM)
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

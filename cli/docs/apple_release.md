@@ -5,13 +5,13 @@ Check an App Store release before it starts, and submit it for review
 ### Options
 
 ```
-  -h, --help   help for release
+  -h, --help[=true|false]   help for release
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

@@ -5,13 +5,13 @@ Check, upload and follow a build through App Store Connect
 ### Options
 
 ```
-  -h, --help   help for build
+  -h, --help[=true|false]   help for build
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

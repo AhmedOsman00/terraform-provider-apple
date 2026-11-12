@@ -24,15 +24,15 @@ apple release submit VERSION [flags]
 ### Options
 
 ```
-      --bundle-id string   the app's bundle ID (env APPLE_BUNDLE_ID)
-  -h, --help               help for submit
-      --platform string    IOS, MAC_OS, TV_OS or VISION_OS (env APPLE_PLATFORM) (default "IOS")
+      --bundle-id string    the app's bundle ID (env APPLE_BUNDLE_ID)
+  -h, --help[=true|false]   help for submit
+      --platform string     IOS, MAC_OS, TV_OS or VISION_OS (env APPLE_PLATFORM) (default "IOS")
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

@@ -1,5 +1,12 @@
 ## Unreleased
 
+NOTES:
+
+* **Boolean flags show `[=true|false]` in `--help`.** pflag 1.1.0 prints every
+  boolean flag as `--json[=true|false]` rather than `--json`, `--help`
+  included, and the reference under `cli/docs/` is regenerated to match.
+  Flags parse exactly as before: `--json` alone still means true.
+
 BUG FIXES:
 
 * **The CLI is built with Go 1.26.11.** Go 1.26.10's `net/http` carries

@@ -25,17 +25,17 @@ apple terraform export [flags]
 ### Options
 
 ```
-      --app strings    an app to export, by App Store Connect ID or bundle identifier; repeat for several (default every app) (env APPLE_APP)
-      --force          write into --out even when it already holds files, replacing any of the same name (env APPLE_FORCE)
-  -h, --help           help for export
-      --only strings   export only these parts: signing, app, products, testflight, team (default all) (env APPLE_ONLY)
-      --out string     the directory to write into; it must be empty or not exist yet (env APPLE_OUT)
+      --app strings          an app to export, by App Store Connect ID or bundle identifier; repeat for several (default every app) (env APPLE_APP)
+      --force[=true|false]   write into --out even when it already holds files, replacing any of the same name (env APPLE_FORCE)
+  -h, --help[=true|false]    help for export
+      --only strings         export only these parts: signing, app, products, testflight, team (default all) (env APPLE_ONLY)
+      --out string           the directory to write into; it must be empty or not exist yet (env APPLE_OUT)
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

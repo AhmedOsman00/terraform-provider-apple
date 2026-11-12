@@ -19,15 +19,15 @@ apple screenshots capture SCREEN... [flags]
 ### Options
 
 ```
-      --device string   the simulator to shoot on (env APPLE_DEVICE) (default "iPhone 17 Pro Max")
-  -h, --help            help for capture
-      --out string      where to write (env APPLE_OUT) (default "screenshots")
+      --device string       the simulator to shoot on (env APPLE_DEVICE) (default "iPhone 17 Pro Max")
+  -h, --help[=true|false]   help for capture
+      --out string          where to write (env APPLE_OUT) (default "screenshots")
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO
