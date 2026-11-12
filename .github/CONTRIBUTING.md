@@ -92,9 +92,12 @@ The existing code is the specification, but a few conventions are load-bearing:
   404 into specific, actionable diagnostics rather than surfacing a raw HTTP
   error.
 - Customer-facing strings are validated in **characters**, not bytes:
-  `stringvalidator.UTF8LengthBetween`. Apple's 30- and 45-character limits are
-  character counts, and `LengthBetween` counts bytes — which rejected a legal
-  27-character Arabic description at "49".
+  `stringvalidator.UTF8LengthBetween`. Apple's limits (30, 35, 45, 55 and
+  others, depending on the field) are character counts, and `LengthBetween`
+  counts bytes — which rejected a legal 27-character Arabic description at
+  "49". Check each limit against App Store Connect's own form rather than
+  copying a neighbouring field's: a subscription localization allows 35 and
+  55 where an in-app purchase localization allows 30 and 45.
 - Log with `tflog` and `tflog.SetField`. Never log a credential value.
 - Data sources have no `last_updated` attribute, on purpose. A data source is
   re-read every plan with no prior state, so the value can only ever be "now",

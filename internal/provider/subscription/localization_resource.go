@@ -87,7 +87,7 @@ func (r *subscriptionLocalizationResource) Schema(_ context.Context, _ resource.
 					"55 characters. Optional, but Apple's review expects one on anything customer-facing. " +
 					"Can be updated in place.",
 				Optional:   true,
-				Validators: GetDescriptionValidator(),
+				Validators: GetLocalizationDescriptionValidator(),
 			},
 			"state": schema.StringAttribute{
 				MarkdownDescription: "Apple's review state for this localization: `PREPARE_FOR_SUBMISSION`, " +
