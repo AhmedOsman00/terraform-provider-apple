@@ -46,6 +46,19 @@ ENHANCEMENTS:
 
 BUG FIXES:
 
+* **The provider is built with Go 1.26.11.** Go 1.26.10's `net/http` carries
+  GO-2026-6859, and every request the provider makes to App Store Connect and
+  Apple's upload hosts goes through it. Building from source now needs Go
+  1.26.11 or later.
+
+* **`apple_subscription_localization` accepts App Store Connect's own
+  limits.** `name` was capped at 30 characters and `description` at 45, but
+  App Store Connect allows 35 and 55 for a subscription's display name and
+  description, so a configuration holding a localization made in the web UI
+  failed validation at plan time, including the first plan after an import.
+  The 45-character limit is the in-app purchase
+  one; `apple_in_app_purchase_localization` keeps it.
+
 * **Transient App Store Connect failures no longer fail the run.** Apple
   answers an occasional request with a 500, or stalls it past the 30-second
   timeout, and every such failure failed the whole plan or apply — on a
@@ -57,6 +70,14 @@ BUG FIXES:
   record and repeating it would create a second one. `401` and other client
   errors are never retried.
   
+* **Importing an external `apple_beta_group` no longer plans its replacement.**
+  Apple ignores `has_access_to_all_builds` on an external group and reports it
+  as null, whatever the group was created with, so an imported external group
+  held null against a configuration saying `true` -- and the attribute forced
+  replacement, which would delete the group, its testers' access and its
+  public link. It now replaces only an internal group; on an external one the
+  change is recorded in place.
+
 * **`apple_app_info_localization` adopts a locale Apple already added.**
   Creating a version localization in a new language can make Apple add the
   same language to the editable AppInfo, so the first apply with a new language

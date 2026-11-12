@@ -2,10 +2,22 @@
 
 BUG FIXES:
 
+* **The CLI is built with Go 1.26.11.** Go 1.26.10's `net/http` carries
+  GO-2026-6859, and every request the CLI makes to App Store Connect and
+  Apple's upload hosts goes through it. Building from source now needs Go
+  1.26.11 or later.
+
 * **Transient App Store Connect failures are retried.** The CLI shares the
   provider's API client, so reads, updates and deletes that meet a 500, a 429
   or a stalled request are now retried with backoff instead of failing the
   command. Creates are retried on 429 only.
+
+* **`apple terraform export` writes one localization per locale.** Editing an
+  approved subscription or subscription group localization makes Apple add a
+  `PREPARE_FOR_SUBMISSION` copy beside the `APPROVED` one, and the export wrote
+  both: two resources for one locale, one of which could not be written to.
+  Where a locale has an edit, the edit is exported and the approved copy is
+  named in `EXPORT_NOTES.md`.
 
 ## 0.3.0 (October 21, 2026)
 

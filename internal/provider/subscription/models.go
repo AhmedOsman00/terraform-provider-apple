@@ -349,10 +349,12 @@ func GetProductIDValidator() []validator.String {
 	}
 }
 
-// GetNameValidator returns validators for subscription and group names.
+// GetNameValidator returns validators for a subscription's reference name and
+// a group localization's name.
 //
-// Apple caps the customer-facing name at 30 characters, which is shorter than
-// most Apple name fields and is enforced at creation rather than at review.
+// Both are capped at 30 characters, enforced at creation rather than at review.
+// A subscription localization's display name is not: App Store Connect allows
+// 35 there, which is GetLocalizationNameValidator.
 //
 // The limit is counted in characters, so this uses UTF8LengthBetween rather
 // than LengthBetween: the latter counts bytes, which rejects a perfectly legal
@@ -372,12 +374,27 @@ func GetReferenceNameValidator() []validator.String {
 	}
 }
 
-// GetDescriptionValidator returns validators for localization descriptions.
+// GetLocalizationNameValidator returns validators for a subscription
+// localization's display name.
 //
-// Counted in characters, not bytes -- see GetNameValidator.
-func GetDescriptionValidator() []validator.String {
+// App Store Connect allows 35 characters here, more than the 30 of
+// GetNameValidator. Counted in characters, not bytes -- see GetNameValidator.
+func GetLocalizationNameValidator() []validator.String {
 	return []validator.String{
-		stringvalidator.UTF8LengthBetween(1, 45),
+		stringvalidator.UTF8LengthBetween(1, 35),
+	}
+}
+
+// GetLocalizationDescriptionValidator returns validators for a subscription
+// localization's description.
+//
+// App Store Connect allows 55 characters, not the 45 of an in-app purchase
+// description, which is why this is not named after inapppurchase's
+// GetDescriptionValidator. Counted in characters, not bytes -- see
+// GetNameValidator.
+func GetLocalizationDescriptionValidator() []validator.String {
+	return []validator.String{
+		stringvalidator.UTF8LengthBetween(1, 55),
 	}
 }
 

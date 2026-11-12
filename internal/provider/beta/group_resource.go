@@ -101,14 +101,20 @@ func (r *betaGroupResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"has_access_to_all_builds": schema.BoolAttribute{
 				MarkdownDescription: "Whether the group automatically sees every build of the app rather " +
 					"than only the builds assigned to it. Absent from Apple's update request, so changing " +
-					"it replaces the group.\n\n" +
+					"it replaces an internal group.\n\n" +
 					"A group without this sees only the builds assigned to it, one " +
-					"`apple_beta_group_build` each.",
+					"`apple_beta_group_build` each.\n\n" +
+					"**Internal groups only.** Apple ignores it on an external group, which receives a build " +
+					"only once beta review has approved it, and reports it there as null. So on an external " +
+					"group a change is recorded in state without replacing the group, and an imported " +
+					"external group holds null.",
 				Optional: true,
 				Computed: true,
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
-					boolplanmodifier.RequiresReplace(),
+					boolplanmodifier.RequiresReplaceIf(allBuildsRequiresReplace,
+						"Changing has_access_to_all_builds replaces an internal group.",
+						"Changing `has_access_to_all_builds` replaces an internal group."),
 				},
 			},
 			"public_link_enabled": schema.BoolAttribute{
@@ -544,4 +550,19 @@ func adoptInt64(current types.Int64, reported *int64) types.Int64 {
 	default:
 		return current
 	}
+}
+
+// allBuildsRequiresReplace decides whether a planned has_access_to_all_builds
+// change replaces the group.
+//
+// On an external group it does not. Apple ignores the value there and reports
+// it as null whatever the group was created with, so an imported external
+// group holds null against a configuration that says true -- and replacing it
+// would delete the group, its testers' access and its public link, to recreate
+// one Apple treats identically. An internal group still replaces, since the
+// value is absent from Apple's update request.
+func allBuildsRequiresReplace(ctx context.Context, req planmodifier.BoolRequest, resp *boolplanmodifier.RequiresReplaceIfFuncResponse) {
+	var internal types.Bool
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("is_internal_group"), &internal)...)
+	resp.RequiresReplace = internal.IsNull() || internal.IsUnknown() || internal.ValueBool()
 }

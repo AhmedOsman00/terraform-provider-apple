@@ -63,6 +63,8 @@ The plan should report **34 to import, 0 to add, 0 to change, 0 to destroy**. An
 - Profile "Example Expired" is EXPIRED, so it was left out.
 - com.example.app 1.10 (IOS): screenshot sets were left out. Apple keeps a screenshot's bytes, not the file it came from, so an apple_app_screenshot_set needs the image files on disk; add one per display type pointing at them.
 - com.example.app: App Privacy, app preview videos, the build upload, export compliance and submission have no resource; see remaining_manual_steps in examples/app-listing.
+- subscription group "Premium": the approved localizations for en-US were left out. Each has an edit beside it that Apple has not approved yet, and the edit is what was exported: it is the copy that can be changed, and it replaces the approved one once Apple approves it.
+- com.example.app.monthly: the approved localizations for en-US were left out. Each has an edit beside it that Apple has not approved yet, and the edit is what was exported: it is the copy that can be changed, and it replaces the approved one once Apple approves it.
 - com.example.app: App Review screenshots of subscriptions and in-app purchases were left out. Apple keeps the bytes, not the file, so they need the image on disk; add an apple_subscription_review_screenshot or apple_in_app_purchase_review_screenshot pointing at it.
 - `apple_beta_group.com_example_app_public_beta`: 1 testers who joined "Public Beta" through its public link were left out.
 - com.example.app: builds given to beta groups (apple_beta_group_build) and per-build "What to Test" notes (apple_beta_build_localization) were left out. Both belong to one build and change with every upload, so they are better written next to the pipeline that produces the build.

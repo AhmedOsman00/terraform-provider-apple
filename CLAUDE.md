@@ -160,6 +160,10 @@ Rules that are easy to undo by accident:
   `apple_beta_build_localization` are left out with a note.
 - **An internal beta group gets no `public_link_*` attribute**, even a false
   one: `ValidateConfig` rejects any on an internal group.
+- One subscription or subscription group localization per locale. Editing an
+  approved one makes Apple list a `PREPARE_FOR_SUBMISSION` copy beside the
+  `APPROVED` one until the edit is approved; `editableLocalizations` keeps the
+  edit and drops the approved copy, which cannot be written to.
 - One `apple_app_store_version` per platform: the editable one, or the newest
   when none is.
 - Strings go through `hclwrite`, which escapes `${` and `%{`. Apple text is
@@ -288,9 +292,10 @@ and survives every build, `apple_beta_build_localization` hangs off a build and
 is replaced with it. Do not fold them together; they are two Apple records.
 
 Internal and external groups are **not one flag**. `isInternalGroup` and
-`hasAccessToAllBuilds` are absent from Apple's `BetaGroupUpdateRequest`, so both
-are `RequiresReplace`, and the two kinds accept disjoint attribute sets — only an
-external group can carry a public link. `ValidateConfig` rejects
+`hasAccessToAllBuilds` are absent from Apple's `BetaGroupUpdateRequest`, so
+neither changes in place, and the two kinds accept disjoint attribute sets — only
+an external group can carry a public link, and only an internal group's
+`hasAccessToAllBuilds` means anything. `ValidateConfig` rejects
 `public_link_*` on an internal group at plan time rather than letting Apple
 refuse it with a message that names the attribute and not the reason.
 
@@ -665,7 +670,7 @@ cross-variable validation.
     element, skipping only whole unknown elements: a set built by a `for` over
     a data source is unknown at validation time, which `make validate-examples`
     caught.
-- **Customer-facing text is validated in characters, not bytes.** `GetNameValidator` and `GetDescriptionValidator` in `subscription` and `inapppurchase`, `GetAppNameValidator`, `GetSubtitleValidator`, `GetVersionDescriptionValidator`, `GetPromotionalTextValidator` and `GetWhatsNewValidator` in `app`, and `GetBetaGroupNameValidator`, `GetBetaDescriptionValidator`, `GetWhatsNewValidator` and `GetReviewNotesValidator` in `beta`, all use `stringvalidator.UTF8LengthBetween`, not `LengthBetween`. Apple's 30- and 45-character limits are character counts, while `LengthBetween` counts bytes, which rejected a legal 27-character Arabic description at "49". Any new customer-visible string field must follow this.
+- **Customer-facing text is validated in characters, not bytes.** `GetNameValidator`, `GetLocalizationNameValidator` and `GetLocalizationDescriptionValidator` in `subscription`, `GetNameValidator` and `GetDescriptionValidator` in `inapppurchase`, `GetAppNameValidator`, `GetSubtitleValidator`, `GetVersionDescriptionValidator`, `GetPromotionalTextValidator` and `GetWhatsNewValidator` in `app`, and `GetBetaGroupNameValidator`, `GetBetaDescriptionValidator`, `GetWhatsNewValidator` and `GetReviewNotesValidator` in `beta`, all use `stringvalidator.UTF8LengthBetween`, not `LengthBetween`. The limits differ by field and must each be checked against App Store Connect rather than copied from a sibling: a subscription localization allows 35 (name) and 55 (description), an in-app purchase localization 30 and 45, and a subscription's own name and a group localization 30. Apple's limits are character counts, while `LengthBetween` counts bytes, which rejected a legal 27-character Arabic description at "49". Any new customer-visible string field must follow this.
 - **`apple_in_app_purchase`**: the one-time purchase side of the App Store — `CONSUMABLE`, `NON_CONSUMABLE`, `NON_RENEWING_SUBSCRIPTION` — on `/v2/inAppPurchases`, and a different Apple resource from `apple_subscription`. `app_id` is worse than write-once: `InAppPurchaseV2` has **no app relationship at all** and no `include` produces one, so the app can never be read back, `Read` keeps the configured value, and `ImportState` accepts only `<app_id>/<in_app_purchase_id>` — confirming ownership by listing the app's collection, which is the only check the API offers. `product_id` and `in_app_purchase_type` are `RequiresReplace` because Apple's update request has neither member, and replacing either is expensive: Apple never releases a product identifier. `Read` never refreshes `app_id`.
 - **`apple_in_app_purchase_localization`**: localizations hang off an **in-app purchase version**, not the purchase. Apple moved them there in App Store Connect API 4.4.1 and deprecated the v1 endpoints that hid it, so the provider writes to `/v2/inAppPurchaseLocalizations` against a version resolved by `EnsureEditableInAppPurchaseVersion`: it picks the highest-numbered version in `PREPARE_FOR_SUBMISSION`, `DEVELOPER_REJECTED` or `REJECTED`, and creates one when every version is in review or approved — which is what App Store Connect's UI does when you edit approved metadata. Versions have no `DELETE`, so one created that way outlives the localization. The resolved version is reported as the computed `version_id`. Unlike a subscription localization there is **no `state`**: `InAppPurchaseLocalizationV2` has none, because the state lives on the version. Import accepts a bare ID — the parent is resolved in two hops, localization → version → purchase — or the composite `<in_app_purchase_id>/<localization_id>`. **Delete tolerates Apple's 409 `Cannot delete the last localization`**: a version must keep at least one, so destroying the only localization warns and drops state rather than erroring — erroring failed the whole destroy and left the purchase behind, and the record goes away with the purchase anyway. `ImportState` sets `review_note` itself instead of going through `applyPurchaseAttributes`, which skips it so that a null in configuration survives a `Read`; an import has no configuration to contradict, and leaving it null dropped a value Apple holds.
 - **`apple_in_app_purchase_price_schedule`**: a purchase has exactly **one** schedule, not a price record per territory the way a subscription does. `POST /v1/inAppPurchasePriceSchedules` replaces it wholesale, and there is no `PATCH` and no `DELETE` — so `Update` posts again (a genuine in-place update, not `RequiresReplace`) and `Delete` warns and drops state only. Both this and `apple_in_app_purchase_availability` need a `ModifyPlan` that marks `id` unknown when anything else changes: Terraform proposes the prior value for a computed attribute, Apple issues a new record ID on every `POST`, and without it every update would be rejected as an inconsistent result. The create request is the only one in the provider using JSON:API's `included` member: the prices do not exist yet, so each is sent inline under a literal placeholder ID (`${price0}`) that the `manualPrices` relationship references, and Apple substitutes real IDs on commit. `baseTerritory` is required — Apple added that after the endpoint shipped. `prices` is a **set**, because Apple returns them unordered, and `Read` matches by `price_point_id` and **keeps the configured dates** for a price already in state: Apple derives an `endDate` for any price a later one supersedes, and adopting it would be a permanent diff. Only `manualPrices` are read; the prices Apple equalizes from the base territory are computed and never the provider's. Import ID is the purchase ID.
@@ -846,10 +851,17 @@ cross-variable validation.
   not churn the plan.
 - **`apple_beta_group`**: the only TestFlight resource with a real create and a
   real delete. `is_internal_group` and `has_access_to_all_builds` are
-  `Optional+Computed+RequiresReplace` with `UseStateForUnknown` — absent from
-  Apple's update request, so neither can change in place, and neither carries a
-  Terraform `Default`: a default would make an imported internal group plan a
-  replacement the moment the configuration stayed silent about it. The remaining
+  `Optional+Computed` with `UseStateForUnknown` and are absent from Apple's update
+  request. `is_internal_group` is `RequiresReplace`; `has_access_to_all_builds`
+  is `RequiresReplaceIf` (`allBuildsRequiresReplace`) and replaces **only an
+  internal group**. Apple ignores it on an external group and reports it as null
+  whatever the group was created with, so an imported external group holds null
+  against a configuration saying `true`, and replacing it would delete the group,
+  its testers' access and its public link for nothing. On an external group the
+  change is recorded in place, and `adoptBool` keeps it against Apple's null.
+  Neither carries a Terraform `Default`: a default would make an imported
+  internal group plan a replacement the moment the configuration stayed silent
+  about it. The remaining
   booleans are `Optional+Computed` and go through `adoptBool`/`adoptInt64` in
   `applyBetaGroup` rather than being assigned outright, because an attribute
   Apple omits from a response must neither blank a value the plan holds (an
