@@ -1,6 +1,16 @@
-## Unreleased
+## 0.8.0 (November 12, 2026)
 
 FEATURES:
+
+* **Xcode Cloud workflows: `apple_ci_workflow`.** Manages a workflow's
+  actions, start conditions and Xcode and macOS versions (#11). The product
+  and its repository connection have to exist in Xcode Cloud already. Four
+  data sources supply the IDs a workflow refers to:
+  `apple_ci_products`, `apple_scm_repositories`, `apple_ci_xcode_versions`
+  and `apple_ci_mac_os_versions`. Post-actions and environment variables are
+  not managed, because Apple's API does not expose them: TestFlight
+  distribution, notifications and environment variables stay in Xcode or App
+  Store Connect. Import is the workflow ID.
 
 * **`apple_subscription_introductory_offer`.** Introductory offers on an
   auto-renewable subscription: a free trial, a reduced price per period, or a
@@ -83,6 +93,17 @@ BUG FIXES:
   so a 500 or a credentials failure was reported as "profile with name ...
   not found" -- blaming an ID that was correct. It now tries the name only
   when Apple answers the ID with a 404, which is how it answers a name.
+
+* **`apple_app_availability` updates storefronts in place.** A change was
+  sent as a new availability record meant to supersede the old one. Existing
+  storefronts are now updated through
+  `PATCH /v1/territoryAvailabilities/{id}` (#12). Apple's API cannot change
+  `available_in_new_territories` on an existing record, so change that setting
+  in App Store Connect before applying.
+
+* **`apple_app_availability` can be created on an app that never had one.**
+  Apple answers such an app with a 404 rather than an empty record, and the
+  first apply failed instead of creating the availability (#17).
 
 * **`apple_app_info_localization` adopts a locale Apple already added.**
   Creating a version localization in a new language can make Apple add the
