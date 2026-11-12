@@ -16,14 +16,14 @@ apple signing encrypt --key-dir DIR [flags]
 ### Options
 
 ```
-  -h, --help             help for encrypt
-      --key-dir string   the directory holding <role>.key (env APPLE_KEY_DIR)
+  -h, --help[=true|false]   help for encrypt
+      --key-dir string      the directory holding <role>.key (env APPLE_KEY_DIR)
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

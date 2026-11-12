@@ -24,17 +24,17 @@ apple release preflight VERSION [flags]
 ### Options
 
 ```
-      --bundle-id string   the app's bundle ID (env APPLE_BUNDLE_ID)
-  -h, --help               help for preflight
-      --locales strings    the locales that need notes, instead of the ones App Store Connect lists (env APPLE_LOCALES)
-      --notes-dir string   the directory holding VERSION/LOCALE.txt release notes (env APPLE_NOTES_DIR)
-      --platform string    IOS, MAC_OS, TV_OS or VISION_OS (env APPLE_PLATFORM) (default "IOS")
+      --bundle-id string    the app's bundle ID (env APPLE_BUNDLE_ID)
+  -h, --help[=true|false]   help for preflight
+      --locales strings     the locales that need notes, instead of the ones App Store Connect lists (env APPLE_LOCALES)
+      --notes-dir string    the directory holding VERSION/LOCALE.txt release notes (env APPLE_NOTES_DIR)
+      --platform string     IOS, MAC_OS, TV_OS or VISION_OS (env APPLE_PLATFORM) (default "IOS")
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

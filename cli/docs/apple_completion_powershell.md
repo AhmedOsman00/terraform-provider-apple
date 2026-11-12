@@ -21,14 +21,14 @@ apple completion powershell [flags]
 ### Options
 
 ```
-  -h, --help              help for powershell
-      --no-descriptions   disable completion descriptions
+  -h, --help[=true|false]              help for powershell
+      --no-descriptions[=true|false]   disable completion descriptions
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

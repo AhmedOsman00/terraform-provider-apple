@@ -11,13 +11,13 @@ read here, from a file, the environment, or an encrypted file in the repository.
 ### Options
 
 ```
-  -h, --help   help for signing
+  -h, --help[=true|false]   help for signing
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

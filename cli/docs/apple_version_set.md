@@ -14,14 +14,14 @@ apple version set VERSION BUILD [flags]
 ### Options
 
 ```
-  -h, --help             help for set
-      --project string   the .xcodeproj (env APPLE_PROJECT)
+  -h, --help[=true|false]   help for set
+      --project string      the .xcodeproj (env APPLE_PROJECT)
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

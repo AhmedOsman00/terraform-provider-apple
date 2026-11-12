@@ -5,13 +5,13 @@ Write what TestFlight testers are told
 ### Options
 
 ```
-  -h, --help   help for testflight
+  -h, --help[=true|false]   help for testflight
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

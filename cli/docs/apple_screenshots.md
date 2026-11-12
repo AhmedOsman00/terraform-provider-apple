@@ -5,13 +5,13 @@ Take App Store screenshots on a simulator
 ### Options
 
 ```
-  -h, --help   help for screenshots
+  -h, --help[=true|false]   help for screenshots
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

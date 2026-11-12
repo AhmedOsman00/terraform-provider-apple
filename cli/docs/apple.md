@@ -16,8 +16,8 @@ Every flag can also be set as APPLE_<FLAG>, such as APPLE_BUNDLE_ID for --bundle
 ### Options
 
 ```
-  -h, --help   help for apple
-      --json   print the result as JSON (env APPLE_JSON)
+  -h, --help[=true|false]   help for apple
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

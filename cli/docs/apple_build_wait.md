@@ -19,7 +19,7 @@ apple build wait VERSION BUILD [flags]
 
 ```
       --bundle-id string      the app's bundle ID (env APPLE_BUNDLE_ID)
-  -h, --help                  help for wait
+  -h, --help[=true|false]     help for wait
       --interval duration     how often to ask (env APPLE_INTERVAL) (default 1m0s)
       --locale string         the locale of the "What to Test" note (env APPLE_LOCALE) (default "en-US")
       --platform string       IOS, MAC_OS, TV_OS or VISION_OS (env APPLE_PLATFORM) (default "IOS")
@@ -31,7 +31,7 @@ apple build wait VERSION BUILD [flags]
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

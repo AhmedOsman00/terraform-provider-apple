@@ -40,24 +40,24 @@ apple signing install (--from FILE | --terraform DIR) [flags]
 ### Options
 
 ```
-      --certificates-only         skip the profiles (env APPLE_CERTIFICATES_ONLY)
-      --check-expiry int          warn about a certificate expiring within DAYS, and stop on an expired one (env APPLE_CHECK_EXPIRY)
-      --ephemeral-keychain        create a throwaway keychain for a CI runner (env APPLE_EPHEMERAL_KEYCHAIN)
-      --from string               the signing document, or - for stdin (env APPLE_FROM)
-  -h, --help                      help for install
-      --key stringArray           ROLE=PATH, the private key for ROLE; repeatable (env APPLE_KEY)
-      --key-dir string            a directory of <role>.key or <role>.key.enc files (env APPLE_KEY_DIR)
-      --keychain string           the keychain to import into (default: login, or a temporary one with --ephemeral-keychain) (env APPLE_KEYCHAIN)
-      --profile-dir stringArray   where to install profiles, repeatable (default: the two directories Xcode reads) (env APPLE_PROFILE_DIR)
-      --profiles-only             skip the certificates (env APPLE_PROFILES_ONLY)
-      --terraform string          the Terraform configuration whose output is the signing document (env APPLE_TERRAFORM)
-      --terraform-output string   the output --terraform reads (env APPLE_TERRAFORM_OUTPUT) (default "signing")
+      --certificates-only[=true|false]    skip the profiles (env APPLE_CERTIFICATES_ONLY)
+      --check-expiry int                  warn about a certificate expiring within DAYS, and stop on an expired one (env APPLE_CHECK_EXPIRY)
+      --ephemeral-keychain[=true|false]   create a throwaway keychain for a CI runner (env APPLE_EPHEMERAL_KEYCHAIN)
+      --from string                       the signing document, or - for stdin (env APPLE_FROM)
+  -h, --help[=true|false]                 help for install
+      --key stringArray                   ROLE=PATH, the private key for ROLE; repeatable (env APPLE_KEY)
+      --key-dir string                    a directory of <role>.key or <role>.key.enc files (env APPLE_KEY_DIR)
+      --keychain string                   the keychain to import into (default: login, or a temporary one with --ephemeral-keychain) (env APPLE_KEYCHAIN)
+      --profile-dir stringArray           where to install profiles, repeatable (default: the two directories Xcode reads) (env APPLE_PROFILE_DIR)
+      --profiles-only[=true|false]        skip the certificates (env APPLE_PROFILES_ONLY)
+      --terraform string                  the Terraform configuration whose output is the signing document (env APPLE_TERRAFORM)
+      --terraform-output string           the output --terraform reads (env APPLE_TERRAFORM_OUTPUT) (default "signing")
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO

@@ -15,18 +15,18 @@ apple testflight notes [flags]
 ### Options
 
 ```
-      --header string   the first paragraph, such as which build and lane this is (env APPLE_HEADER)
-  -h, --help            help for notes
-      --limit int       at most this many commits (env APPLE_LIMIT) (default 20)
-      --notes string    a paragraph under the header (env APPLE_NOTES)
-      --repo string     the git repository to read (env APPLE_REPO) (default ".")
-      --since string    list the commits after this one, up to --limit (env APPLE_SINCE)
+      --header string       the first paragraph, such as which build and lane this is (env APPLE_HEADER)
+  -h, --help[=true|false]   help for notes
+      --limit int           at most this many commits (env APPLE_LIMIT) (default 20)
+      --notes string        a paragraph under the header (env APPLE_NOTES)
+      --repo string         the git repository to read (env APPLE_REPO) (default ".")
+      --since string        list the commits after this one, up to --limit (env APPLE_SINCE)
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --json   print the result as JSON (env APPLE_JSON)
+      --json[=true|false]   print the result as JSON (env APPLE_JSON)
 ```
 
 ### SEE ALSO
