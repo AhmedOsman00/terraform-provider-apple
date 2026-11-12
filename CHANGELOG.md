@@ -46,6 +46,11 @@ ENHANCEMENTS:
 
 BUG FIXES:
 
+* **The provider is built with Go 1.26.11.** Go 1.26.10's `net/http` carries
+  GO-2026-6859, and every request the provider makes to App Store Connect and
+  Apple's upload hosts goes through it. Building from source now needs Go
+  1.26.11 or later.
+
 * **`apple_subscription_localization` accepts App Store Connect's own
   limits.** `name` was capped at 30 characters and `description` at 45, but
   App Store Connect allows 35 and 55 for a subscription's display name and
