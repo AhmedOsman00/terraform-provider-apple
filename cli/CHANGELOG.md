@@ -1,3 +1,14 @@
+## 0.3.3 (Unreleased)
+
+NOTES:
+
+* **`apple terraform export` explains how to hand a certificate to Terraform.**
+  A certificate is still exported as a data source, which Terraform never
+  renews. Its note in `EXPORT_NOTES.md` now says so. It also says how to hand
+  the certificate over without revoking it: import it as `apple_certificate`
+  with a CSR generated from the same private key, which provider 0.8.2 records
+  in place, then point the profiles at the resource.
+
 ## 0.3.2 (November 25, 2026)
 
 BUG FIXES:

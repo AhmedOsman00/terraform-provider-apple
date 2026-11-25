@@ -141,9 +141,13 @@ the tests use. It never imports `internal/provider`.
 
 Rules that are easy to undo by accident:
 
-- **Certificates are data sources, never resources.** Importing an
-  `apple_certificate` reissues it on the next apply, which revokes the
+- **Certificates are data sources, never resources.** Apple returns no CSR, so
+  the export has no `csr_content` to write, and a CSR from any key but the
+  one the certificate was issued for reissues it, which revokes the
   original. Profiles refer to `data.apple_certificates.<x>.certificates[0].id`.
+  The note on each certificate says how to hand it over by hand: import it with
+  a CSR from the same private key, which provider 0.8.2 records in place, then
+  repoint the profiles.
 - **One `apple_subscription_price_schedule` per subscription**, never
   `apple_subscription_price` as well: they write the same set and fight. It
   carries `depends_on` the subscription's availability, which Apple requires

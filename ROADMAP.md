@@ -86,7 +86,7 @@ certificate and revokes the original.
 
 ### 2b. Clearer certificate note in the export
 
-- [ ] Reword the `EXPORT_NOTES.md` note on each certificate: it is read through
+- [x] Reword the `EXPORT_NOTES.md` note on each certificate: it is read through
       a data source, so Terraform won't renew it, and `early_renewal_hours`
       acts only on an `apple_certificate` Terraform owns. To hand it over,
       import it as `apple_certificate` with `csr_content` from the same private

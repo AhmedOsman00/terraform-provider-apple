@@ -79,6 +79,14 @@ func TestCertificatesAreNeverImported(t *testing.T) {
 	if !strings.Contains(signing, "data.apple_certificates.example_distribution_distribution.certificates[0].id") {
 		t.Errorf("profile does not refer to the certificate data source:\n%s", signing)
 	}
+	// The note says how to hand the certificate to Terraform without
+	// revoking it, and why reading it is not enough.
+	notes := string(result.Files[NotesFile])
+	for _, want := range []string{"early_renewal_hours", "csr_content", "private key it was issued for", "provider 0.8.2"} {
+		if !strings.Contains(notes, want) {
+			t.Errorf("certificate note does not mention %q:\n%s", want, notes)
+		}
+	}
 	// A certificate no longer listed is written as Apple's ID.
 	if !strings.Contains(signing, `"CERT_GONE"`) {
 		t.Errorf("revoked certificate ID is missing from the profile:\n%s", signing)

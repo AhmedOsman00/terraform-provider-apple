@@ -159,18 +159,24 @@ func (e *exporter) exportDevice(f *file, device models.Device) {
 	b.str("platform", string(device.Attributes.Platform))
 }
 
-// exportCertificate writes a data source, never a resource. Importing an
-// apple_certificate reissues it on the next apply -- csr_content forces
-// replacement and Apple does not return it -- and reissuing revokes the
-// certificate every machine is signing with.
+// exportCertificate writes a data source, never a resource. Apple does not
+// return the CSR a certificate was issued from, and the export has no other
+// source for one, so an apple_certificate written here would have no
+// csr_content to give it: the configuration would not validate, and any CSR
+// from another key would reissue the certificate every machine is signing
+// with, revoking the original. Handing it over is the user's step, with a CSR
+// from the key they hold; the note says how.
 func (e *exporter) exportCertificate(f *file, certificate models.Certificate) {
 	b, addr := e.dataSource(f, "apple_certificates", certificate.ID,
 		certificate.Attributes.DisplayName, string(certificate.Attributes.CertificateType))
 	b.str("serial_number", certificate.Attributes.SerialNumber)
 
 	e.note(Attention, addr.String(),
-		"Certificate %q (serial %s) is read through a data source rather than imported: importing an apple_certificate reissues it, which revokes the one you are signing with. To have Terraform issue its successor, see the Code Signing guide.",
-		certificate.Attributes.DisplayName, certificate.Attributes.SerialNumber)
+		"Certificate %q (serial %s) is read through a data source, so Terraform will not renew it: early_renewal_hours acts only on an apple_certificate Terraform owns. "+
+			"To hand it over (provider 0.8.2 or later), import it as an apple_certificate with id %q and csr_content set to a CSR generated from the private key it was issued for, "+
+			"check that the plan updates it in place rather than replacing it (a replacement revokes it), then point the profiles that use it at the resource's id instead of %s.certificates[0].id. "+
+			"The Code Signing guide walks through it.",
+		certificate.Attributes.DisplayName, certificate.Attributes.SerialNumber, certificate.Attributes.SerialNumber, addr.String())
 }
 
 func (e *exporter) exportProfile(f *file, profile models.Profile) error {
