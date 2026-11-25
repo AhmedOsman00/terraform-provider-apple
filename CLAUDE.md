@@ -168,6 +168,14 @@ Rules that are easy to undo by accident:
   when none is.
 - Strings go through `hclwrite`, which escapes `${` and `%{`. Apple text is
   data, and unescaped it would be an interpolation.
+- `providers.tf` pins `>= MinProviderVersion, < <next major>.0.0`, never a
+  loose `~> 0.1`: the CLI ships separately from the provider, and an older
+  provider either lacks a resource the export writes or imports it into a
+  non-empty plan. `MinProviderVersion` is the newest entry in
+  `introducedIn` (`version_test.go`), the first release each exported type
+  plans cleanly against, counting from an import fix where there was one.
+  `TestMinProviderVersion` fails on an exporter writing a type that list does
+  not name, so a new exporter has to decide its release.
 
 Three imports had to be fixed for this contract to hold, and must stay fixed:
 `apple_profile` import reads `bundle_id`, `certificates` and `devices` from the
@@ -973,7 +981,7 @@ cross-variable validation.
 
 The provider serves `registry.terraform.io/ahmedosman00/apple` (set in `main.go`; lower case because Terraform normalizes source addresses, while the Registry displays the namespace as `AhmedOsman00`). `terraform init` in `examples/` therefore downloads the last released version — to exercise the working tree instead, wire a locally built binary up through a `dev_overrides` block in `~/.terraformrc`, or a filesystem mirror if `init` needs to keep working. Run with `-debug` to attach a debugger.
 
-The examples pin `version = "~> 0.1"`, and `scripts/validate-examples.sh` builds the working tree into a mirror at version `0.1.0` to satisfy that constraint — bump `PROVIDER_VERSION` there if the pin ever moves past it.
+The examples pin `version = "~> 0.1"` and the export's golden output pins `>= MinProviderVersion`, so `scripts/validate-examples.sh` builds the working tree into a mirror at `MinProviderVersion`, read from `internal/export/report.go`, which satisfies both.
 
 ## Releasing
 

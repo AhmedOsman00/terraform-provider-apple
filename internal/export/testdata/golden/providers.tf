@@ -6,7 +6,7 @@ terraform {
   required_providers {
     apple = {
       source  = "ahmedosman00/apple"
-      version = "~> 0.1"
+      version = ">= 0.8.0, < 1.0.0"
     }
   }
 }
