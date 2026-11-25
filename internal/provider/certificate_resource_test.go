@@ -177,6 +177,68 @@ func TestAccCertificateResource_requiresReplace(t *testing.T) {
 	})
 }
 
+// TestAccCertificateResource_adoptByCSR covers adopting an imported
+// certificate. Apple returns no CSR, so the import records csr_content as null;
+// a CSR from another key must still plan a replacement, while one regenerated
+// from the key the certificate was issued for is recorded in place, keeping
+// the same serial.
+func TestAccCertificateResource_adoptByCSR(t *testing.T) {
+	key := testAccCertificateKey(t)
+	original := testAccCertificateCSRForKey(t, key, "terraform-provider-apple acceptance test")
+	regenerated := testAccCertificateCSRForKey(t, key, "terraform-provider-apple regenerated CSR")
+	otherKey := testAccCertificateCSR(t)
+	var serial string
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCertificateDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCertificateResourceConfig(testAccCertificateType, original, ""),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckCertificateExists("apple_certificate.test"),
+					testAccCaptureAttr("apple_certificate.test", "serial_number", &serial),
+				),
+			},
+			// Replace state with what an import records: no CSR.
+			{
+				ResourceName:       "apple_certificate.test",
+				ImportState:        true,
+				ImportStateIdFunc:  testAccCertificateImportIDFunc("apple_certificate.test", "serial_number"),
+				ImportStatePersist: true,
+			},
+			// A CSR from another key still replaces. Plan only: applying it would
+			// revoke the certificate the next step adopts.
+			{
+				Config:             testAccCertificateResourceConfig(testAccCertificateType, otherKey, ""),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PostApplyPreRefresh: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("apple_certificate.test", plancheck.ResourceActionReplace),
+					},
+				},
+			},
+			// A CSR regenerated from the same key is adopted in place, and the
+			// plan after it is empty.
+			{
+				Config: testAccCertificateResourceConfig(testAccCertificateType, regenerated, ""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("apple_certificate.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckCertificateExists("apple_certificate.test"),
+					resource.TestCheckResourceAttrPtr("apple_certificate.test", "serial_number", &serial),
+					resource.TestCheckResourceAttr("apple_certificate.test", "csr_content", regenerated),
+				),
+			},
+		},
+	})
+}
+
 // TestAccCertificateResource_validation is rejected at plan time and issues
 // nothing.
 func TestAccCertificateResource_validation(t *testing.T) {
@@ -213,14 +275,29 @@ func TestAccCertificateResource_validation(t *testing.T) {
 func testAccCertificateCSR(t *testing.T) string {
 	t.Helper()
 
+	return testAccCertificateCSRForKey(t, testAccCertificateKey(t), "terraform-provider-apple acceptance test")
+}
+
+// testAccCertificateKey generates the RSA key a CSR is signed with.
+func testAccCertificateKey(t *testing.T) *rsa.PrivateKey {
+	t.Helper()
+
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("generating RSA key for CSR: %s", err)
 	}
 
+	return key
+}
+
+// testAccCertificateCSRForKey generates a CSR from a given key, so a test can
+// produce two different CSRs carrying the same public key.
+func testAccCertificateCSRForKey(t *testing.T, key *rsa.PrivateKey, commonName string) string {
+	t.Helper()
+
 	der, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
 		Subject: pkix.Name{
-			CommonName:   "terraform-provider-apple acceptance test",
+			CommonName:   commonName,
 			Organization: []string{"terraform-provider-apple"},
 		},
 		SignatureAlgorithm: x509.SHA256WithRSA,
