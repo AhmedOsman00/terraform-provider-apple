@@ -55,7 +55,100 @@ resource can set a first price but never change it.
 - [ ] `httptest` tests for each case above, and one live run that raises the
       price of an approved subscription.
 
-## 2. Verify everything against the live API
+## 2. Adopting an existing account
+
+Three changes that make `apple terraform export` and certificate adoption
+usable on a real account. The certificate fix lands first, so the export note
+can point to it.
+
+### 2a. Fix: adopt a certificate by giving its CSR (`bugfix/`)
+
+An imported `apple_certificate` records `csr_content` as null, since Apple
+returns it null. Setting it in configuration then plans null → value, and
+because the attribute is `RequiresReplace`, the next apply reissues the
+certificate and revokes the original.
+
+- [ ] Make `csr_content` `RequiresReplaceIf`: skip the replacement when prior
+      state holds no CSR and the CSR's public key equals the key in
+      `certificate_content` (`x509.ParseCertificateRequest` against
+      `x509.ParseCertificate`, comparing the public key info). The change is
+      then recorded in place, and `Update` already carries the issued
+      certificate forward.
+- [ ] A CSR generated later from the same private key matches too, since only
+      the public key is compared.
+- [ ] A key mismatch still replaces, but `ModifyPlan` warns that the CSR comes
+      from a different key, so it isn't mistaken for the old bug.
+- [ ] After adoption, `early_renewal_hours` renews as usual. The successor is
+      issued from the stored CSR, so it reuses the same key; say so in the
+      code-signing guide.
+- [ ] Unit tests for the key comparison; an acceptance step that imports a
+      certificate, sets its CSR and expects an empty plan.
+
+### 2b. Clearer certificate note in the export
+
+- [ ] Reword the `EXPORT_NOTES.md` note on each certificate: it is read through
+      a data source, so Terraform won't renew it, and `early_renewal_hours`
+      acts only on an `apple_certificate` Terraform owns. To hand it over,
+      import it as `apple_certificate` with `csr_content` from the same private
+      key (2a), then point profiles at the resource's `id`.
+
+### 2c. Per-app scoping for `--app` (`feature/`, CLI changelog: behaviour change)
+
+Today `--app` filters only the listing, products and TestFlight. Signing and
+team are always exported for the whole account, so `--app com.acme` still
+writes every Bundle ID, device, merchant ID and user.
+
+Shape:
+
+```
+apple terraform export --out DIR [--app APP]... [--only PART]... [--list] [--force] [--json]
+```
+
+| Part (`--only`) | Scope | Written as | Under `--app` |
+|---|---|---|---|
+| `listing` | app | resources | yes |
+| `products` | app | resources | yes |
+| `testflight` | app | resources | yes |
+| `bundle-ids` (with capabilities) | app | resources | yes |
+| `profiles` | app | resources | yes |
+| `certificates` | referenced | data sources, always | only those the profiles use |
+| `devices` | account | resources | data sources, only those the profiles use |
+| `merchant-ids`, `pass-type-ids` | account | resources | only when named in `--only` |
+| `users`, `invitations` | account | resources | only when named in `--only` |
+
+Aliases keep today's commands working: `signing` = bundle-ids, profiles,
+certificates, devices, merchant-ids, pass-type-ids; `team` = users,
+invitations; `app` = listing.
+
+- [ ] An app owns its own Bundle ID and every one under it (`com.acme.*`),
+      except one that is another app record's own Bundle ID
+      (`com.acme.staging` goes with that app, not as an extension). This needs
+      one `GetApps` call even under `--app`.
+- [ ] Bundle IDs that look related but sit outside the prefix
+      (`com-acme-widget`) are listed in `EXPORT_NOTES.md` as unclaimed, not
+      guessed at.
+- [ ] Profiles are matched through `GetProfileLinkages`, which the export
+      already calls per profile.
+- [ ] Referenced devices are written as `data.apple_devices` with
+      `udid_pattern = "^<udid>$"`. When `devices` is named in `--only`,
+      profiles refer to the `apple_device` resources instead.
+- [ ] Defaults: without `--app` and `--only`, the whole account, unchanged.
+      With `--app` alone, the app parts plus referenced certificates and
+      devices. An explicit `--only` always wins, so
+      `--app com.acme --only users` exports only users.
+- [ ] Files: under `--app`, signing goes in `<bundle_id>_signing.tf` beside
+      `<bundle_id>.tf`, `_products.tf` and `_testflight.tf`. A certificate
+      shared by two apps is written once. A whole-account export keeps
+      `signing.tf` and `team.tf` as they are, so the golden output only grows.
+- [ ] `--list` reads the account and prints what would be written, by app and
+      part, plus referenced and unclaimed records, without writing anything
+      (`--out` not required; `--json` gives the same as data).
+- [ ] `--help` and the generated CLI reference carry the full list of resource
+      types per part, so what an export can contain is fixed and documented.
+- [ ] Golden output for a fake account with an extension, a staging app and a
+      shared certificate; `make validate-examples` over it.
+
+## 3. Verify everything against the live API
 
 - [ ] Move fenn-money to provider 0.8.x and CLI 0.3.1. That covers the retries
       and the export version pin for free.
@@ -68,7 +161,7 @@ resource can set a first price but never change it.
       `apple_subscription_price`, `apple_subscription_introductory_offer(_schedule)`,
       `apple_ci_workflow` and its four data sources, `apple screenshots capture`,
       `apple terraform export` (`TestAccExport_firstPlanChangesNothing`).
-- [ ] Every new resource from section 5 before it ships.
+- [ ] Every new resource from section 6 before it ships.
 - [ ] Settle the one remaining code-level unknown: whether Apple ever answers
       "last localization" 409 when deleting a subscription group localization.
 - [ ] Give `acceptance.yml` the `APPLE_TEST_APP_ID` secret and run it per release.
@@ -77,7 +170,7 @@ resource can set a first price but never change it.
       date, and whether it was fenn-money or the acceptance suite) and remove its
       "unverified" note.
 
-## 3. Build what makes stability checkable
+## 4. Build what makes stability checkable
 
 - [ ] **Upgrade tests**: for each resource, apply with the previous release
       (`ExternalProviders`), then plan with the working tree, expecting an empty
@@ -99,7 +192,7 @@ resource can set a first price but never change it.
 - [ ] Bring `CLAUDE.md` up to date: the `ci` package (Xcode Cloud) and the
       `releasing` guide aren't described.
 
-## 4. Distribution and project hygiene
+## 5. Distribution and project hygiene
 
 - [ ] **Publish to the OpenTofu Registry** as `ahmedosman00/apple`. OpenTofu
       resolves the address against `registry.opentofu.org`, where the provider
@@ -111,7 +204,7 @@ resource can set a first price but never change it.
       signing key and admits only `v*` / `cli-v*` tags.
 - [ ] `SECURITY.md` with a contact, and `CODEOWNERS`.
 
-## 5. Features that make it complete
+## 6. Features that make it complete
 
 For 1.0, subscription offers (each a resource plus a listing data source, with
 an exporter or a recorded reason to leave it out, an `introducedIn` entry and
@@ -151,7 +244,7 @@ Also for 1.0:
 After 1.0 (additive, so they don't block it): custom product pages, in-app
 events, app preview videos, sandbox testers, Game Center, App Clips.
 
-## 6. Redesign the documentation
+## 7. Redesign the documentation
 
 The current docs are generated from schema descriptions plus three guides
 (`getting-started`, `code-signing`, `releasing`). That makes them a reference
@@ -190,9 +283,9 @@ Plan:
       guides.
 - [ ] Decide whether the Registry is enough or the project wants a docs site.
 
-## 7. Release 1.0
+## 8. Release 1.0
 
-- [ ] Sections 1–4 done. Section 5's 1.0 items shipped in a 0.x release first.
+- [ ] Sections 1–5 done. Section 6's 1.0 items shipped in a 0.x release first.
 - [ ] One release candidate used by fenn-money for a full release cycle (TestFlight
       → submit → live) with no manual fixes.
 - [ ] Release provider 1.0.0 and CLI 1.0.0 together, with `MinProviderVersion`
