@@ -541,7 +541,7 @@ cross-variable validation.
   `PATCH /v1/subscriptions/{id}` with each price inline under a `${price0}`
   placeholder — the same JSON:API shape
   `apple_in_app_purchase_price_schedule` and `apple_app_price_schedule` use.
-  Five things follow:
+  Six things follow:
   - It is a **separate request type** from `SubscriptionUpdateRequest`, not a
     field on it, because that one sends a non-optional `attributes` member. An
     empty `"attributes":{}` is what Apple answers with the 409 about
@@ -561,16 +561,44 @@ cross-variable validation.
     same problem is solved by `reconcileSchedulePrices` not refreshing a price
     already in state, the way `apple_in_app_purchase_price_schedule` keeps
     configured dates.
-  - A write **replaces the subscription's manual price set**, so do not point
-    this and `apple_subscription_price` at the same subscription — a price only
-    the other resource knows about would come off behind its back. Removal is
-    still subject to Apple's rule that only future price changes can be
-    deleted.
+  - **The `PATCH` works only before approval.** Apple reads undated prices in
+    it as the *initial* price, which it accepts in `MISSING_METADATA`,
+    `READY_TO_SUBMIT` and `DEVELOPER_ACTION_NEEDED` (`initialPriceStates`) and
+    refuses afterwards with 409 "Initial price cannot be created again after
+    subscription is approved". So `write` reads the subscription's state first.
+    In any other state, `planPriceChanges` (`filters.go`) decides the requests
+    and `writePriceChanges` sends them: one dated
+    `POST /v1/subscriptionPrices` per territory whose price differs from the
+    one in effect, plus a `DELETE` for each scheduled change the plan no longer
+    names. **A price change is always dated**: an undated `POST` is an initial
+    price and gets the same 409, so an unset `start_date` is sent as
+    `priceChangeLeadDays` (three) days from today, UTC, past the one-to-two-day
+    notice Apple needs. A new price point needs a territory to be posted to,
+    from `territory_id` or from a price Apple already lists at it; otherwise
+    the write fails before sending anything.
+  - Before approval a write **replaces the subscription's manual price set**,
+    so do not point this and `apple_subscription_price` at the same
+    subscription — a price only the other resource knows about would come off
+    behind its back. After approval nothing comes off: a live price can only be
+    superseded, so a territory the plan leaves out keeps its price and the
+    apply warns.
+  - **Apple lists the price history beside the price.** Ended records and
+    `preserved` ones (the old price kept for existing subscribers) come back
+    from `GET /v1/subscriptions/{id}/prices` too. `effectivePrices` reduces them
+    to the latest-starting non-preserved record per territory, and
+    `reconcileSchedulePrices` adopts only those. A state price superseded by
+    one state does not hold (a change made by hand) is dropped, and the adopted
+    price **takes its form**: an unset `start_date` and `territory_id` stay
+    unset and `preserve_current_price` keeps its value. Apple reports
+    **`UPFRONT` on the ordinary price**, so an adopted `UPFRONT` is unset unless
+    the replaced price said `UPFRONT`; adopting it literally planned an update
+    forever. `MONTHLY` is the monthly-payment plan on a longer commitment, not
+    the ordinary price. `preserve_current_price` is never read from Apple.
   - The same prerequisites as the singular resource: an
     `apple_subscription_availability` has to exist first and the 409 names
     neither it nor a territory, so the `processing the pricing information`
-    special case is carried over. Apple additionally refuses the write while
-    the subscription is in review.
+    special case is carried over. Apple additionally refuses any price write
+    while the subscription is in review (`reviewPriceStates`).
 
 - **`apple_subscription_price_point_equalizations`**: the data source that makes
   pricing every territory possible, and the reason `apple_subscription_price_points`
@@ -985,7 +1013,7 @@ The CLI releases from `cli-v*` tags through `.github/workflows/cli-release.yml`,
 
 Two tiers:
 
-- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`, `internal/apple/uploads_test.go`, `internal/apple/buildUploads_test.go`, `internal/apple/profiles_test.go`, `internal/apple/retry_test.go`, `internal/export/export_test.go`, `internal/provider/media/files_test.go`, `internal/provider/media/schema_test.go`, `internal/provider/subscription/introductory_offer_schedule_resource_test.go`, `internal/provider/plan_modifier_order_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`. `uploads_test.go` sets `HTTPClient` and `UploadHTTPClient` to two counting transports over one `httptest.NewTLSServer` and asserts which network carried each request and that no part carried an `Authorization` header — that test is the guarantee the two networks stay separate. It shortens `assetPollInterval`/`assetPollAttempts` rather than waiting.
+- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`, `internal/apple/uploads_test.go`, `internal/apple/buildUploads_test.go`, `internal/apple/profiles_test.go`, `internal/apple/retry_test.go`, `internal/export/export_test.go`, `internal/provider/media/files_test.go`, `internal/provider/media/schema_test.go`, `internal/provider/subscription/introductory_offer_schedule_resource_test.go`, `internal/provider/subscription/price_schedule_resource_test.go`, `internal/provider/plan_modifier_order_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`. `uploads_test.go` sets `HTTPClient` and `UploadHTTPClient` to two counting transports over one `httptest.NewTLSServer` and asserts which network carried each request and that no part carried an `Authorization` header — that test is the guarantee the two networks stay separate. It shortens `assetPollInterval`/`assetPollAttempts` rather than waiting.
 - **Acceptance** (`internal/provider/*_test.go`, package `provider`): `terraform-plugin-testing` against the real API. `testAccPreCheck` skips when credentials are absent.
 
 The CLI's credential-free tests (`internal/cli/*_test.go`) drive whole commands through `run` against `fakeConnect`, an `httptest` App Store Connect whose build state advances on each look, with a fake clock so waits finish at once. `internal/cli/acceptance_test.go` only reads, and needs `APPLE_TEST_BUNDLE_ID`.
