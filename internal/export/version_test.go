@@ -21,7 +21,8 @@ import (
 // from the fix, not from the resource: apple_profile, apple_app_settings and
 // apple_subscription imports were fixed alongside the export in 0.8.0, and
 // apple_beta_group stopped replacing an imported external group there too.
-// When an exporter starts relying on a newer release, raise its entry here
+// apple_subscription_price_schedule counts from 0.8.1, whose import stopped
+// adopting Apple's price history. When an exporter starts relying on a newer release, raise its entry here
 // and MinProviderVersion with it.
 var introducedIn = map[string]string{
 	"apple_bundle_id":                      "0.1.0",
@@ -52,16 +53,19 @@ var introducedIn = map[string]string{
 	"apple_beta_app_localization":  "0.3.0",
 	"apple_beta_app_review_detail": "0.3.0",
 
-	"apple_beta_tester":                 "0.4.0",
-	"apple_subscription_price_schedule": "0.4.0",
-	"apple_user":                        "0.4.0",
-	"apple_user_invitation":             "0.4.0",
+	"apple_beta_tester":     "0.4.0",
+	"apple_user":            "0.4.0",
+	"apple_user_invitation": "0.4.0",
 
 	"apple_app_settings": "0.8.0",
 	"apple_beta_group":   "0.8.0",
 	"apple_profile":      "0.8.0",
 	"apple_subscription": "0.8.0",
 	"apple_subscription_introductory_offer_schedule": "0.8.0",
+
+	// 0.8.1 imports only the price in effect per territory and leaves an
+	// UPFRONT plan type unset, which is what the exporter now writes.
+	"apple_subscription_price_schedule": "0.8.1",
 }
 
 // TestMinProviderVersion fails when an exporter names a resource that

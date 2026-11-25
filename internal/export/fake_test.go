@@ -200,7 +200,12 @@ func (f *fakeAccount) GetSubscriptionLocalizations(string) ([]models.Subscriptio
 func (f *fakeAccount) GetSubscriptionPrices(string) ([]models.SubscriptionPrice, error) {
 	return []models.SubscriptionPrice{
 		{ID: "SP2", Attributes: models.SubscriptionPriceAttributes{StartDate: ptr("2026-12-01")}, Relationships: &models.SubscriptionPriceRelationships{SubscriptionPricePoint: id("subscriptionPricePoints", "spp-gbr"), Territory: id("territories", "GBR")}},
-		{ID: "SP1", Relationships: &models.SubscriptionPriceRelationships{SubscriptionPricePoint: id("subscriptionPricePoints", "spp-usa"), Territory: id("territories", "USA")}},
+		{ID: "SP1", Attributes: models.SubscriptionPriceAttributes{PlanType: ptr(models.SubscriptionPlanTypeUpfront)}, Relationships: &models.SubscriptionPriceRelationships{SubscriptionPricePoint: id("subscriptionPricePoints", "spp-usa"), Territory: id("territories", "USA")}},
+		// History Apple lists beside the prices in effect: the GBR price the
+		// scheduled change supersedes, and a USA price preserved for existing
+		// subscribers. The import adopts neither, so the export must not write them.
+		{ID: "SP0", Relationships: &models.SubscriptionPriceRelationships{SubscriptionPricePoint: id("subscriptionPricePoints", "spp-gbr-old"), Territory: id("territories", "GBR")}},
+		{ID: "SP3", Attributes: models.SubscriptionPriceAttributes{StartDate: ptr("2026-11-01"), Preserved: ptr(true)}, Relationships: &models.SubscriptionPriceRelationships{SubscriptionPricePoint: id("subscriptionPricePoints", "spp-usa-preserved"), Territory: id("territories", "USA")}},
 	}, nil
 }
 

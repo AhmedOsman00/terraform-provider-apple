@@ -22,7 +22,7 @@ const NotesFile = "EXPORT_NOTES.md"
 // an attribute or an import form that a later release introduced;
 // TestMinProviderVersion holds the per-resource list it is the maximum of.
 // scripts/validate-examples.sh builds the working tree at this version.
-const MinProviderVersion = "0.8.0"
+const MinProviderVersion = "0.8.1"
 
 // providerConstraint allows MinProviderVersion and anything after it within
 // the same major version: a new major may change the schema the export was

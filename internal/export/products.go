@@ -162,18 +162,16 @@ func (e *exporter) exportSubscriptionPriceSchedule(f *file, subscription models.
 
 	// One price schedule, never an apple_subscription_price per price: the
 	// two write the same set and would take each other's prices off.
-	byPoint := map[string]models.SubscriptionPrice{}
-	for _, price := range prices {
-		if price.Relationships == nil || price.Relationships.SubscriptionPricePoint == nil {
-			continue
-		}
-		if point := price.Relationships.SubscriptionPricePoint.Data.ID; point != "" {
-			byPoint[point] = price
-		}
-	}
-	objects := make([]map[string]cty.Value, 0, len(byPoint))
-	for _, point := range sortedKeys(byPoint) {
-		price := byPoint[point]
+	//
+	// This mirrors the schedule's ImportState, which adopts through
+	// reconcileSchedulePrices with no prior state: only the price in effect
+	// in each territory, never the ended and preserved records Apple lists
+	// beside it, and an UPFRONT plan type left unset, since Apple reports
+	// UPFRONT on the ordinary price.
+	effective := effectiveSubscriptionPrices(prices)
+	objects := make([]map[string]cty.Value, 0, len(effective))
+	for _, point := range sortedKeys(effective) {
+		price := effective[point]
 		object := map[string]cty.Value{
 			"price_point_id": cty.StringVal(point),
 			"start_date":     optString(price.Attributes.StartDate),
@@ -183,10 +181,13 @@ func (e *exporter) exportSubscriptionPriceSchedule(f *file, subscription models.
 		if price.Relationships.Territory != nil && price.Relationships.Territory.Data.ID != "" {
 			object["territory_id"] = cty.StringVal(price.Relationships.Territory.Data.ID)
 		}
-		if price.Attributes.PlanType != nil {
-			object["plan_type"] = cty.StringVal(string(*price.Attributes.PlanType))
+		if planType := price.Attributes.PlanType; planType != nil && *planType != models.SubscriptionPlanTypeUpfront {
+			object["plan_type"] = cty.StringVal(string(*planType))
 		}
 		objects = append(objects, object)
+	}
+	if len(objects) == 0 {
+		return nil
 	}
 
 	s, saddr := e.resource(f, "apple_subscription_price_schedule", subscription.ID, subscription.ID, productID)
@@ -196,9 +197,51 @@ func (e *exporter) exportSubscriptionPriceSchedule(f *file, subscription models.
 		s.body.SetAttributeRaw("depends_on", tupleOfTraversals(availability.traversal()))
 	}
 	e.note(Attention, saddr.String(),
-		"Every price Apple holds for %s is listed, past ones included. Apple deletes only future price changes, so to change a price add a new one with a later start_date rather than editing or removing a live one.", productID)
+		"The price in effect in each territory of %s is listed, a scheduled change included; Apple's ended and preserved price records are not. Once the subscription is approved, changing a price_point_id schedules a dated price change rather than replacing the price, and a live price cannot be removed.", productID)
 
 	return nil
+}
+
+// effectiveSubscriptionPrices mirrors effectivePrices in the provider's
+// subscription package: per territory, the latest-starting price that is not
+// preserved, where an undated price started before any dated one. It is keyed
+// by price point, which encodes the territory, so one entry per territory.
+func effectiveSubscriptionPrices(prices []models.SubscriptionPrice) map[string]models.SubscriptionPrice {
+	byTerritory := map[string]models.SubscriptionPrice{}
+	for _, price := range prices {
+		if price.Relationships == nil || price.Relationships.SubscriptionPricePoint == nil {
+			continue
+		}
+		point := price.Relationships.SubscriptionPricePoint.Data.ID
+		if point == "" || (price.Attributes.Preserved != nil && *price.Attributes.Preserved) {
+			continue
+		}
+		key := point
+		if t := price.Relationships.Territory; t != nil && t.Data.ID != "" {
+			key = t.Data.ID
+		}
+		if current, ok := byTerritory[key]; !ok || startsLater(price.Attributes.StartDate, current.Attributes.StartDate) {
+			byTerritory[key] = price
+		}
+	}
+
+	byPoint := make(map[string]models.SubscriptionPrice, len(byTerritory))
+	for _, price := range byTerritory {
+		byPoint[price.Relationships.SubscriptionPricePoint.Data.ID] = price
+	}
+	return byPoint
+}
+
+// startsLater reports whether start date a is later than b, a null start date
+// never being later.
+func startsLater(a, b *string) bool {
+	if a == nil {
+		return false
+	}
+	if b == nil {
+		return true
+	}
+	return *a > *b
 }
 
 // exportSubscriptionIntroductoryOffers mirrors the introductory offer

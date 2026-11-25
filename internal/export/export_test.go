@@ -186,6 +186,28 @@ func TestTeamLeavesOutTheAccountHolder(t *testing.T) {
 	}
 }
 
+// TestSubscriptionPricesAreThoseInEffect checks the export mirrors the price
+// schedule's import: one price per territory, none of Apple's history, and no
+// UPFRONT plan type, which Apple reports on the ordinary price.
+func TestSubscriptionPricesAreThoseInEffect(t *testing.T) {
+	result, _ := runFake(t, Options{Domains: []Domain{DomainProducts}})
+	products := string(result.Files["com_example_app_products.tf"])
+
+	for _, history := range []string{"spp-gbr-old", "spp-usa-preserved"} {
+		if strings.Contains(products, history) {
+			t.Errorf("price history %s exported; the import does not adopt it:\n%s", history, products)
+		}
+	}
+	for _, current := range []string{"spp-gbr", "spp-usa"} {
+		if !strings.Contains(products, `"`+current+`"`) {
+			t.Errorf("price in effect %s missing:\n%s", current, products)
+		}
+	}
+	if strings.Contains(products, "UPFRONT") {
+		t.Errorf("UPFRONT plan type exported; the import leaves it unset:\n%s", products)
+	}
+}
+
 func TestInAppPurchaseLocalizationsComeFromTheNewestVersion(t *testing.T) {
 	_, account := runFake(t, Options{Domains: []Domain{DomainProducts}})
 

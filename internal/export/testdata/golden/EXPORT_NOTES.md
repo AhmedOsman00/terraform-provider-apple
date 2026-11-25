@@ -54,7 +54,7 @@ The plan should report **34 to import, 0 to add, 0 to change, 0 to destroy**. An
 - `apple_app_store_review_detail.com_example_app_ios`: A demo account is required, and Apple does not return its password. Set var.app_review_com_example_app_ios_demo_password (it is sensitive, and still stored in state in plain text); until it is set, Terraform leaves the password Apple holds alone.
 - `apple_app_store_version.com_example_app_mac_os`: com.example.app 2.0 is READY_FOR_DISTRIBUTION, so Apple accepts no changes to it. Changing version_string replaces it with a new version, which is how the next release is cut.
 - `apple_app_price_schedule.com_example_app`: This changes what com.example.app costs. Apple publishes no DELETE for a price schedule, so a change applied here cannot be undone by removing it.
-- `apple_subscription_price_schedule.com_example_app_monthly`: Every price Apple holds for com.example.app.monthly is listed, past ones included. Apple deletes only future price changes, so to change a price add a new one with a later start_date rather than editing or removing a live one.
+- `apple_subscription_price_schedule.com_example_app_monthly`: The price in effect in each territory of com.example.app.monthly is listed, a scheduled change included; Apple's ended and preserved price records are not. Once the subscription is approved, changing a price_point_id schedules a dated price change rather than replacing the price, and a live price cannot be removed.
 - `apple_user_invitation.new_example_com`: The invitation to new@example.com is pending and lapses at 2026-10-23T00:00:00Z. Once it is accepted Apple deletes it; replace this block with an apple_user for them then.
 
 ## Not in the configuration

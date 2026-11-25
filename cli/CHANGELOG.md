@@ -1,3 +1,22 @@
+## 0.3.2 (Unreleased)
+
+BUG FIXES:
+
+* **`apple terraform export` pins the provider release it was written for.**
+  `providers.tf` pinned `~> 0.1`, which allowed providers that lack
+  `apple_subscription_introductory_offer_schedule` or import a profile, app
+  settings, subscription or external beta group into a non-empty plan. It now
+  pins `>= 0.8.1, < 1.0.0`.
+
+* **`apple terraform export` writes a subscription's current prices, not its
+  price history.** Apple lists ended prices and prices preserved for existing
+  subscribers beside the ones in effect, and the export wrote all of them into
+  `apple_subscription_price_schedule`. Provider 0.8.1 imports only the price in
+  effect in each territory, so the first plan showed changes, and on an approved
+  subscription would have scheduled the old prices again. The export now writes
+  one price per territory, and leaves out the `UPFRONT` plan type Apple reports
+  on an ordinary price. This is why the pin starts at 0.8.1.
+
 ## 0.3.1 (November 12, 2026)
 
 NOTES:
