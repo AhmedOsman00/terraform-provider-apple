@@ -227,7 +227,17 @@ an example):
       `_one_time_use_code`, and data sources for the codes and the one-time-use
       code values).
 - [ ] An `apple_subscription_introductory_offers` listing data source, the one
-      piece of introductory offer coverage still missing.
+      piece of introductory offer coverage still missing. An implementation
+      already exists under MPL-2.0 and can be ported rather than written: a
+      required `subscription_id`, a `territories` filter sent to Apple as
+      `filter[territory]`, an `offer_mode` filter applied in memory, and one
+      record per territory (`id`, `territory_id`, `offer_mode`, `duration`,
+      `number_of_periods`, `price_point_id`, `start_date`, `end_date`,
+      `target_subscription_plan_type`), ordered by territory then start date.
+      Read it through the existing `GetSubscriptionIntroductoryOffers`. Bring it
+      in line with the other listing data sources on the way in: the filters
+      in `filters.go` with table tests, `limit` / `sort_by` / `sort_order`,
+      `total_count` / `filtered_count`, and no `last_updated`.
 
 Also for 1.0:
 - [ ] Phased release (`appStoreVersionPhasedReleases`): a setting on most
