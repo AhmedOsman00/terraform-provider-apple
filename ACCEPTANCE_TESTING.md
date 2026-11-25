@@ -14,6 +14,29 @@ The credential-free tests (`internal/apple`, the `filters_test.go` files,
 `capability_models_test.go`, `renewal_test.go`, `models_test.go`) never reach
 Apple and are not covered here.
 
+## Keeping the variables in the Keychain (macOS)
+
+`scripts/acc-env.sh` stores each variable as its own item in the login
+Keychain and sets them only for the command it runs, so nothing is exported
+in your shell or written to a file:
+
+```bash
+scripts/acc-env.sh set APPLE_APP_STORE_CONNECT_ISSUER_ID          # typed, hidden
+scripts/acc-env.sh set APPLE_APP_STORE_CONNECT_API_KEY
+scripts/acc-env.sh set APPLE_APP_STORE_CONNECT_PRIVATE_KEY ~/keys/AuthKey_ABC123.p8
+scripts/acc-env.sh set APPLE_TEST_APP_ID
+scripts/acc-env.sh list                                           # names only
+
+make testacc-local RUN=TestAccCertificateResource_adoptByCSR      # PKG=./internal/cli for the CLI
+```
+
+Values never reach a command line (`ps` would show them) or the output. Only
+names the suite reads are accepted, so a misspelt one fails rather than being
+stored and ignored. The opt-in guards (`APPLE_TEST_ALLOW_APP_PRICING`,
+`APPLE_TEST_ALLOW_USER_REMOVAL`, the invitation emails) are stored the same way,
+which makes them sticky. Store them only while you mean them, and
+`scripts/acc-env.sh unset` them afterwards.
+
 ## Is any of this going to get the account suspended?
 
 No. The suite does none of the things Apple acts on: no credential

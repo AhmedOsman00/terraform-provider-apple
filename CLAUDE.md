@@ -16,6 +16,7 @@ make fmt        # gofmt -s -w -e .
 make lint       # golangci-lint run  (config in .golangci.yml)
 make test       # go test -v -cover -race -timeout=120s -parallel=10 ./...
 make testacc    # TF_ACC=1 go test -v -cover -timeout 120m ./...
+make testacc-local RUN=TestAccFoo  # same, environment from the macOS Keychain (scripts/acc-env.sh)
 make generate   # regenerates docs/ from schemas + examples/ (see caveats below)
 make validate-examples  # terraform validate over every directory under examples/
 ```
