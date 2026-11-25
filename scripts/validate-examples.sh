@@ -20,8 +20,14 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROVIDER_ADDR="registry.terraform.io/ahmedosman00/apple"
-# Must satisfy the version constraint the examples pin.
-PROVIDER_VERSION="0.1.0"
+# Must satisfy every version constraint validated here: the examples pin
+# `~> 0.1`, and the export's golden output pins `>= MinProviderVersion`, so the
+# build takes the export's floor.
+PROVIDER_VERSION="$(sed -n 's/^const MinProviderVersion = "\(.*\)"$/\1/p' "$REPO_ROOT/internal/export/report.go")"
+if [ -z "$PROVIDER_VERSION" ]; then
+  echo "Could not read MinProviderVersion from internal/export/report.go." >&2
+  exit 1
+fi
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

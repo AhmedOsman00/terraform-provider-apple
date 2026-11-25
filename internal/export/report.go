@@ -15,6 +15,27 @@ import (
 // NotesFile is the file the notes are written to, beside the configuration.
 const NotesFile = "EXPORT_NOTES.md"
 
+// MinProviderVersion is the oldest provider release the exported
+// configuration plans cleanly against: the newest of the versions in which
+// each resource it writes first existed and first imported the way its
+// exporter writes it. Raise it when an exporter starts writing a resource,
+// an attribute or an import form that a later release introduced;
+// TestMinProviderVersion holds the per-resource list it is the maximum of.
+// scripts/validate-examples.sh builds the working tree at this version.
+const MinProviderVersion = "0.8.0"
+
+// providerConstraint allows MinProviderVersion and anything after it within
+// the same major version: a new major may change the schema the export was
+// written against.
+func providerConstraint() string {
+	major, _, _ := strings.Cut(MinProviderVersion, ".")
+	next := 1
+	if _, err := fmt.Sscan(major, &next); err == nil {
+		next++
+	}
+	return fmt.Sprintf(">= %s, < %d.0.0", MinProviderVersion, next)
+}
+
 // providersFile pins the provider. Import blocks need Terraform 1.5.
 func providersFile() *file {
 	f := newFile("providers.tf")
@@ -25,7 +46,7 @@ func providersFile() *file {
 	providers := terraform.AppendNewBlock("required_providers", nil).Body()
 	providers.SetAttributeValue("apple", cty.ObjectVal(map[string]cty.Value{
 		"source":  cty.StringVal("ahmedosman00/apple"),
-		"version": cty.StringVal("~> 0.1"),
+		"version": cty.StringVal(providerConstraint()),
 	}))
 	f.hcl.Body().AppendNewline()
 	f.hcl.Body().AppendNewBlock("provider", []string{"apple"})
