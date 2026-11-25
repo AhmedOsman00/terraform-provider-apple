@@ -84,7 +84,8 @@ certificate and revokes the original.
       code-signing guide.
 - [x] Unit tests for the key comparison and the replacement rule, and
       `TestAccCertificateResource_adoptByCSR`.
-- [ ] Run `TestAccCertificateResource_adoptByCSR` against the live API.
+- [x] Run `TestAccCertificateResource_adoptByCSR` against the live API
+      (2026-11-25, passed).
 
 ### 2b. Clearer certificate note in the export
 

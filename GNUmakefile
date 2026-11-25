@@ -33,6 +33,6 @@ testacc:
 RUN ?= .
 PKG ?= ./...
 testacc-local:
-	scripts/acc-env.sh run env TF_ACC=1 go test -v -cover -timeout 120m -run '$(RUN)' $(PKG)
+	scripts/acc-env.sh run env TF_ACC=1 go test -v -cover -timeout 120m -run '$(value RUN)' $(PKG)
 
 .PHONY: fmt lint test testacc testacc-local build install generate validate-examples
