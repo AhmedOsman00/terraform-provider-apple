@@ -1,6 +1,6 @@
 # Road to 1.0
 
-What stands between today's provider (0.8.0) and CLI (0.3.1) and a 1.0 of each.
+What stands between today's provider (0.8.1) and CLI (0.3.2) and a 1.0 of each.
 Ordered by priority: correctness first, then proof, then the promise, then reach.
 
 A 1.0 means: every resource and CLI command has run against the live API,
@@ -18,7 +18,7 @@ flags, exit codes and `--json` output change only through a deprecation cycle.
   testers and pages, users and invitations), plus `version`, `release preflight`,
   `signing install/clean`, `build verify/upload/wait` and `testflight notes`.
 
-## 1. Fix: changing the price of an approved subscription
+## 1. Fix: changing the price of an approved subscription (0.8.1)
 
 `apple_subscription_price_schedule` always sends the replace-all
 `PATCH /v1/subscriptions/{id}`. Apple reads undated prices there as an
@@ -27,33 +27,33 @@ and `DEVELOPER_ACTION_NEEDED`. For an approved subscription it answers 409
 "Initial price cannot be created again after subscription is approved", so the
 resource can set a first price but never change it.
 
-- [ ] `write` reads the subscription's state first. In the three states above it
+- [x] `write` reads the subscription's state first. In the three states above it
       keeps the `PATCH`. In any other state it sends one
       `POST /v1/subscriptionPrices` for each territory whose price point differs
       from the one in effect, carrying `start_date` and `preserve_current_price`.
       A territory absent from the configuration is left alone, since a live price
-      can't be withdrawn. Keep the decision in a pure function (`pricesToPost`)
-      so it can be tested without HTTP.
-- [ ] A price change is always dated. A `POST` with no `startDate` is an initial
+      can't be withdrawn. The decision is a pure function
+      (`planPriceChanges`), tested without HTTP.
+- [x] A price change is always dated. A `POST` with no `startDate` is an initial
       price and gets the same 409, so an unset `start_date` sends three days from
       today (UTC). That's past the one-to-two-day minimum Apple gives for every
       time zone.
-- [ ] On read, Apple lists ended and preserved records beside the current price.
+- [x] On read, Apple lists ended and preserved records beside the current price.
       Drop `preserved` records and keep the latest-starting record per territory,
       so a change scheduled by hand in App Store Connect reads back equal to a
       configuration asking for it.
-- [ ] An unset `plan_type` is `UPFRONT`, which is what Apple reports for the
+- [x] An unset `plan_type` is `UPFRONT`, which is what Apple reports for the
       ordinary price. An adopted price keeps the form of the one it replaced
       (unset stays unset), or else the read plans an update forever. Fix the
       `plan_type` descriptions on both price resources: they call `MONTHLY` the
       ordinary price, but `MONTHLY` is the monthly-payment plan on a longer
       commitment.
-- [ ] `preserve_current_price` is an instruction, never read from Apple. An
+- [x] `preserve_current_price` is an instruction, never read from Apple. An
       adopted price keeps the value of the state price it replaced, or null.
-- [ ] Error text names the subscription's state instead of always saying
+- [x] Error text names the subscription's state instead of always saying
       "in review".
-- [ ] `httptest` tests for each case above, and one live run that raises the
-      price of an approved subscription.
+- [x] `httptest` tests for each case above.
+- [ ] One live run that raises the price of an approved subscription.
 
 ## 2. Adopting an existing account
 
@@ -150,7 +150,7 @@ invitations; `app` = listing.
 
 ## 3. Verify everything against the live API
 
-- [ ] Move fenn-money to provider 0.8.x and CLI 0.3.1. That covers the retries
+- [ ] Move fenn-money to provider 0.8.1 and CLI 0.3.2. That covers the retries
       and the export version pin for free.
 - [ ] **`apple release submit`**: add it to fenn-money's `release.yml` after
       "Attach the build", or run it once by hand. It is the most important
