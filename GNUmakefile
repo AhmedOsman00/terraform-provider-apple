@@ -27,4 +27,12 @@ test:
 testacc:
 	TF_ACC=1 go test -v -cover -timeout 120m ./...
 
-.PHONY: fmt lint test testacc build install generate validate-examples
+# Acceptance tests with the environment from the macOS Keychain
+# (scripts/acc-env.sh). RUN narrows to a -run pattern, PKG to a package:
+#   make testacc-local RUN=TestAccCertificateResource_adoptByCSR
+RUN ?= .
+PKG ?= ./...
+testacc-local:
+	scripts/acc-env.sh run env TF_ACC=1 go test -v -cover -timeout 120m -run '$(RUN)' $(PKG)
+
+.PHONY: fmt lint test testacc testacc-local build install generate validate-examples
