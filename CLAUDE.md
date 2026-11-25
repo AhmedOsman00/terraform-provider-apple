@@ -147,7 +147,10 @@ Rules that are easy to undo by accident:
 - **One `apple_subscription_price_schedule` per subscription**, never
   `apple_subscription_price` as well: they write the same set and fight. It
   carries `depends_on` the subscription's availability, which Apple requires
-  first. Introductory offers follow the same rule: one
+  first. It writes only the price in effect per territory, with an `UPFRONT`
+  plan type left out (`effectiveSubscriptionPrices`, mirroring the provider's
+  `effectivePrices`), because that is what the import has recorded since
+  0.8.1. Introductory offers follow the same rule: one
   `apple_subscription_introductory_offer_schedule` per subscription that has
   any, never `apple_subscription_introductory_offer`, because the schedule
   removes the offers it does not list. It `depends_on` the availability, which
@@ -179,6 +182,9 @@ Rules that are easy to undo by accident:
   plans cleanly against, counting from an import fix where there was one.
   `TestMinProviderVersion` fails on an exporter writing a type that list does
   not name, so a new exporter has to decide its release.
+  A provider fix that changes what an import records moves that type's entry
+  to the fixing release, even when the exporter changes with it: the pin is
+  what keeps an older provider from planning against the new output.
 
 Three imports had to be fixed for this contract to hold, and must stay fixed:
 `apple_profile` import reads `bundle_id`, `certificates` and `devices` from the
