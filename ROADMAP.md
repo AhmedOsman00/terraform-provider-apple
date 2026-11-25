@@ -1,6 +1,6 @@
 # Road to 1.0
 
-What stands between today's provider (0.8.1) and CLI (0.3.2) and a 1.0 of each.
+What stands between today's provider (0.8.2) and CLI (0.3.3) and a 1.0 of each.
 Ordered by priority: correctness first, then proof, then the promise, then reach.
 
 A 1.0 means: every resource and CLI command has run against the live API,
@@ -87,7 +87,7 @@ certificate and revokes the original.
 - [x] Run `TestAccCertificateResource_adoptByCSR` against the live API
       (2026-11-25, passed).
 
-### 2b. Clearer certificate note in the export
+### 2b. Clearer certificate note in the export (CLI 0.3.3)
 
 - [x] Reword the `EXPORT_NOTES.md` note on each certificate: it is read through
       a data source, so Terraform won't renew it, and `early_renewal_hours`
@@ -153,7 +153,7 @@ invitations; `app` = listing.
 
 ## 3. Verify everything against the live API
 
-- [ ] Move fenn-money to provider 0.8.1 and CLI 0.3.2. That covers the retries
+- [ ] Move fenn-money to provider 0.8.2 and CLI 0.3.3. That covers the retries
       and the export version pin for free.
 - [ ] **`apple release submit`**: add it to fenn-money's `release.yml` after
       "Attach the build", or run it once by hand. It is the most important
