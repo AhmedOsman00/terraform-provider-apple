@@ -102,6 +102,10 @@ func (c *Client) createBuildUpload(appID, platform, version, buildNumber string)
 	return &response.Data, nil
 }
 
+// reserveBuildUploadFile reserves the .ipa as a single ASSET. altool also sends
+// ASSET_DESCRIPTION and ASSET_SPI files, but Apple does not need them: an
+// ASSET-only upload has been seen to reach COMPLETE, process to VALID and be
+// attached to an App Store version against the live API.
 func (c *Client) reserveBuildUploadFile(uploadID, fileName string, fileSize int64) (*models.BuildUploadFile, error) {
 	requestData := models.Request[models.BuildUploadFileCreateRequest]{
 		Data: models.BuildUploadFileCreateRequest{

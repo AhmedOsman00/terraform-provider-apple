@@ -110,9 +110,12 @@ every build change into a CLI release for nothing those tools do not already do.
   from the screenshot flow in two ways: the commit takes `sourceFileChecksums`
   (an object naming its algorithm) rather than one string, and parts are read
   from the file through an `io.ReaderAt`, since an `.ipa` is too large to hold
-  in memory. The file is reserved as `ASSET` / `com.apple.ipa` alone; whether
-  Apple also wants the `ASSET_DESCRIPTION` or `ASSET_SPI` types `altool` sends
-  is **unverified against the live API**.
+  in memory. The file is reserved as `ASSET` / `com.apple.ipa` alone, without
+  the `ASSET_DESCRIPTION` or `ASSET_SPI` types `altool` sends, and that is
+  **enough**: verified against the live API by a production release pipeline
+  (CLI 0.3.0, October 2026), where the upload reached `COMPLETE`, the build
+  processed to `VALID` and was then attached to an App Store version. Do not
+  add the other two types without a reason Apple gives.
 - `terraform.go`: `apple terraform export`, a thin wrapper over
   `internal/export` (below). It refuses a non-empty `--out` unless `--force`,
   so it can never write over a configuration that already manages the account,
