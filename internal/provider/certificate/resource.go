@@ -76,11 +76,17 @@ func (r *certificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 			},
 			"csr_content": schema.StringAttribute{
 				MarkdownDescription: "The Certificate Signing Request (CSR) content in PEM format. " +
-					"This is used to generate the certificate and cannot be changed after creation.",
+					"Apple issues the certificate against it, so changing it issues a new certificate and revokes this one.\n\n" +
+					"The exception is adopting an imported certificate. Apple does not return the CSR a certificate was issued " +
+					"from, so an import records it as null. Setting it then to a CSR carrying the certificate's public key -- " +
+					"the original, or one generated later from the same private key -- records it in place without " +
+					"replacing the certificate. A CSR from a different key still replaces it, with a warning.",
 				Required:   true,
 				Validators: GetCsrContentValidator(),
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.RequiresReplaceIf(csrRequiresReplace,
+						"Replaces the certificate, unless it was imported without a CSR and this CSR carries its public key.",
+						"Replaces the certificate, unless it was imported without a CSR and this CSR carries its public key."),
 				},
 			},
 			"serial_number": schema.StringAttribute{
@@ -373,8 +379,9 @@ func (r *certificateResource) Read(ctx context.Context, req resource.ReadRequest
 // Update updates the resource and sets the updated Terraform state on success.
 //
 // The certificate itself is immutable and every attribute describing one
-// requires replacement, so the only change that reaches this method is to
-// early_renewal_hours: local bookkeeping that Apple does not store.
+// requires replacement, so only two changes reach this method, neither of
+// which Apple stores: early_renewal_hours, and a csr_content adopted onto an
+// imported certificate whose public key it carries (csrRequiresReplace).
 func (r *certificateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan certificateResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -388,13 +395,15 @@ func (r *certificateResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	// Carry the issued certificate forward untouched; only the window moves.
+	// Carry the issued certificate forward untouched. Only the renewal window
+	// moves, or csr_content is adopted onto an imported certificate, which
+	// csrRequiresReplace allows in place only when the CSR carries the
+	// certificate's public key; both come from the plan.
 	plan.ID = state.ID
 	plan.SerialNumber = state.SerialNumber
 	plan.CertificateContent = state.CertificateContent
 	plan.DisplayName = state.DisplayName
 	plan.Name = state.Name
-	plan.CsrContent = state.CsrContent
 	plan.Platform = state.Platform
 	plan.ExpirationDate = state.ExpirationDate
 	plan.CertificateType = state.CertificateType
@@ -403,7 +412,7 @@ func (r *certificateResource) Update(ctx context.Context, req resource.UpdateReq
 	plan.RequesterEmail = state.RequesterEmail
 	plan.ReadyForRenewal = types.BoolValue(false)
 
-	tflog.Info(ctx, "Updating Certificate early renewal window", map[string]interface{}{
+	tflog.Info(ctx, "Updating Certificate in place", map[string]interface{}{
 		"certificate_id":      state.ID.ValueString(),
 		"early_renewal_hours": plan.EarlyRenewalHours.ValueInt64(),
 	})

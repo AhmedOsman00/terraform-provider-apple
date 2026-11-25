@@ -224,13 +224,12 @@ state whose read access is a company-wide security boundary.
 
 Pointing the module at a team that already uses match, and letting it issue its
 own certificate, revokes the one match handed out — every build already signed
-with it stops verifying. Importing the existing certificate does not help either:
-`csr_content` forces replacement on `apple_certificate`, and Apple does not
-reliably return the CSR a certificate was issued from, so an imported certificate
-is replaced on the next apply, which revokes the original.
+with it stops verifying. There are two ways to keep it: read it, or hand it to
+Terraform.
 
-So adopt it instead. Give the module the serial number of the certificate match
-issued:
+### Read it by serial
+
+Give the module the serial number of the certificate match issued:
 
 ```hcl
 adopt_certificate_serials = {
@@ -257,13 +256,43 @@ passphrase and stored wherever you decided the key lives:
 openssl rsa -in certs/distribution/ABCDE12345.p12.key -out distribution.key
 ```
 
-**Adoption is deliberately a one-way door held open.** `early_renewal_hours` does
-not apply to an adopted certificate: renewing means issuing a replacement, and
-issuing revokes the original. When the certificate nears expiry, or when the team
-is ready to stop depending on match, generate a CSR, put it in `csr_contents`,
-drop the role from `adopt_certificate_serials`, and let Terraform issue a fresh
-one. That is the cutover — on a date you choose rather than the moment you first
-ran `terraform apply`.
+**A certificate read this way is never renewed.** `early_renewal_hours` acts only
+on an `apple_certificate` Terraform owns. When the certificate nears expiry,
+either generate a new key and CSR, put the CSR in `csr_contents`, drop the role
+from `adopt_certificate_serials`, and let Terraform issue a fresh one — or hand
+the existing certificate over, below.
+
+### Hand it to Terraform
+
+From provider 0.8.2, an imported certificate can be given its CSR without being
+reissued. Apple does not return the CSR a certificate was issued from, so an
+import records `csr_content` as null. Setting it then to a CSR whose public key
+matches the certificate's is recorded in place. Any CSR generated from the key
+match holds will do; it does not have to be the original:
+
+```bash
+openssl req -new -key distribution.key -subj "/CN=distribution" -out distribution.csr
+```
+
+Put that CSR in `csr_contents`, drop the role from `adopt_certificate_serials`,
+and import the certificate into the address the module issues it at:
+
+```hcl
+import {
+  to = module.signing.apple_certificate.signing["distribution"]
+  id = "6F1B2C3D4E5A7B8C"
+}
+```
+
+The plan shows an import and an in-place update of `csr_content`, with no
+replacement. A CSR from a different key is still a replacement, and the plan
+warns that the keys differ. Check for that warning before applying, because a
+replacement revokes the certificate.
+
+From then on `early_renewal_hours` renews it like any certificate the module
+issued. The successor is issued from the same CSR, so it keeps the same key. To
+move to a new key, put a CSR from that key in `csr_contents`, and the next apply
+replaces the certificate.
 
 ## Behaviour that differs from match
 

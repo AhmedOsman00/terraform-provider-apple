@@ -1,3 +1,17 @@
+## 0.8.2 (Unreleased)
+
+BUG FIXES:
+
+* **An imported `apple_certificate` can be given its CSR without being
+  reissued.** Apple does not return the CSR a certificate was issued from, so
+  an import records `csr_content` as null. Setting it in configuration then
+  planned a replacement, which revokes the certificate. Now a CSR whose public
+  key matches the certificate's is recorded in place, the original or one
+  generated later from the same private key. A CSR from a different key still
+  replaces the certificate, and the plan warns that the keys differ. Once
+  adopted, `early_renewal_hours` renews the certificate from that CSR, so the
+  successor keeps the same key.
+
 ## 0.8.1 (November 25, 2026)
 
 BUG FIXES:

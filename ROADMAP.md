@@ -61,28 +61,30 @@ Three changes that make `apple terraform export` and certificate adoption
 usable on a real account. The certificate fix lands first, so the export note
 can point to it.
 
-### 2a. Fix: adopt a certificate by giving its CSR (`bugfix/`)
+### 2a. Fix: adopt a certificate by giving its CSR (0.8.2)
 
 An imported `apple_certificate` records `csr_content` as null, since Apple
 returns it null. Setting it in configuration then plans null → value, and
 because the attribute is `RequiresReplace`, the next apply reissues the
 certificate and revokes the original.
 
-- [ ] Make `csr_content` `RequiresReplaceIf`: skip the replacement when prior
+- [x] Make `csr_content` `RequiresReplaceIf`: skip the replacement when prior
       state holds no CSR and the CSR's public key equals the key in
       `certificate_content` (`x509.ParseCertificateRequest` against
       `x509.ParseCertificate`, comparing the public key info). The change is
       then recorded in place, and `Update` already carries the issued
       certificate forward.
-- [ ] A CSR generated later from the same private key matches too, since only
+- [x] A CSR generated later from the same private key matches too, since only
       the public key is compared.
-- [ ] A key mismatch still replaces, but `ModifyPlan` warns that the CSR comes
-      from a different key, so it isn't mistaken for the old bug.
-- [ ] After adoption, `early_renewal_hours` renews as usual. The successor is
+- [x] A key mismatch still replaces, but the plan warns that the CSR comes
+      from a different key (from `csrRequiresReplace`), so it isn't mistaken for
+      the old bug.
+- [x] After adoption, `early_renewal_hours` renews as usual. The successor is
       issued from the stored CSR, so it reuses the same key; say so in the
       code-signing guide.
-- [ ] Unit tests for the key comparison; an acceptance step that imports a
-      certificate, sets its CSR and expects an empty plan.
+- [x] Unit tests for the key comparison and the replacement rule, and
+      `TestAccCertificateResource_adoptByCSR`.
+- [ ] Run `TestAccCertificateResource_adoptByCSR` against the live API.
 
 ### 2b. Clearer certificate note in the export
 

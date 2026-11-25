@@ -155,7 +155,9 @@ output "all_certificate_serials" {
 - And others...
 
 This cannot be changed after creation.
-- `csr_content` (String) The Certificate Signing Request (CSR) content in PEM format. This is used to generate the certificate and cannot be changed after creation.
+- `csr_content` (String) The Certificate Signing Request (CSR) content in PEM format. Apple issues the certificate against it, so changing it issues a new certificate and revokes this one.
+
+The exception is adopting an imported certificate. Apple does not return the CSR a certificate was issued from, so an import records it as null. Setting it then to a CSR carrying the certificate's public key -- the original, or one generated later from the same private key -- records it in place without replacing the certificate. A CSR from a different key still replaces it, with a warning.
 
 ### Optional
 
