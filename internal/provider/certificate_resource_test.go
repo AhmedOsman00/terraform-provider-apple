@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 )
 
 // Certificates are the one resource here that consumes a limited allowance:
@@ -182,6 +183,10 @@ func TestAccCertificateResource_requiresReplace(t *testing.T) {
 // a CSR from another key must still plan a replacement, while one regenerated
 // from the key the certificate was issued for is recorded in place, keeping
 // the same serial.
+//
+// Terraform refuses to import into an address it already manages, so the
+// certificate is first dropped from state with a removed block that does not
+// destroy it -- which is also how a certificate managed elsewhere arrives.
 func TestAccCertificateResource_adoptByCSR(t *testing.T) {
 	key := testAccCertificateKey(t)
 	original := testAccCertificateCSRForKey(t, key, "terraform-provider-apple acceptance test")
@@ -190,6 +195,10 @@ func TestAccCertificateResource_adoptByCSR(t *testing.T) {
 	var serial string
 
 	resource.Test(t, resource.TestCase{
+		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
+			// removed blocks.
+			tfversion.SkipBelow(tfversion.Version1_7_0),
+		},
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCertificateDestroy,
@@ -201,12 +210,39 @@ func TestAccCertificateResource_adoptByCSR(t *testing.T) {
 					testAccCaptureAttr("apple_certificate.test", "serial_number", &serial),
 				),
 			},
-			// Replace state with what an import records: no CSR.
+			// Forget the certificate without revoking it.
 			{
+				Config: `
+removed {
+  from = apple_certificate.test
+
+  lifecycle {
+    destroy = false
+  }
+}
+`,
+			},
+			// Import it as a certificate managed elsewhere would be: no CSR.
+			{
+				Config:             testAccCertificateResourceConfig(testAccCertificateType, original, ""),
 				ResourceName:       "apple_certificate.test",
 				ImportState:        true,
-				ImportStateIdFunc:  testAccCertificateImportIDFunc("apple_certificate.test", "serial_number"),
 				ImportStatePersist: true,
+				ImportStateIdFunc: func(*terraform.State) (string, error) {
+					if serial == "" {
+						return "", fmt.Errorf("no serial captured from the first step")
+					}
+					return serial, nil
+				},
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("imported %d certificates, want 1", len(states))
+					}
+					if csr := states[0].Attributes["csr_content"]; csr != "" {
+						return fmt.Errorf("import recorded csr_content %q; Apple was expected to return none", csr)
+					}
+					return nil
+				},
 			},
 			// A CSR from another key still replaces. Plan only: applying it would
 			// revoke the certificate the next step adopts.
