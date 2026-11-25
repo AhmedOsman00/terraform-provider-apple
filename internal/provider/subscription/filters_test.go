@@ -5,7 +5,9 @@ package subscription
 
 import (
 	"errors"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 
@@ -500,10 +502,10 @@ func TestReconcileSchedulePricesDropsPricesAppleNoLongerReports(t *testing.T) {
 // instead of being silently discarded on the next plan.
 func TestReconcileSchedulePricesAdoptsUnknownPrices(t *testing.T) {
 	startDate := "2027-01-01"
-	upfront := models.SubscriptionPlanType("UPFRONT")
+	monthly := models.SubscriptionPlanType("MONTHLY")
 
 	reconciled := reconcileSchedulePrices(nil, []models.SubscriptionPrice{
-		reportedPrice("price-2", "point-gbr", "GBR", &startDate, &upfront),
+		reportedPrice("price-2", "point-gbr", "GBR", &startDate, &monthly),
 	})
 
 	if len(reconciled) != 1 {
@@ -519,8 +521,8 @@ func TestReconcileSchedulePricesAdoptsUnknownPrices(t *testing.T) {
 	if got := adopted.StartDate.ValueString(); got != startDate {
 		t.Errorf("start_date = %q, want %q", got, startDate)
 	}
-	if got := adopted.PlanType.ValueString(); got != "UPFRONT" {
-		t.Errorf("plan_type = %q, want UPFRONT", got)
+	if got := adopted.PlanType.ValueString(); got != "MONTHLY" {
+		t.Errorf("plan_type = %q, want MONTHLY", got)
 	}
 	// preserveCurrentPrice is an instruction Apple never reports back.
 	if !adopted.PreserveCurrentPrice.IsNull() {
@@ -887,5 +889,274 @@ func TestIntroductoryOfferEntryFromAPI(t *testing.T) {
 	paid := apiOffer("gbr", "GBR", models.SubscriptionOfferModePayAsYouGo, models.SubscriptionOfferDurationOneMonth, 3, "point-gbr")
 	if got := introductoryOfferEntryFromAPI(paid); got.PricePointID.ValueString() != "point-gbr" {
 		t.Errorf("paid price_point_id = %s, want point-gbr", got.PricePointID)
+	}
+}
+
+// preservedPrice marks a reported price as preserved: the old price Apple keeps
+// for existing subscribers after a change that preserves it.
+func preservedPrice(price models.SubscriptionPrice) models.SubscriptionPrice {
+	preserved := true
+	price.Attributes.Preserved = &preserved
+	return price
+}
+
+// TestReconcileSchedulePricesAdoptsUpfrontAsUnset checks that the ordinary
+// price, which Apple reports as UPFRONT, is adopted with plan_type unset, so a
+// configuration that leaves plan_type out does not plan an update forever.
+func TestReconcileSchedulePricesAdoptsUpfrontAsUnset(t *testing.T) {
+	upfront := models.SubscriptionPlanTypeUpfront
+
+	reconciled := reconcileSchedulePrices(nil, []models.SubscriptionPrice{
+		reportedPrice("price-1", "point-usa", "USA", nil, &upfront),
+	})
+
+	if len(reconciled) != 1 {
+		t.Fatalf("got %d prices, want 1", len(reconciled))
+	}
+	if !reconciled[0].PlanType.IsNull() {
+		t.Errorf("plan_type = %v, want null for Apple's UPFRONT", reconciled[0].PlanType)
+	}
+}
+
+// TestReconcileSchedulePricesIgnoresPriceHistory checks that the ended and
+// preserved records Apple lists beside a price are not adopted as prices of
+// their own once state holds the price that superseded them.
+func TestReconcileSchedulePricesIgnoresPriceHistory(t *testing.T) {
+	configured := []subscriptionSchedulePriceModel{
+		{PricePointID: types.StringValue("point-usa-9")},
+	}
+	changed := "2026-12-01"
+
+	reconciled := reconcileSchedulePrices(configured, []models.SubscriptionPrice{
+		preservedPrice(reportedPrice("price-old", "point-usa-8", "USA", nil, nil)),
+		reportedPrice("price-ended", "point-usa-7", "USA", nil, nil),
+		reportedPrice("price-new", "point-usa-9", "USA", &changed, nil),
+	})
+
+	if len(reconciled) != 1 {
+		t.Fatalf("got %d prices, want 1: only the price in effect is the price", len(reconciled))
+	}
+	if got := reconciled[0].PricePointID.ValueString(); got != "point-usa-9" {
+		t.Errorf("price point = %q, want point-usa-9", got)
+	}
+}
+
+// TestReconcileSchedulePricesAdoptsAChangeMadeByHand checks a price changed in
+// App Store Connect: the configured price is superseded, so it leaves state,
+// and the new one takes its form, so the plan shows only the price point.
+func TestReconcileSchedulePricesAdoptsAChangeMadeByHand(t *testing.T) {
+	configured := []subscriptionSchedulePriceModel{{
+		PricePointID:         types.StringValue("point-usa-8"),
+		TerritoryID:          types.StringNull(),
+		StartDate:            types.StringNull(),
+		PreserveCurrentPrice: types.BoolValue(true),
+		PlanType:             types.StringNull(),
+	}}
+	changed := "2026-12-01"
+	upfront := models.SubscriptionPlanTypeUpfront
+
+	reconciled := reconcileSchedulePrices(configured, []models.SubscriptionPrice{
+		reportedPrice("price-old", "point-usa-8", "USA", nil, &upfront),
+		reportedPrice("price-new", "point-usa-9", "USA", &changed, &upfront),
+	})
+
+	if len(reconciled) != 1 {
+		t.Fatalf("got %d prices, want 1", len(reconciled))
+	}
+	adopted := reconciled[0]
+	if got := adopted.PricePointID.ValueString(); got != "point-usa-9" {
+		t.Errorf("price point = %q, want point-usa-9", got)
+	}
+	if !adopted.StartDate.IsNull() {
+		t.Errorf("start_date = %v, want null like the price it replaced", adopted.StartDate)
+	}
+	if !adopted.TerritoryID.IsNull() {
+		t.Errorf("territory_id = %v, want null like the price it replaced", adopted.TerritoryID)
+	}
+	if !adopted.PreserveCurrentPrice.ValueBool() {
+		t.Errorf("preserve_current_price = %v, want true from the price it replaced", adopted.PreserveCurrentPrice)
+	}
+	if !adopted.PlanType.IsNull() {
+		t.Errorf("plan_type = %v, want null", adopted.PlanType)
+	}
+}
+
+// TestReconcileSchedulePricesKeepsExplicitUpfront checks that a replaced price
+// that said UPFRONT passes that form on.
+func TestReconcileSchedulePricesKeepsExplicitUpfront(t *testing.T) {
+	configured := []subscriptionSchedulePriceModel{{
+		PricePointID: types.StringValue("point-usa-8"),
+		TerritoryID:  types.StringValue("USA"),
+		PlanType:     types.StringValue("UPFRONT"),
+	}}
+	upfront := models.SubscriptionPlanTypeUpfront
+
+	reconciled := reconcileSchedulePrices(configured, []models.SubscriptionPrice{
+		reportedPrice("price-new", "point-usa-9", "USA", nil, &upfront),
+	})
+
+	if len(reconciled) != 1 {
+		t.Fatalf("got %d prices, want 1", len(reconciled))
+	}
+	if got := reconciled[0].PlanType.ValueString(); got != "UPFRONT" {
+		t.Errorf("plan_type = %q, want UPFRONT", got)
+	}
+}
+
+// TestReconcileSchedulePricesKeepsAScheduleConfiguredBeforeApproval checks
+// that a price and a dated change of one territory, both in state, both stay.
+func TestReconcileSchedulePricesKeepsAScheduleConfiguredBeforeApproval(t *testing.T) {
+	later := "2027-01-01"
+	configured := []subscriptionSchedulePriceModel{
+		{PricePointID: types.StringValue("point-usa-8"), TerritoryID: types.StringValue("USA")},
+		{PricePointID: types.StringValue("point-usa-9"), TerritoryID: types.StringValue("USA"), StartDate: types.StringValue(later)},
+	}
+
+	reconciled := reconcileSchedulePrices(configured, []models.SubscriptionPrice{
+		reportedPrice("price-1", "point-usa-8", "USA", nil, nil),
+		reportedPrice("price-2", "point-usa-9", "USA", &later, nil),
+	})
+
+	if len(reconciled) != 2 {
+		t.Fatalf("got %d prices, want both configured prices", len(reconciled))
+	}
+}
+
+var priceChangeToday = time.Date(2026, 11, 25, 22, 0, 0, 0, time.UTC)
+
+func plannedPrice(point, territory string) subscriptionSchedulePriceModel {
+	price := subscriptionSchedulePriceModel{
+		PricePointID:         types.StringValue(point),
+		TerritoryID:          types.StringNull(),
+		StartDate:            types.StringNull(),
+		PreserveCurrentPrice: types.BoolNull(),
+		PlanType:             types.StringNull(),
+	}
+	if territory != "" {
+		price.TerritoryID = types.StringValue(territory)
+	}
+	return price
+}
+
+func TestPlanPriceChanges(t *testing.T) {
+	future := "2026-12-10"
+	past := "2026-01-01"
+
+	tests := []struct {
+		name          string
+		planned       []subscriptionSchedulePriceModel
+		reported      []models.SubscriptionPrice
+		wantCreations map[string]string // territory -> "point@startDate"
+		wantDeletions []string
+		wantNoTerr    []string
+		wantUnmanaged []string
+	}{
+		{
+			name:     "a price already in effect sends nothing",
+			planned:  []subscriptionSchedulePriceModel{plannedPrice("usa-8", "")},
+			reported: []models.SubscriptionPrice{reportedPrice("p1", "usa-8", "USA", nil, nil)},
+		},
+		{
+			name:          "a changed price is dated three days out",
+			planned:       []subscriptionSchedulePriceModel{plannedPrice("usa-9", "USA")},
+			reported:      []models.SubscriptionPrice{reportedPrice("p1", "usa-8", "USA", nil, nil)},
+			wantCreations: map[string]string{"USA": "usa-9@2026-11-28"},
+		},
+		{
+			name:          "the latest dated price is the one in effect",
+			planned:       []subscriptionSchedulePriceModel{plannedPrice("usa-8", "USA")},
+			reported:      []models.SubscriptionPrice{reportedPrice("p1", "usa-8", "USA", nil, nil), reportedPrice("p2", "usa-7", "USA", &past, nil)},
+			wantCreations: map[string]string{"USA": "usa-8@2026-11-28"},
+		},
+		{
+			name:     "a change already scheduled is not sent again",
+			planned:  []subscriptionSchedulePriceModel{plannedPrice("usa-9", "USA")},
+			reported: []models.SubscriptionPrice{reportedPrice("p1", "usa-8", "USA", nil, nil), reportedPrice("p2", "usa-9", "USA", &future, nil)},
+		},
+		{
+			name:          "an unwanted scheduled change is deleted",
+			planned:       []subscriptionSchedulePriceModel{plannedPrice("usa-8", "USA")},
+			reported:      []models.SubscriptionPrice{reportedPrice("p1", "usa-8", "USA", nil, nil), reportedPrice("p2", "usa-9", "USA", &future, nil)},
+			wantDeletions: []string{"p2"},
+		},
+		{
+			name:     "a preserved record is not the price in effect",
+			planned:  []subscriptionSchedulePriceModel{plannedPrice("usa-9", "USA")},
+			reported: []models.SubscriptionPrice{preservedPrice(reportedPrice("p1", "usa-8", "USA", nil, nil)), reportedPrice("p2", "usa-9", "USA", &past, nil)},
+		},
+		{
+			name:          "the territory comes from Apple's prices when not configured",
+			planned:       []subscriptionSchedulePriceModel{plannedPrice("usa-8", "")},
+			reported:      []models.SubscriptionPrice{reportedPrice("p1", "usa-8", "USA", &past, nil), reportedPrice("p2", "usa-9", "USA", &future, nil)},
+			wantDeletions: []string{"p2"},
+		},
+		{
+			name:          "a new price point with no territory cannot be posted",
+			planned:       []subscriptionSchedulePriceModel{plannedPrice("usa-9", "")},
+			reported:      []models.SubscriptionPrice{reportedPrice("p1", "usa-8", "USA", nil, nil)},
+			wantNoTerr:    []string{"usa-9"},
+			wantUnmanaged: []string{"USA"},
+		},
+		{
+			name:          "a territory the plan leaves out is reported and left alone",
+			planned:       []subscriptionSchedulePriceModel{plannedPrice("usa-8", "USA")},
+			reported:      []models.SubscriptionPrice{reportedPrice("p1", "usa-8", "USA", nil, nil), reportedPrice("p2", "gbr-8", "GBR", nil, nil)},
+			wantUnmanaged: []string{"GBR"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			changes := planPriceChanges(tt.planned, tt.reported, priceChangeToday)
+
+			got := make(map[string]string, len(changes.Creations))
+			for _, c := range changes.Creations {
+				got[c.TerritoryID] = c.PricePointID + "@" + *c.StartDate
+			}
+			if len(got) != len(tt.wantCreations) {
+				t.Errorf("creations = %v, want %v", got, tt.wantCreations)
+			}
+			for territory, want := range tt.wantCreations {
+				if got[territory] != want {
+					t.Errorf("creation in %s = %q, want %q", territory, got[territory], want)
+				}
+			}
+			if !slices.Equal(changes.Deletions, tt.wantDeletions) {
+				t.Errorf("deletions = %v, want %v", changes.Deletions, tt.wantDeletions)
+			}
+			if !slices.Equal(changes.NoTerritory, tt.wantNoTerr) {
+				t.Errorf("no territory = %v, want %v", changes.NoTerritory, tt.wantNoTerr)
+			}
+			if !slices.Equal(changes.Unmanaged, tt.wantUnmanaged) {
+				t.Errorf("unmanaged = %v, want %v", changes.Unmanaged, tt.wantUnmanaged)
+			}
+		})
+	}
+}
+
+// TestPlanPriceChangesSendsTheConfiguredInstruction checks that an explicit
+// start date, preserve_current_price and plan type travel with the change.
+func TestPlanPriceChangesSendsTheConfiguredInstruction(t *testing.T) {
+	price := plannedPrice("usa-9", "USA")
+	price.StartDate = types.StringValue("2027-02-01")
+	price.PreserveCurrentPrice = types.BoolValue(true)
+	price.PlanType = types.StringValue("MONTHLY")
+
+	changes := planPriceChanges([]subscriptionSchedulePriceModel{price}, []models.SubscriptionPrice{
+		reportedPrice("p1", "usa-8", "USA", nil, nil),
+	}, priceChangeToday)
+
+	if len(changes.Creations) != 1 {
+		t.Fatalf("got %d creations, want 1", len(changes.Creations))
+	}
+	c := changes.Creations[0]
+	if *c.StartDate != "2027-02-01" {
+		t.Errorf("start date = %q, want the configured 2027-02-01", *c.StartDate)
+	}
+	if c.PreserveCurrentPrice == nil || !*c.PreserveCurrentPrice {
+		t.Errorf("preserveCurrentPrice = %v, want true", c.PreserveCurrentPrice)
+	}
+	if c.PlanType == nil || *c.PlanType != models.SubscriptionPlanTypeMonthly {
+		t.Errorf("planType = %v, want MONTHLY", c.PlanType)
 	}
 }

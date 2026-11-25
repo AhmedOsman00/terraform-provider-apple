@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
@@ -540,4 +541,347 @@ func introductoryOfferInput(entry introductoryOfferValues) apple.SubscriptionInt
 		input.TargetPlanType = &t
 	}
 	return input
+}
+
+// priceChangeLeadDays is how far ahead an undated price change is scheduled.
+//
+// A POST /v1/subscriptionPrices with no startDate is an initial price, which
+// Apple refuses once the subscription is approved ("Initial price cannot be
+// created again after subscription is approved"), so a change always needs a
+// date. Apple's help gives one to two days in advance as the soonest a change
+// can take effect, depending on the time zone; three days clears that
+// everywhere.
+const priceChangeLeadDays = 3
+
+// subscriptionDateLayout is Apple's plain-date form for price start dates.
+const subscriptionDateLayout = "2006-01-02"
+
+// initialPriceStates are the subscription states in which Apple accepts the
+// replace-all PATCH /v1/subscriptions/{id}. It reads undated prices there as
+// the initial price, which it takes only before the subscription is approved.
+var initialPriceStates = map[models.SubscriptionState]bool{
+	models.SubscriptionStateMissingMetadata:       true,
+	models.SubscriptionStateReadyToSubmit:         true,
+	models.SubscriptionStateDeveloperActionNeeded: true,
+}
+
+// reviewPriceStates are the states in which Apple refuses any price write.
+var reviewPriceStates = map[models.SubscriptionState]bool{
+	models.SubscriptionStateWaitingForReview:      true,
+	models.SubscriptionStateInReview:              true,
+	models.SubscriptionStatePendingBinaryApproval: true,
+}
+
+// pricePointOf returns the price point a reported price references, or "".
+func pricePointOf(price models.SubscriptionPrice) string {
+	if price.Relationships == nil || price.Relationships.SubscriptionPricePoint == nil {
+		return ""
+	}
+	return price.Relationships.SubscriptionPricePoint.Data.ID
+}
+
+// priceTerritoryOf returns the territory of a reported price, or "".
+func priceTerritoryOf(price models.SubscriptionPrice) string {
+	if price.Relationships == nil || price.Relationships.Territory == nil {
+		return ""
+	}
+	return price.Relationships.Territory.Data.ID
+}
+
+// startsLater reports whether start date a is later than b. A null start date
+// is a price in effect since before any dated one, so it is never later.
+func startsLater(a, b *string) bool {
+	if a == nil {
+		return false
+	}
+	if b == nil {
+		return true
+	}
+	return *a > *b
+}
+
+// effectivePrices reduces Apple's price history to the price that applies in
+// each territory.
+//
+// Apple lists ended and preserved records beside the current price: a change
+// on an approved subscription leaves the old price in the collection, and a
+// change that preserves the current price for existing subscribers is
+// reported as a separate preserved record. The price that applies is the
+// latest-starting record that is not preserved, a scheduled change included.
+// The result is keyed by territory; a record Apple reports with no territory is
+// keyed by its price point, so it is still adopted rather than lost.
+func effectivePrices(reported []models.SubscriptionPrice) map[string]models.SubscriptionPrice {
+	effective := make(map[string]models.SubscriptionPrice, len(reported))
+	for _, price := range reported {
+		point := pricePointOf(price)
+		if point == "" || (price.Attributes.Preserved != nil && *price.Attributes.Preserved) {
+			continue
+		}
+
+		key := priceTerritoryOf(price)
+		if key == "" {
+			key = point
+		}
+		if current, ok := effective[key]; !ok || startsLater(price.Attributes.StartDate, current.Attributes.StartDate) {
+			effective[key] = price
+		}
+	}
+	return effective
+}
+
+// reconcileSchedulePrices matches Apple's prices against what state holds.
+//
+// A price state already knows about is kept exactly as configured. Apple
+// reports the territory of every price whether or not one was sent, and reports
+// planType on prices that never named one, so adopting what it returns would
+// show as a permanent diff against a configuration that set neither -- the same
+// reason territory_id had to become Optional+Computed on
+// apple_subscription_price, solved here by not refreshing rather than by
+// widening the attribute, because a computed attribute inside a set makes the
+// element unknown at plan time.
+//
+// Only the price in effect in each territory is adopted (effectivePrices), so
+// the history Apple lists beside it never reads as prices of their own. A state
+// price is dropped when Apple no longer reports it, or when another price has
+// superseded it in its territory and state does not hold that one -- a price
+// changed in App Store Connect. The price adopted in its place takes the form of
+// the one it replaced: an unset start_date stays unset, preserve_current_price
+// keeps its value, and an UPFRONT plan stays unset unless the replaced price
+// said UPFRONT. Apple reports UPFRONT on the ordinary price, so adopting it
+// literally would plan an update forever against a configuration that leaves
+// plan_type out. Two prices of one territory that state both holds (a price and
+// a scheduled change, configured before approval) are both kept.
+//
+// Matching is by price point, which is also what makes two prices sharing a
+// price point indistinguishable here. They would differ only by start date, and
+// scheduling the same price twice is not a thing a configuration does.
+func reconcileSchedulePrices(state []subscriptionSchedulePriceModel, reported []models.SubscriptionPrice) []subscriptionSchedulePriceModel {
+	pointTerritory := make(map[string]string, len(reported))
+	for _, price := range reported {
+		if point := pricePointOf(price); point != "" {
+			pointTerritory[point] = priceTerritoryOf(price)
+		}
+	}
+
+	effective := effectivePrices(reported)
+	effectivePoints := make(map[string]bool, len(effective))
+	for _, price := range effective {
+		effectivePoints[pricePointOf(price)] = true
+	}
+
+	statePoints := make(map[string]bool, len(state))
+	for _, price := range state {
+		statePoints[price.PricePointID.ValueString()] = true
+	}
+
+	reconciled := make([]subscriptionSchedulePriceModel, 0, len(effective))
+	replaced := make(map[string]subscriptionSchedulePriceModel)
+	for _, price := range state {
+		point := price.PricePointID.ValueString()
+		territory, known := pointTerritory[point]
+		if !price.TerritoryID.IsNull() && !price.TerritoryID.IsUnknown() {
+			territory = price.TerritoryID.ValueString()
+		}
+
+		if !known {
+			if territory != "" {
+				replaced[territory] = price
+			}
+			continue
+		}
+
+		if !effectivePoints[point] && territory != "" {
+			if current, ok := effective[territory]; ok && !statePoints[pricePointOf(current)] {
+				replaced[territory] = price
+				continue
+			}
+		}
+
+		reconciled = append(reconciled, price)
+	}
+
+	for _, price := range effective {
+		point := pricePointOf(price)
+		if statePoints[point] {
+			continue
+		}
+
+		adopted := subscriptionSchedulePriceModel{
+			PricePointID: types.StringValue(point),
+			StartDate:    stringOrNull(price.Attributes.StartDate),
+			// preserveCurrentPrice is an instruction on a price change, not a
+			// property of a price: Apple never reports it back. Leave it null
+			// unless the price this one replaced held a value.
+			PreserveCurrentPrice: types.BoolNull(),
+			PlanType:             types.StringNull(),
+		}
+		if price.Relationships != nil {
+			adopted.TerritoryID = territoryID(price.Relationships.Territory)
+		} else {
+			adopted.TerritoryID = types.StringNull()
+		}
+
+		prior, hasPrior := replaced[priceTerritoryOf(price)]
+		if hasPrior {
+			if prior.StartDate.IsNull() {
+				adopted.StartDate = types.StringNull()
+			}
+			if prior.TerritoryID.IsNull() {
+				adopted.TerritoryID = types.StringNull()
+			}
+			adopted.PreserveCurrentPrice = prior.PreserveCurrentPrice
+		}
+
+		if planType := price.Attributes.PlanType; planType != nil {
+			upfront := *planType == models.SubscriptionPlanTypeUpfront
+			if !upfront || (hasPrior && prior.PlanType.ValueString() == string(models.SubscriptionPlanTypeUpfront)) {
+				adopted.PlanType = types.StringValue(string(*planType))
+			}
+		}
+
+		reconciled = append(reconciled, adopted)
+	}
+
+	return reconciled
+}
+
+// priceChanges is what a write to an approved subscription sends: Apple keeps
+// the price history, so a change is a new dated record per territory rather
+// than a replacement of the set.
+type priceChanges struct {
+	// Deletions are the IDs of scheduled changes the plan no longer wants.
+	// Apple deletes a price change that has not taken effect yet.
+	Deletions []string
+	// Creations are one dated price change per territory whose price differs
+	// from the one in effect.
+	Creations []apple.SubscriptionManualPrice
+	// NoTerritory are planned price points with no territory_id whose
+	// territory Apple's prices do not reveal either, so there is nowhere to
+	// post them.
+	NoTerritory []string
+	// Unmanaged are territories with a price the plan does not name. A live
+	// price cannot be withdrawn, so they are left alone.
+	Unmanaged []string
+}
+
+// planPriceChanges decides what an approved subscription's prices need.
+//
+// For each territory the plan names, a scheduled change the plan does not
+// want is deleted, and a planned price that is neither in effect nor already
+// scheduled is created. An undated planned price is scheduled
+// priceChangeLeadDays after today (UTC), since Apple refuses an undated change.
+// A territory the plan does not name is reported, not touched.
+func planPriceChanges(planned []subscriptionSchedulePriceModel, reported []models.SubscriptionPrice, now time.Time) priceChanges {
+	today := now.UTC().Format(subscriptionDateLayout)
+	defaultStart := now.UTC().AddDate(0, 0, priceChangeLeadDays).Format(subscriptionDateLayout)
+
+	type territoryPrices struct {
+		inForce *models.SubscriptionPrice
+		pending []models.SubscriptionPrice
+	}
+
+	pointTerritory := make(map[string]string, len(reported))
+	byTerritory := make(map[string]*territoryPrices)
+	for _, price := range reported {
+		point, territory := pricePointOf(price), priceTerritoryOf(price)
+		if point == "" || territory == "" {
+			continue
+		}
+		pointTerritory[point] = territory
+		if price.Attributes.Preserved != nil && *price.Attributes.Preserved {
+			continue
+		}
+
+		prices := byTerritory[territory]
+		if prices == nil {
+			prices = &territoryPrices{}
+			byTerritory[territory] = prices
+		}
+
+		start := price.Attributes.StartDate
+		switch {
+		case start != nil && *start > today:
+			prices.pending = append(prices.pending, price)
+		case prices.inForce == nil || startsLater(start, prices.inForce.Attributes.StartDate):
+			p := price
+			prices.inForce = &p
+		}
+	}
+
+	var changes priceChanges
+	plannedByTerritory := make(map[string][]subscriptionSchedulePriceModel)
+	for _, price := range planned {
+		point := price.PricePointID.ValueString()
+		territory := price.TerritoryID.ValueString()
+		if price.TerritoryID.IsNull() || price.TerritoryID.IsUnknown() {
+			territory = pointTerritory[point]
+		}
+		if territory == "" {
+			changes.NoTerritory = append(changes.NoTerritory, point)
+			continue
+		}
+		plannedByTerritory[territory] = append(plannedByTerritory[territory], price)
+	}
+
+	territories := make([]string, 0, len(plannedByTerritory))
+	for territory := range plannedByTerritory {
+		territories = append(territories, territory)
+	}
+	sort.Strings(territories)
+
+	for _, territory := range territories {
+		prices := plannedByTerritory[territory]
+		wanted := make(map[string]bool, len(prices))
+		for _, price := range prices {
+			wanted[price.PricePointID.ValueString()] = true
+		}
+
+		current := byTerritory[territory]
+		scheduled := make(map[string]bool)
+		if current != nil {
+			for _, pending := range current.pending {
+				if point := pricePointOf(pending); wanted[point] {
+					scheduled[point] = true
+				} else {
+					changes.Deletions = append(changes.Deletions, pending.ID)
+				}
+			}
+		}
+
+		for _, price := range prices {
+			point := price.PricePointID.ValueString()
+			if scheduled[point] {
+				continue
+			}
+			if current != nil && current.inForce != nil && pricePointOf(*current.inForce) == point {
+				continue
+			}
+
+			start := defaultStart
+			if s := stringOrNil(price.StartDate); s != nil {
+				start = *s
+			}
+			change := apple.SubscriptionManualPrice{
+				PricePointID:         point,
+				TerritoryID:          territory,
+				StartDate:            &start,
+				PreserveCurrentPrice: boolOrNil(price.PreserveCurrentPrice),
+			}
+			if planType := stringOrNil(price.PlanType); planType != nil {
+				t := models.SubscriptionPlanType(*planType)
+				change.PlanType = &t
+			}
+			changes.Creations = append(changes.Creations, change)
+		}
+	}
+
+	for territory := range byTerritory {
+		if _, ok := plannedByTerritory[territory]; !ok {
+			changes.Unmanaged = append(changes.Unmanaged, territory)
+		}
+	}
+	sort.Strings(changes.Unmanaged)
+	sort.Strings(changes.NoTerritory)
+
+	return changes
 }

@@ -1,3 +1,34 @@
+## 0.8.1 (Unreleased)
+
+BUG FIXES:
+
+* **`apple_subscription_price_schedule` can change the price of an approved
+  subscription.** It always sent the replace-all `PATCH /v1/subscriptions/{id}`,
+  which Apple reads as an initial price and refuses once the subscription is
+  approved, with HTTP 409 "Initial price cannot be created again after
+  subscription is approved". The resource now reads the subscription's state
+  first. Before approval it still sends the `PATCH`. After approval it sends one
+  dated `POST /v1/subscriptionPrices` for each territory whose price differs
+  from the one in effect, and deletes a scheduled change the configuration no
+  longer names. A territory left out of the configuration keeps its price,
+  since a live price can't be withdrawn, and the apply warns about it.
+  An unset `start_date` on a change is sent as three days from today (UTC),
+  because Apple refuses an undated change and needs one to two days' notice.
+  A new price point needs `territory_id`, unless Apple already lists a price at
+  it.
+* **`apple_subscription_price_schedule` reads the price, not its history.**
+  Apple lists ended and preserved price records beside the current one. Only
+  the latest-starting record of each territory that isn't preserved is adopted
+  now, and a price changed in App Store Connect takes the form of the price it
+  replaced, so the plan shows only the change of price point.
+* **An unset `plan_type` no longer plans an update forever.** Apple reports
+  `UPFRONT` on the ordinary price, and a price adopted from Apple was recorded
+  as `plan_type = "UPFRONT"` against a configuration that left it unset.
+* The `plan_type` descriptions of `apple_subscription_price_schedule` and
+  `apple_subscription_price` called `MONTHLY` the recurring price. The ordinary
+  price is `UPFRONT` (leave `plan_type` unset). `MONTHLY` is Apple's
+  monthly-payment plan on a longer commitment.
+
 ## 0.8.0 (November 12, 2026)
 
 FEATURES:
