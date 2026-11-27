@@ -1,6 +1,6 @@
 # Road to 1.0
 
-What stands between today's provider (0.9.0) and CLI (0.4.1) and a 1.0 of each.
+What stands between today's provider (0.10.0) and CLI (0.4.1) and a 1.0 of each.
 Ordered by priority: correctness first, then proof, then the promise, then reach.
 
 A 1.0 means: every resource and CLI command has run against the live API,
