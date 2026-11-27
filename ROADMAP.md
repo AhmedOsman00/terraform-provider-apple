@@ -193,12 +193,13 @@ invitations; `app` = listing.
 - [ ] Upgrade tests for imports: import with the previous release, then plan
       with the working tree. The profile import regression was of this kind,
       and `TestAccUpgrade` only covers state written by an apply.
-- [ ] **Unit tests for create/read/update/delete code** that runs only against the
+- [x] **Unit tests for create/read/update/delete code** that runs only against the
       live API today, through `httptest`, for the riskiest reconcilers:
   - [x] the subscription price schedule (read, import, delete, the error
         mapping) and the introductory offer schedule (every path, against a
         fake that keeps its offers between requests).
-  - [ ] the screenshot set, `apple_beta_tester`, `apple_user_invitation`.
+  - [x] the screenshot set (against a fake with the upload flow and the
+        ten-screenshot limit), `apple_beta_tester` and `apple_user_invitation`.
 - [ ] **Schema audit before freezing**: one pass over every resource for
       naming consistency, `RequiresReplace` vs in-place, defaults and
       descriptions. Implement the mutual-exclusivity validators left as TODOs
