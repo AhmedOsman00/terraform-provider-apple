@@ -5,9 +5,11 @@ package app
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/provider/media"
@@ -228,4 +230,64 @@ func matchScreenshots(existing []models.MediaAsset, wantChecksums []string) (kee
 	}
 
 	return keep, remove
+}
+
+// ageRatingRequiredAttribute matches one entry of Apple's refusal of a
+// declaration that leaves an unanswered question out: "You must provide a
+// value for the attribute 'lootBox' with this request". Apple sends one such
+// error per question.
+var ageRatingRequiredAttribute = regexp.MustCompile(`provide a value for the attribute '([A-Za-z0-9]+)'`)
+
+// ageRatingAttributeNames maps each wire attribute of a declaration the
+// provider models to its Terraform attribute name, read from the JSON tags so
+// it cannot fall behind the model.
+var ageRatingAttributeNames = func() map[string]string {
+	names := map[string]string{}
+	t := reflect.TypeOf(models.AgeRatingDeclarationAttributes{})
+	for i := 0; i < t.NumField(); i++ {
+		wire, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+		if wire != "" && wire != "-" {
+			names[wire] = camelToSnake(wire)
+		}
+	}
+	return names
+}()
+
+// missingAgeRatingAnswers reads the questions Apple refused a declaration
+// write for leaving out. modeled holds the Terraform names of those the
+// provider has an attribute for, sorted; unmodeled holds Apple's names for the
+// rest, which a newer questionnaire may add before the provider does.
+func missingAgeRatingAnswers(errMsg string) (modeled, unmodeled []string) {
+	seen := map[string]bool{}
+	for _, match := range ageRatingRequiredAttribute.FindAllStringSubmatch(errMsg, -1) {
+		wire := match[1]
+		if seen[wire] {
+			continue
+		}
+		seen[wire] = true
+		if name, ok := ageRatingAttributeNames[wire]; ok {
+			modeled = append(modeled, name)
+		} else {
+			unmodeled = append(unmodeled, wire)
+		}
+	}
+	sort.Strings(modeled)
+	sort.Strings(unmodeled)
+	return modeled, unmodeled
+}
+
+// camelToSnake turns Apple's attribute names into the provider's:
+// developerAgeRatingInfoUrl becomes developer_age_rating_info_url.
+func camelToSnake(s string) string {
+	var b strings.Builder
+	for i, r := range s {
+		if unicode.IsUpper(r) {
+			if i > 0 {
+				b.WriteByte('_')
+			}
+			r = unicode.ToLower(r)
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }

@@ -795,7 +795,13 @@ cross-variable validation.
   outside the Kids Category has no band and a null is the same as unset, and
   `developer_age_rating_info_url`. **An omitted answer is not `NONE`** — Apple
   leaves it exactly as it was, which for a new app means unanswered, and an
-  unanswered questionnaire blocks the submission. Apple revised this
+  unanswered questionnaire blocks the submission. Apple also **refuses a write that
+  leaves out a question it holds no answer for**, with one 409 per question
+  naming Apple's attribute (`missingAgeRatingAnswers` maps them to Terraform
+  names, from the model's JSON tags), so the first apply against a new app has
+  to answer everything. Once answered, a question can be left out again.
+  Apple already reports `datingAndRelationships`, `sharedLocation` and
+  `gracRatingClassificationNumber`, which the provider does not model yet. Apple revised this
   questionnaire and the provider models both forms: `INFREQUENT`/`FREQUENT`
   alongside `INFREQUENT_OR_MILD`/`FREQUENT_OR_INTENSE`, and
   `age_rating_override_v2` (where `SEVENTEEN_PLUS` became `EIGHTEEN_PLUS`)
