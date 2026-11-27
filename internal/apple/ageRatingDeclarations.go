@@ -45,6 +45,8 @@ func (c *Client) GetAgeRatingDeclaration(appInfoID string) (*models.AgeRatingDec
 //
 // Only the attributes present in the request are touched; an omitted answer
 // leaves Apple's existing value alone, which is not the same as answering NONE.
+// Apple refuses the request, with one 409 per question, when it leaves out a
+// question that has never been answered.
 func (c *Client) UpdateAgeRatingDeclaration(declarationID string, attributes models.AgeRatingDeclarationAttributes, authToken *string) (*models.AgeRatingDeclaration, error) {
 	requestData := models.Request[models.AgeRatingDeclarationUpdateRequest]{
 		Data: models.AgeRatingDeclarationUpdateRequest{

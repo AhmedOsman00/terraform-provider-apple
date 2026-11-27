@@ -51,8 +51,9 @@ func (r *ageRatingDeclarationResource) Schema(_ context.Context, _ resource.Sche
 			"`FREQUENT`), yes/no facts about what the app does, and the overrides that raise the " +
 			"computed rating.\n\n" +
 			"~> **An unset answer is not `NONE`.** Apple leaves an omitted attribute exactly as it was, " +
-			"which for a new app means unanswered — and an unanswered questionnaire blocks the " +
-			"submission. Answer every question that applies rather than relying on a default. Each " +
+			"and refuses a write that leaves out a question it holds no answer for, so the first " +
+			"apply against a new app has to answer every question; the error names the ones missing. " +
+			"Answer them rather than relying on a default. Each " +
 			"attribute is `Computed` as well as `Optional`, so an answer given in App Store Connect and " +
 			"not in the configuration is adopted rather than fought over.\n\n" +
 			"~> **This resource adopts a record Apple already created; it does not create or destroy " +
@@ -487,6 +488,8 @@ func (r *ageRatingDeclarationResource) write(ctx context.Context, plan *ageRatin
 					"An app info in review or already distributed is frozen. Wait for the current "+
 					"review to finish.", appID, errMsg),
 			)
+		case ageRatingRequiredAttribute.MatchString(errMsg):
+			diags.AddError("Age Rating Questionnaire Incomplete", incompleteAgeRatingDetail(appID, errMsg))
 		case strings.Contains(errMsg, "kidsAgeBand"):
 			diags.AddError(
 				"Kids Age Band Rejected",
@@ -508,6 +511,34 @@ func (r *ageRatingDeclarationResource) write(ctx context.Context, plan *ageRatin
 
 	plan.AppInfoID = types.StringValue(info.ID)
 	applyAgeRating(plan, updated)
+}
+
+// incompleteAgeRatingDetail explains Apple's refusal of a write that leaves
+// unanswered questions out.
+//
+// Apple requires every question to hold an answer: a write to a declaration
+// that has never answered one must include it, and is refused with one error
+// per question otherwise. Once answered, a question can be left out of later
+// writes and keeps its value. Checked against the live API, November 2026.
+func incompleteAgeRatingDetail(appID, errMsg string) string {
+	modeled, unmodeled := missingAgeRatingAnswers(errMsg)
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "Apple refused the age rating declaration of app '%s' because it leaves out "+
+		"questions that have never been answered.\n\n", appID)
+	if len(modeled) > 0 {
+		fmt.Fprintf(&b, "Set these attributes, to NONE or false where they do not apply:\n\n  %s\n\n",
+			strings.Join(modeled, "\n  "))
+	}
+	if len(unmodeled) > 0 {
+		fmt.Fprintf(&b, "Apple also asked for %s, which this provider version has no attribute for. "+
+			"Answer them in App Store Connect under App Information, Age Rating, then apply again.\n\n",
+			strings.Join(unmodeled, ", "))
+	}
+	b.WriteString("Apple requires an answer to every question. Once a question has been answered, " +
+		"leaving it out of the configuration keeps the answer Apple holds.")
+
+	return b.String()
 }
 
 // ageRatingAttributes renders the configured answers for the wire.

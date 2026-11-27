@@ -11,6 +11,15 @@ BUG FIXES:
   three attempts, so a version Apple did create is adopted rather than
   duplicated.
 
+* **`apple_app_age_rating_declaration` says which questions are missing on a
+  new app.** Apple now refuses a write to a declaration that has never been
+  answered unless it answers every question, with one HTTP 409 per question
+  in Apple's own attribute names. The provider now reports this as one error
+  that lists the Terraform attributes to set. If Apple asks for a question
+  this provider version has no attribute for, the error says to answer it in
+  App Store Connect. Once a question has been answered, leaving it out of the
+  configuration still keeps Apple's answer.
+
 ## 0.8.2 (November 25, 2026)
 
 BUG FIXES:

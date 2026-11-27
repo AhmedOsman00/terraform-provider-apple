@@ -314,9 +314,20 @@ resource "apple_app_age_rating_declaration" "test" {
   sexual_content_or_nudity                  = "NONE"
   violence_realistic                        = "NONE"
 
+  guns_or_other_weapons                            = "NONE"
+  violence_realistic_prolonged_graphic_or_sadistic = "NONE"
+
   gambling                = false
   unrestricted_web_access = false
   user_generated_content  = false
+
+  advertising               = false
+  age_assurance             = false
+  health_or_wellness_topics = false
+  loot_box                  = false
+  messaging_and_chat        = false
+  parental_controls         = false
+  social_media              = false
 }
 `, testAccAppID(), cartoonViolence)
 }
