@@ -6,9 +6,11 @@ package profile
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -95,8 +97,11 @@ func (d *profilesDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 				Validators: []validator.String{ProfileTypeValidator},
 			},
 			"bundle_id": schema.StringAttribute{
-				MarkdownDescription: "Filter Profiles by the associated Bundle ID.",
-				Optional:            true,
+				MarkdownDescription: "Return only profiles issued for this Bundle ID, named either by " +
+					"Apple's ID (an `apple_bundle_id`'s `id`) or by its identifier, such as " +
+					"`com.example.app`. The profile record does not carry it, so this costs one request " +
+					"per profile that passes the other filters.",
+				Optional: true,
 			},
 
 			// Result control attributes
@@ -138,7 +143,7 @@ func (d *profilesDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 							Computed:            true,
 						},
 						"name": schema.StringAttribute{
-							MarkdownDescription: "The name of the Profile.",
+							MarkdownDescription: "The profile's name in the Developer Portal.",
 							Computed:            true,
 						},
 						"platform": schema.StringAttribute{
@@ -146,25 +151,31 @@ func (d *profilesDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 							Computed:            true,
 						},
 						"bundle_id": schema.StringAttribute{
-							MarkdownDescription: "The Bundle ID associated with this profile.",
-							Computed:            true,
+							MarkdownDescription: "Apple's ID of the Bundle ID this profile was issued for " +
+								"(an `apple_bundle_id`'s `id`, not the `com.example.app` identifier). Read with " +
+								"one request per profile returned.",
+							Computed: true,
 						},
 						"certificates": schema.ListAttribute{
-							MarkdownDescription: "List of certificate IDs included in the profile.",
-							ElementType:         types.StringType,
-							Computed:            true,
+							MarkdownDescription: "Always empty: this data source does not read a profile's " +
+								"certificates, which would cost a paginated request per profile on every plan. " +
+								"Import the profile as an `apple_profile` to read them.",
+							ElementType: types.StringType,
+							Computed:    true,
 						},
 						"devices": schema.ListAttribute{
-							MarkdownDescription: "List of device IDs included in the profile.",
-							ElementType:         types.StringType,
-							Computed:            true,
+							MarkdownDescription: "Always empty: this data source does not read a profile's " +
+								"devices, which would cost a paginated request per profile on every plan. " +
+								"Import the profile as an `apple_profile` to read them.",
+							ElementType: types.StringType,
+							Computed:    true,
 						},
 						"profile_content": schema.StringAttribute{
 							MarkdownDescription: "Base64-encoded profile content.",
 							Computed:            true,
 						},
 						"uuid": schema.StringAttribute{
-							MarkdownDescription: "The UUID of the profile.",
+							MarkdownDescription: "The profile's UUID, which Xcode uses to refer to it.",
 							Computed:            true,
 						},
 						"profile_state": schema.StringAttribute{
@@ -172,7 +183,7 @@ func (d *profilesDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 							Computed:            true,
 						},
 						"profile_type": schema.StringAttribute{
-							MarkdownDescription: "The type of profile.",
+							MarkdownDescription: "The profile type, such as `IOS_APP_STORE` or `IOS_APP_DEVELOPMENT`.",
 							Computed:            true,
 						},
 						"created_date": schema.StringAttribute{
@@ -240,6 +251,32 @@ func (d *profilesDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
+	// The Bundle ID each profile was issued for, read at most once per profile:
+	// by the filter for every candidate, and for the profiles returned.
+	bundleIDs := map[string]string{}
+	bundleIDOf := func(profileID string) (string, error) {
+		if id, ok := bundleIDs[profileID]; ok {
+			return id, nil
+		}
+		id, err := d.client.GetProfileBundleID(profileID)
+		if err != nil {
+			return "", err
+		}
+		bundleIDs[profileID] = id
+		return id, nil
+	}
+
+	if !config.BundleID.IsNull() && !config.BundleID.IsUnknown() {
+		filteredProfiles, err = d.filterByBundleID(config.BundleID.ValueString(), filteredProfiles, bundleIDOf)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error Reading Profile Bundle IDs",
+				fmt.Sprintf("Could not filter profiles by bundle_id '%s': %s", config.BundleID.ValueString(), err.Error()),
+			)
+			return
+		}
+	}
+
 	filteredCount := len(filteredProfiles)
 	tflog.Debug(ctx, "Applied filters to profiles", map[string]interface{}{
 		"filtered_count": filteredCount,
@@ -285,10 +322,20 @@ func (d *profilesDataSource) Read(ctx context.Context, req datasource.ReadReques
 			profileModel.ExpirationDate = types.StringValue(profile.Attributes.ExpirationDate.Format(time.RFC3339))
 		}
 
-		// For data source, we set empty lists for relationships as they're not typically included
+		// Certificates and devices are not read: each is a paginated request
+		// per profile on every plan. See their descriptions.
 		profileModel.Certificates, _ = types.ListValue(types.StringType, []attr.Value{})
 		profileModel.Devices, _ = types.ListValue(types.StringType, []attr.Value{})
-		profileModel.BundleID = types.StringValue("")
+
+		bundleID, err := bundleIDOf(profile.ID)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error Reading Profile Bundle ID",
+				fmt.Sprintf("Could not read the Bundle ID of profile '%s': %s", profile.Attributes.Name, err.Error()),
+			)
+			return
+		}
+		profileModel.BundleID = types.StringValue(bundleID)
 
 		profileModels[i] = profileModel
 	}
@@ -305,6 +352,34 @@ func (d *profilesDataSource) Read(ctx context.Context, req datasource.ReadReques
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+}
+
+// filterByBundleID keeps the profiles issued for one Bundle ID, named by
+// Apple's ID or by its identifier, such as com.example.app. An identifier no
+// Bundle ID has matches nothing rather than failing, like any other filter.
+func (d *profilesDataSource) filterByBundleID(wanted string, profiles []models.Profile, bundleIDOf func(string) (string, error)) ([]models.Profile, error) {
+	if strings.Contains(wanted, ".") {
+		bundle, err := d.client.GetBundleIDByIdentifier(wanted)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				return []models.Profile{}, nil
+			}
+			return nil, err
+		}
+		wanted = bundle.ID
+	}
+
+	kept := make([]models.Profile, 0, len(profiles))
+	for _, profile := range profiles {
+		id, err := bundleIDOf(profile.ID)
+		if err != nil {
+			return nil, err
+		}
+		if id == wanted {
+			kept = append(kept, profile)
+		}
+	}
+	return kept, nil
 }
 
 // Configure adds the provider configured client to the data source.

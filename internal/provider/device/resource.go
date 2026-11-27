@@ -54,8 +54,14 @@ func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest,
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				MarkdownDescription: "Unique identifier for the device assigned by Apple",
+				MarkdownDescription: "Unique identifier for the device assigned by Apple.",
 				Computed:            true,
+				// Kept across a rename: apple_profile.devices forces replacement,
+				// so an ID planned as unknown would reissue every profile listing
+				// the device.
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Display name for the device",
@@ -95,8 +101,11 @@ func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Computed:            true,
 			},
 			"added_date": schema.StringAttribute{
-				MarkdownDescription: "Date when the device was added (ISO 8601 format)",
+				MarkdownDescription: "Date when the device was added (ISO 8601 format).",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}

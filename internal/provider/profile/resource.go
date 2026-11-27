@@ -108,8 +108,9 @@ func (r *profileResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				},
 			},
 			"bundle_id": schema.StringAttribute{
-				MarkdownDescription: "The ID of the Bundle ID to associate with this profile. This cannot be changed after creation.",
-				Required:            true,
+				MarkdownDescription: "Apple's ID of the Bundle ID to issue the profile for: an `apple_bundle_id`'s `id`, not its " +
+					"`com.example.app` identifier. This cannot be changed after creation.",
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
