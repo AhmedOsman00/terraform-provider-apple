@@ -18,7 +18,9 @@ import (
 // file is one generated .tf file, built up block by block.
 type file struct {
 	name string
-	hcl  *hclwrite.File
+	// app is the bundle identifier of the app the file belongs to, if any.
+	app string
+	hcl *hclwrite.File
 }
 
 func newFile(name string) *file {

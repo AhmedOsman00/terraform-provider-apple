@@ -6,7 +6,6 @@ package export
 import (
 	"errors"
 	"flag"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,43 +30,11 @@ func runFake(t *testing.T, opts Options) (*Result, *fakeAccount) {
 func TestGolden(t *testing.T) {
 	result, _ := runFake(t, Options{})
 
-	dir := filepath.Join("testdata", "golden")
-	if *update {
-		if err := os.RemoveAll(dir); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		for name, content := range result.Files {
-			if err := os.WriteFile(filepath.Join(dir, name), content, 0o644); err != nil {
-				t.Fatal(err)
-			}
-		}
-		return
-	}
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("%v (run go test ./internal/export -update to create the golden files)", err)
-	}
-	if len(entries) != len(result.Files) {
-		t.Errorf("golden has %d files, export wrote %d: %v", len(entries), len(result.Files), result.FileNames())
-	}
-	for name, content := range result.Files {
-		want, err := os.ReadFile(filepath.Join(dir, name))
-		if err != nil {
-			t.Errorf("%s: %v", name, err)
-			continue
-		}
-		if string(want) != string(content) {
-			t.Errorf("%s differs from testdata/golden/%s (run with -update and review the diff):\n%s", name, name, content)
-		}
-	}
+	compareGolden(t, filepath.Join("testdata", "golden"), result)
 }
 
 func TestCertificatesAreNeverImported(t *testing.T) {
-	result, _ := runFake(t, Options{Domains: []Domain{DomainSigning}})
+	result, _ := runFake(t, Options{Parts: mustParts(t, "signing")})
 
 	if n := result.Imports["apple_certificate"]; n != 0 {
 		t.Fatalf("imported %d certificates; importing one reissues it and revokes the original", n)
@@ -94,7 +61,7 @@ func TestCertificatesAreNeverImported(t *testing.T) {
 }
 
 func TestProfilesNameWhatTheyWereIssuedFor(t *testing.T) {
-	result, _ := runFake(t, Options{Domains: []Domain{DomainSigning}})
+	result, _ := runFake(t, Options{Parts: mustParts(t, "signing")})
 	signing := string(result.Files["signing.tf"])
 
 	for _, want := range []string{
@@ -114,7 +81,7 @@ func TestProfilesNameWhatTheyWereIssuedFor(t *testing.T) {
 }
 
 func TestInterpolationIsEscaped(t *testing.T) {
-	result, _ := runFake(t, Options{Domains: []Domain{DomainApp}})
+	result, _ := runFake(t, Options{Parts: mustParts(t, "app")})
 	listing := string(result.Files["com_example_app.tf"])
 
 	// Apple text is data. Written raw, ${done} would be a reference to
@@ -125,7 +92,7 @@ func TestInterpolationIsEscaped(t *testing.T) {
 }
 
 func TestVersionsPickTheOneBeingPrepared(t *testing.T) {
-	result, _ := runFake(t, Options{Domains: []Domain{DomainApp}})
+	result, _ := runFake(t, Options{Parts: mustParts(t, "app")})
 	listing := string(result.Files["com_example_app.tf"])
 
 	if !strings.Contains(listing, `id = "VER_NEW"`) || strings.Contains(listing, `"VER_OLD"`) {
@@ -162,7 +129,7 @@ func TestSecretsBecomeNullVariables(t *testing.T) {
 }
 
 func TestTestFlightLeavesOutWhatWouldChurn(t *testing.T) {
-	result, _ := runFake(t, Options{Domains: []Domain{DomainTestFlight}})
+	result, _ := runFake(t, Options{Parts: mustParts(t, "testflight")})
 	testflight := string(result.Files["com_example_app_testflight.tf"])
 
 	if strings.Contains(testflight, "someone@example.org") {
@@ -180,7 +147,7 @@ func TestTestFlightLeavesOutWhatWouldChurn(t *testing.T) {
 }
 
 func TestTeamLeavesOutTheAccountHolder(t *testing.T) {
-	result, _ := runFake(t, Options{Domains: []Domain{DomainTeam}})
+	result, _ := runFake(t, Options{Parts: mustParts(t, "team")})
 	team := string(result.Files["team.tf"])
 
 	if strings.Contains(team, "owner@example.com") {
@@ -198,7 +165,7 @@ func TestTeamLeavesOutTheAccountHolder(t *testing.T) {
 // schedule's import: one price per territory, none of Apple's history, and no
 // UPFRONT plan type, which Apple reports on the ordinary price.
 func TestSubscriptionPricesAreThoseInEffect(t *testing.T) {
-	result, _ := runFake(t, Options{Domains: []Domain{DomainProducts}})
+	result, _ := runFake(t, Options{Parts: mustParts(t, "products")})
 	products := string(result.Files["com_example_app_products.tf"])
 
 	for _, history := range []string{"spp-gbr-old", "spp-usa-preserved"} {
@@ -217,7 +184,7 @@ func TestSubscriptionPricesAreThoseInEffect(t *testing.T) {
 }
 
 func TestInAppPurchaseLocalizationsComeFromTheNewestVersion(t *testing.T) {
-	_, account := runFake(t, Options{Domains: []Domain{DomainProducts}})
+	_, account := runFake(t, Options{Parts: mustParts(t, "products")})
 
 	if len(account.calls) != 1 || account.calls[0] != "GetInAppPurchaseLocalizations IAPV2" {
 		t.Errorf("read localizations through %v, want only the newest version IAPV2", account.calls)
@@ -263,14 +230,14 @@ func (*unauthorized) GetBundleIDs() ([]models.BundleID, error) {
 }
 
 func TestCredentialFailureStopsTheExport(t *testing.T) {
-	_, err := Run(&unauthorized{}, Options{Domains: []Domain{DomainSigning}})
+	_, err := Run(&unauthorized{}, Options{Parts: mustParts(t, "signing")})
 	if !errors.Is(err, errFatal) {
 		t.Fatalf("Run = %v, want a fatal error rather than a note per record", err)
 	}
 }
 
 func TestEditedLocalizationsExportOnlyTheEdit(t *testing.T) {
-	result, _ := runFake(t, Options{Domains: []Domain{DomainProducts}})
+	result, _ := runFake(t, Options{Parts: mustParts(t, "products")})
 	products := string(result.Files["com_example_app_products.tf"])
 
 	for _, approved := range []string{"GRPLOC0", "SUBLOC0"} {
@@ -312,4 +279,17 @@ func TestEditableLocalizationsKeepsOnePerLocale(t *testing.T) {
 	if got, want := strings.Join(shadowed, ","), "en-US,ar-SA"; got != want {
 		t.Errorf("shadowed %s, want %s", got, want)
 	}
+}
+
+func mustParts(t *testing.T, names ...string) []Part {
+	t.Helper()
+	var parts []Part
+	for _, name := range names {
+		p, err := ParsePart(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parts = append(parts, p...)
+	}
+	return parts
 }
