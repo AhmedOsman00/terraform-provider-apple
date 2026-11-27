@@ -58,7 +58,7 @@ type inAppPurchaseModel struct {
 type inAppPurchaseLocalizationModel struct {
 	ID              types.String `tfsdk:"id"`
 	InAppPurchaseID types.String `tfsdk:"in_app_purchase_id"`
-	VersionID       types.String `tfsdk:"version_id"`
+	VersionID       types.String `tfsdk:"in_app_purchase_version_id"`
 	Locale          types.String `tfsdk:"locale"`
 	Name            types.String `tfsdk:"name"`
 	Description     types.String `tfsdk:"description"`

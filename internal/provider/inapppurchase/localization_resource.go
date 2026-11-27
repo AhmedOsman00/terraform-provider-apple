@@ -54,7 +54,7 @@ func (r *inAppPurchaseLocalizationResource) Schema(_ context.Context, _ resource
 			"the version for you: it writes into whichever draft still accepts edits, and creates one " +
 			"when every existing version is in review or already approved, which is what App Store " +
 			"Connect's own UI does when you edit approved metadata. The version it used is reported as " +
-			"`version_id`. Versions cannot be deleted, so one created this way outlives the localization.\n\n" +
+			"`in_app_purchase_version_id`. Versions cannot be deleted, so one created this way outlives the localization.\n\n" +
 			"## Destroying the last localization\n\n" +
 			"Apple requires every version to keep at least one localization, and rejects the deletion " +
 			"of the only one with `409 Cannot delete the last localization`. Destroying it therefore " +
@@ -78,7 +78,7 @@ func (r *inAppPurchaseLocalizationResource) Schema(_ context.Context, _ resource
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"version_id": schema.StringAttribute{
+			"in_app_purchase_version_id": schema.StringAttribute{
 				MarkdownDescription: "The in-app purchase version this localization was written into. " +
 					"Resolved by the provider and reported for reference; it is not configurable.",
 				Computed: true,
