@@ -175,10 +175,16 @@ invitations; `app` = listing.
 
 ## 4. Build what makes stability checkable
 
-- [ ] **Upgrade tests**: for each resource, apply with the previous release
+- [x] **Upgrade tests**: for each resource, apply with the previous release
       (`ExternalProviders`), then plan with the working tree, expecting an empty
       plan. Past regressions (profile import, `platform`,
-      `has_access_to_all_builds`) were all of this kind.
+      `has_access_to_all_builds`) were all of this kind. `TestAccUpgrade`
+      covers every resource except `apple_device` and `apple_ci_workflow`,
+      and a unit test keeps it that way.
+- [ ] Run `TestAccUpgrade` against the live API, and once per release after.
+- [ ] Upgrade tests for imports: import with the previous release, then plan
+      with the working tree. The profile import regression was of this kind,
+      and `TestAccUpgrade` only covers state written by an apply.
 - [ ] **Unit tests for create/read/update/delete code** that runs only against the
       live API today, through `httptest` and `resource.UnitTest`, for the riskiest
       reconcilers: the subscription price schedule, the introductory offer
