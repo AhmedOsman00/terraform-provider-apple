@@ -102,12 +102,8 @@ func (d *profilesDataSource) shouldIncludeProfile(ctx context.Context, profile m
 		}
 	}
 
-	// Bundle ID filter (would require relationship data)
-	if !config.BundleID.IsNull() && !config.BundleID.IsUnknown() {
-		// This would require fetching relationship data from the API
-		// For now, we'll skip this filter or implement it when relationship data is available
-		tflog.Debug(ctx, "Bundle ID filter not yet implemented due to API relationship complexity")
-	}
+	// bundle_id is applied in Read, after these: the profile record does not
+	// carry it, so it costs a request per profile still in the running.
 
 	return true
 }

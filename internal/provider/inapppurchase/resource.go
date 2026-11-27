@@ -13,7 +13,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -110,11 +110,14 @@ func (r *inAppPurchaseResource) Schema(_ context.Context, _ resource.SchemaReque
 			},
 			"family_sharable": schema.BoolAttribute{
 				MarkdownDescription: "Whether the purchase can be shared with the customer's Family Sharing " +
-					"group. Defaults to `false`. Can be updated in place, but Apple treats turning it off " +
+					"group. Leave it unset to keep what Apple holds, which for a new purchase is `false`. " +
+					"Can be updated in place, but Apple treats turning it off " +
 					"as a change affecting existing customers.",
 				Optional: true,
 				Computed: true,
-				Default:  booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"review_note": schema.StringAttribute{
 				MarkdownDescription: "A note for App Review explaining how to reach and test the purchase. " +
@@ -413,6 +416,9 @@ func applyPurchaseAttributes(model *inAppPurchaseModel, purchase *models.InAppPu
 
 	if purchase.Attributes.FamilySharable != nil {
 		model.FamilySharable = types.BoolValue(*purchase.Attributes.FamilySharable)
+	} else if model.FamilySharable.IsUnknown() {
+		// Unset and not reported: Apple's default for a new product.
+		model.FamilySharable = types.BoolValue(false)
 	}
 
 	if purchase.Attributes.State != nil {

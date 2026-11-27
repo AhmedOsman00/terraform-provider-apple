@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -125,11 +124,11 @@ func (r *userResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			"provisioning_allowed": schema.BoolAttribute{
 				MarkdownDescription: "Whether the member may create signing certificates and provisioning " +
 					"profiles in the Developer Portal — the access `apple_certificate` and " +
-					"`apple_profile` need. Defaults to `false`, which is Apple's own default for a new " +
-					"member.",
+					"`apple_profile` need. Leave it unset to keep the member's current answer: this " +
+					"resource adopts a member who is already on the team, so a default would revoke " +
+					"access nobody configured.",
 				Optional: true,
 				Computed: true,
-				Default:  booldefault.StaticBool(false),
 			},
 			"first_name": schema.StringAttribute{
 				MarkdownDescription: "The member's first name, as their Apple Account reports it. Apple's " +

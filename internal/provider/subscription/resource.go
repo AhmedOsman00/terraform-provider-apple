@@ -13,7 +13,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -102,11 +102,14 @@ func (r *subscriptionResource) Schema(_ context.Context, _ resource.SchemaReques
 			},
 			"family_sharable": schema.BoolAttribute{
 				MarkdownDescription: "Whether the subscription can be shared with the customer's Family Sharing group. " +
-					"Defaults to `false`. Can be updated in place, but note that Apple treats turning it off " +
+					"Leave it unset to keep what Apple holds, which for a new subscription is `false`. " +
+					"Can be updated in place, but note that Apple treats turning it off " +
 					"as a change affecting existing subscribers.",
 				Optional: true,
 				Computed: true,
-				Default:  booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"group_level": schema.Int64Attribute{
 				MarkdownDescription: "The rank of this subscription within its group, where 1 is the highest " +
@@ -404,6 +407,9 @@ func applySubscriptionAttributes(model *subscriptionModel, subscription *models.
 
 	if subscription.Attributes.FamilySharable != nil {
 		model.FamilySharable = types.BoolValue(*subscription.Attributes.FamilySharable)
+	} else if model.FamilySharable.IsUnknown() {
+		// Unset and not reported: Apple's default for a new product.
+		model.FamilySharable = types.BoolValue(false)
 	}
 
 	if subscription.Attributes.GroupLevel != nil {

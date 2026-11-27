@@ -247,26 +247,37 @@ type ProfileLinkages struct {
 	DeviceIDs      []string
 }
 
-// GetProfileLinkages reads the bundle ID, certificates and devices a profile
-// names, in the order Apple returns them. Every one of them is fixed at
-// issue, so an import that leaves them out plans a reissue.
-func (c *Client) GetProfileLinkages(profileID string) (*ProfileLinkages, error) {
+// GetProfileBundleID reads Apple's ID of the Bundle ID a profile was issued
+// for. The profile record does not carry it, so this is a request of its own.
+func (c *Client) GetProfileBundleID(profileID string) (string, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/profiles/%s/relationships/bundleId", c.HostURL, profileID), nil)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	body, err := c.doRequest(req, nil)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	bundle := models.Response[models.ResourceData]{}
 	if err := json.Unmarshal(body, &bundle); err != nil {
+		return "", err
+	}
+
+	return bundle.Data.ID, nil
+}
+
+// GetProfileLinkages reads the bundle ID, certificates and devices a profile
+// names, in the order Apple returns them. Every one of them is fixed at
+// issue, so an import that leaves them out plans a reissue.
+func (c *Client) GetProfileLinkages(profileID string) (*ProfileLinkages, error) {
+	bundleID, err := c.GetProfileBundleID(profileID)
+	if err != nil {
 		return nil, err
 	}
 
-	linkages := &ProfileLinkages{BundleID: bundle.Data.ID}
+	linkages := &ProfileLinkages{BundleID: bundleID}
 
 	for _, relationship := range []struct {
 		name string

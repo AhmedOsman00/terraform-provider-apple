@@ -77,9 +77,10 @@ func (d *DevicesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 				},
 			},
 			"status": schema.StringAttribute{
-				MarkdownDescription: "Filter devices by status. Valid values: ENABLED, PROCESSING, INELIGIBLE",
-				Optional:            true,
-				Validators:          []validator.String{StatusValidator},
+				MarkdownDescription: "Filter devices by status: `ENABLED`, `DISABLED`, `PROCESSING` or `INELIGIBLE`. A destroyed " +
+					"`apple_device` is `DISABLED`, since Apple has no way to delete one.",
+				Optional:   true,
+				Validators: []validator.String{StatusValidator},
 			},
 			"name_pattern": schema.StringAttribute{
 				MarkdownDescription: "Filter devices by name using a regular expression pattern",
@@ -120,7 +121,7 @@ func (d *DevicesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 							Computed:            true,
 						},
 						"name": schema.StringAttribute{
-							MarkdownDescription: "Device name",
+							MarkdownDescription: "The device's name in the Developer Portal.",
 							Computed:            true,
 						},
 						"udid": schema.StringAttribute{
@@ -128,19 +129,19 @@ func (d *DevicesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 							Computed:            true,
 						},
 						"platform": schema.StringAttribute{
-							MarkdownDescription: "Device platform",
+							MarkdownDescription: "The device platform: `IOS`, `MAC_OS`, `TV_OS` or `VISION_OS`.",
 							Computed:            true,
 						},
 						"device_class": schema.StringAttribute{
-							MarkdownDescription: "Device class",
+							MarkdownDescription: "The device class Apple determined, such as `IPHONE` or `MAC`.",
 							Computed:            true,
 						},
 						"model": schema.StringAttribute{
-							MarkdownDescription: "Device model",
+							MarkdownDescription: "The device model Apple reports.",
 							Computed:            true,
 						},
 						"status": schema.StringAttribute{
-							MarkdownDescription: "Device status",
+							MarkdownDescription: "The device status: `ENABLED`, `DISABLED`, `PROCESSING` or `INELIGIBLE`.",
 							Computed:            true,
 						},
 						"added_date": schema.StringAttribute{

@@ -59,7 +59,7 @@ var (
 	ValidDeviceClasses = []string{"IPHONE", "IPAD", "IPOD", "APPLE_TV", "APPLE_WATCH", "MAC", "APPLE_VISION_PRO"}
 
 	// ValidStatuses contains all supported Device statuses.
-	ValidStatuses = []string{"ENABLED", "PROCESSING", "INELIGIBLE"}
+	ValidStatuses = []string{"ENABLED", "DISABLED", "PROCESSING", "INELIGIBLE"}
 
 	// PlatformValidator validates platform values.
 	PlatformValidator = stringvalidator.OneOf(ValidPlatforms...)
