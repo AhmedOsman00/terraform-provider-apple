@@ -88,7 +88,7 @@ resource "apple_bundle_id_capability" "conditional_push" {
 ### Optional
 
 - `bundle_id` (String) Filter capabilities by Bundle ID. This can be either the Apple-generated Bundle ID or Bundle identifier.
-- `capability_type` (String) Filter by capability type (e.g., ICLOUD, PUSH_NOTIFICATIONS, IN_APP_PURCHASE).
+- `capability_type` (String) Filter by capability type, one of `ACCESS_WIFI_INFORMATION`, `APP_GROUPS`, `APPLE_PAY`, `APPLE_ID_AUTH`, `ASSOCIATED_DOMAINS`, `AUTOFILL_CREDENTIAL_PROVIDER`, `CLASSKIT`, `COREMEDIA_HLS_LOW_LATENCY`, `DATA_PROTECTION`, `GAME_CENTER`, `HEALTHKIT`, `HOMEKIT`, `HOT_SPOT`, `ICLOUD`, `IN_APP_PURCHASE`, `INTER_APP_AUDIO`, `MAPS`, `MULTIPATH`, `NETWORK_CUSTOM_PROTOCOL`, `NETWORK_EXTENSIONS`, `NFC_TAG_READING`, `PERSONAL_VPN`, `PUSH_NOTIFICATIONS`, `SIRIKIT`, `SYSTEM_EXTENSION_INSTALL`, `USER_MANAGEMENT`, `WALLET`, `WIRELESS_ACCESSORY_CONFIGURATION`.
 - `limit` (Number) Maximum number of capabilities to return. Must be between 1 and 200. Defaults to 100.
 - `sort_by` (String) Field to sort by. Valid values: `capability_type`, `bundle_id`. Defaults to `capability_type`.
 - `sort_order` (String) Sort order. Valid values: `asc`, `desc`. Defaults to `asc`.
@@ -105,7 +105,7 @@ resource "apple_bundle_id_capability" "conditional_push" {
 Read-Only:
 
 - `bundle_id` (String) The Bundle ID that this capability is associated with.
-- `capability_type` (String) The type of capability (e.g., ICLOUD, PUSH_NOTIFICATIONS).
+- `capability_type` (String) The type of capability, for example `ICLOUD` or `PUSH_NOTIFICATIONS`.
 - `id` (String) The unique Apple-generated identifier for the Bundle ID Capability.
 - `settings` (Attributes List) Configuration settings for the capability. (see [below for nested schema](#nestedatt--capabilities--settings))
 

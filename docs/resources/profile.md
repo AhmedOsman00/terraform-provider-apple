@@ -219,7 +219,7 @@ output "profile_metadata" {
 
 ### Required
 
-- `bundle_id` (String) The ID of the Bundle ID to associate with this profile. This cannot be changed after creation.
+- `bundle_id` (String) Apple's ID of the Bundle ID to issue the profile for: an `apple_bundle_id`'s `id`, not its `com.example.app` identifier. This cannot be changed after creation.
 - `certificates` (List of String) List of certificate IDs to include in the profile. This cannot be changed after creation.
 - `name` (String) A human-readable name for the Profile.
 

@@ -1,7 +1,42 @@
-## 0.9.1 (Unreleased)
+## 0.10.0 (Unreleased)
+
+BREAKING CHANGES:
+
+* **`apple_in_app_purchase_localization.version_id` is now
+  `in_app_purchase_version_id`.** It is the in-app purchase version the
+  localization was written into, and `version_id` read as though it were an
+  App Store version, which every other resource calls `app_store_version_id`.
+  The attribute is computed, so only a configuration that references it needs
+  changing. Existing state upgrades without an error, and the next refresh
+  fills in the new attribute.
 
 BUG FIXES:
 
+* **Renaming an `apple_device` no longer reissues the profiles that list it.**
+  The device's `id` was planned as unknown on any update, and
+  `apple_profile.devices` forces replacement, so every profile listing the
+  device planned a reissue. A test now checks that every resource's `id`
+  keeps its state on an update, apart from the few whose ID Apple changes on
+  every write.
+* **`apple_user` no longer revokes provisioning access nobody configured.**
+  `provisioning_allowed` defaulted to `false`, and the resource adopts a
+  member already on the team, so a configuration that left it out turned
+  provisioning off for anyone who had it. Leaving it unset now keeps the
+  member's current answer.
+* **`apple_subscription` and `apple_in_app_purchase` keep Apple's
+  `family_sharable` when it is left unset.** It defaulted to `false`, so an
+  imported product that Apple shares with families planned a change Apple
+  refuses, since family sharing cannot be turned off once on. A new product
+  still starts at `false`, Apple's own default.
+* **`apple_profiles` applies its `bundle_id` filter.** It was accepted and
+  ignored, so every profile in the account came back, and each reported an
+  empty `bundle_id`. The filter now takes Apple's ID or the identifier, such as
+  `com.example.app`, and each profile reports the Bundle ID it was issued for.
+  Both cost one request per profile. `certificates` and `devices` are still not
+  read, and their descriptions now say so.
+* **`apple_devices` accepts `status = "DISABLED"`**, the status every
+  destroyed `apple_device` is left in. The filter refused it, so disabled
+  devices could not be listed.
 * **`apple_bundle_ids` and `apple_certificates` refuse a singular filter
   beside its plural.** Their descriptions have always said `platform` and
   `platforms`, and `certificate_type` and `certificate_types`, cannot be used
@@ -9,6 +44,20 @@ BUG FIXES:
   certificate had to match each. Setting both is now an error at plan time
   naming the two attributes. A value not known until apply is checked once it
   is known.
+
+ENHANCEMENTS:
+
+* **The Xcode Cloud listing data sources take `name_pattern`, `sort_by`,
+  `sort_order` and `limit`, and report `total_count` and `filtered_count`**,
+  like every other listing data source. On `apple_ci_xcode_versions` and
+  `apple_ci_mac_os_versions`, `sort_by = "version"` compares numerically, so
+  `sort_order = "desc"` with `limit = 1` returns the newest version. Without
+  `sort_by`, records keep Apple's order, as before.
+* Fuller descriptions for `apple_ci_workflow`, the Xcode Cloud data sources,
+  `apple_devices` and `apple_profiles`. Every valid capability type and App
+  Store version state is now listed, generated from the same lists the
+  validators use. The `bundle_id` attributes say whether they take Apple's ID
+  or the `com.example.app` identifier.
 
 ## 0.9.0 (November 27, 2026)
 

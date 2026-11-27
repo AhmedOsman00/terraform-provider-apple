@@ -7,7 +7,7 @@ description: |-
   This is what a customer actually reads on the App Store and in the system purchase sheet — the name on apple_in_app_purchase is an internal reference name that customers never see. A purchase stays in MISSING_METADATA until it has at least one localization.
   The locale must be one the app itself supports; Apple rejects a localization for a locale the app has not been localized into.
   Versions
-  Apple attaches localizations to an in-app purchase version — the draft that carries metadata through App Review — rather than to the purchase itself. This resource resolves the version for you: it writes into whichever draft still accepts edits, and creates one when every existing version is in review or already approved, which is what App Store Connect's own UI does when you edit approved metadata. The version it used is reported as version_id. Versions cannot be deleted, so one created this way outlives the localization.
+  Apple attaches localizations to an in-app purchase version — the draft that carries metadata through App Review — rather than to the purchase itself. This resource resolves the version for you: it writes into whichever draft still accepts edits, and creates one when every existing version is in review or already approved, which is what App Store Connect's own UI does when you edit approved metadata. The version it used is reported as in_app_purchase_version_id. Versions cannot be deleted, so one created this way outlives the localization.
   Destroying the last localization
   Apple requires every version to keep at least one localization, and rejects the deletion of the only one with 409 Cannot delete the last localization. Destroying it therefore removes it from Terraform state and emits a warning, leaving the record in App Store Connect; deleting the apple_in_app_purchase removes it for real. Destroying one of several localizations deletes it normally.
 ---
@@ -22,7 +22,7 @@ The locale must be one the app itself supports; Apple rejects a localization for
 
 ## Versions
 
-Apple attaches localizations to an *in-app purchase version* — the draft that carries metadata through App Review — rather than to the purchase itself. This resource resolves the version for you: it writes into whichever draft still accepts edits, and creates one when every existing version is in review or already approved, which is what App Store Connect's own UI does when you edit approved metadata. The version it used is reported as `version_id`. Versions cannot be deleted, so one created this way outlives the localization.
+Apple attaches localizations to an *in-app purchase version* — the draft that carries metadata through App Review — rather than to the purchase itself. This resource resolves the version for you: it writes into whichever draft still accepts edits, and creates one when every existing version is in review or already approved, which is what App Store Connect's own UI does when you edit approved metadata. The version it used is reported as `in_app_purchase_version_id`. Versions cannot be deleted, so one created this way outlives the localization.
 
 ## Destroying the last localization
 
@@ -48,7 +48,7 @@ resource "apple_in_app_purchase" "pro_unlock" {
 #
 # Apple attaches localizations to an in-app purchase version rather than to the
 # purchase itself; the provider resolves the version and reports it as
-# version_id.
+# in_app_purchase_version_id.
 resource "apple_in_app_purchase_localization" "pro_unlock_en" {
   in_app_purchase_id = apple_in_app_purchase.pro_unlock.id
   locale             = "en-US"
@@ -82,7 +82,7 @@ resource "apple_in_app_purchase_localization" "pro_unlock_ar" {
 ### Read-Only
 
 - `id` (String) The unique Apple-generated identifier for the localization.
-- `version_id` (String) The in-app purchase version this localization was written into. Resolved by the provider and reported for reference; it is not configurable.
+- `in_app_purchase_version_id` (String) The in-app purchase version this localization was written into. Resolved by the provider and reported for reference; it is not configurable.
 
 ## Import
 

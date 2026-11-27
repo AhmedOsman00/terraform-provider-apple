@@ -95,7 +95,8 @@ func (r *appAvailabilityResource) Schema(_ context.Context, _ resource.SchemaReq
 					Attributes: map[string]schema.Attribute{
 						"territory": schema.StringAttribute{
 							MarkdownDescription: "The three-letter Apple territory code, for example " +
-								"`USA`, `GBR` or `EGY` — not the two-letter ISO 3166-1 alpha-2 code.",
+								"`USA`, `GBR` or `EGY` — not the two-letter ISO 3166-1 alpha-2 code. The same code other " +
+								"resources call `territory_id`.",
 							Required:   true,
 							Validators: []validator.String{TerritoryValidator},
 						},

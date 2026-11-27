@@ -75,7 +75,7 @@ resource "apple_subscription" "basic_monthly" {
 
 ### Optional
 
-- `family_sharable` (Boolean) Whether the subscription can be shared with the customer's Family Sharing group. Defaults to `false`. Can be updated in place, but note that Apple treats turning it off as a change affecting existing subscribers.
+- `family_sharable` (Boolean) Whether the subscription can be shared with the customer's Family Sharing group. Leave it unset to keep what Apple holds, which for a new subscription is `false`. Can be updated in place, but note that Apple treats turning it off as a change affecting existing subscribers.
 - `group_level` (Number) The rank of this subscription within its group, where 1 is the highest service level. The level decides whether a move between subscriptions is an upgrade, a downgrade or a crossgrade, which in turn decides whether it takes effect immediately or at the next renewal. Apple assigns 1 when this is omitted.
 - `review_note` (String) A note for App Review explaining how to reach and test the subscription. Can be updated in place.
 - `subscription_period` (String) How often the subscription renews. One of `ONE_WEEK`, `ONE_MONTH`, `TWO_MONTHS`, `THREE_MONTHS`, `SIX_MONTHS`, `ONE_YEAR`. These are the only durations the App Store offers. Can be updated in place, though a change affects only new subscribers — existing ones stay on the duration they bought.

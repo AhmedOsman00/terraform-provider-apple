@@ -6,8 +6,10 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -63,8 +65,8 @@ func (d *appStoreVersionsDataSource) Schema(_ context.Context, _ datasource.Sche
 				Validators: []validator.String{AppStorePlatformValidator},
 			},
 			"app_version_state": schema.StringAttribute{
-				MarkdownDescription: "Return only versions in this state, for example " +
-					"`PREPARE_FOR_SUBMISSION`, `IN_REVIEW` or `READY_FOR_DISTRIBUTION`. Matched exactly, " +
+				MarkdownDescription: "Return only versions in this state, one of " +
+					"`" + strings.Join(models.ValidAppVersionStates, "`, `") + "`. Matched exactly, " +
 					"case-insensitively.",
 				Optional:   true,
 				Validators: []validator.String{AppVersionStateValidator},

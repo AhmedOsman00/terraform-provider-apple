@@ -437,3 +437,10 @@ func SettingsInputFromAPI(apiSettings []models.CapabilitySetting) (types.List, e
 
 	return settingsList, nil
 }
+
+// backtickList renders values as the comma-separated code spans a description
+// lists its valid values in, so the description and the validator are built
+// from the same list.
+func backtickList(values []string) string {
+	return "`" + strings.Join(values, "`, `") + "`"
+}

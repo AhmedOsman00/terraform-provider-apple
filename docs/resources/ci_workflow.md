@@ -133,11 +133,11 @@ resource "apple_ci_workflow" "main" {
 - `container_file_path` (String) Repository-relative `.xcodeproj` or `.xcworkspace` path.
 - `description` (String) Workflow description; may be empty.
 - `is_enabled` (Boolean) Whether the workflow can start builds.
-- `mac_os_version_id` (String) Apple relationship ID.
-- `name` (String) Workflow name.
-- `product_id` (String) Apple relationship ID.
-- `repository_id` (String) Apple relationship ID.
-- `xcode_version_id` (String) Apple relationship ID.
+- `mac_os_version_id` (String) The macOS version to build on: an ID from `apple_ci_mac_os_versions`. Apple checks that it supports the Xcode version.
+- `name` (String) The workflow's name, as Xcode Cloud shows it.
+- `product_id` (String) The Xcode Cloud product the workflow belongs to: an ID from `apple_ci_products`. Changing it replaces the workflow.
+- `repository_id` (String) The repository the workflow builds: an ID from `apple_scm_repositories`. Changing it replaces the workflow.
+- `xcode_version_id` (String) The Xcode version to build with: an ID from `apple_ci_xcode_versions`.
 
 ### Optional
 
@@ -151,7 +151,7 @@ resource "apple_ci_workflow" "main" {
 
 ### Read-Only
 
-- `id` (String) Apple workflow ID.
+- `id` (String) Apple's ID for the workflow.
 
 <a id="nestedatt--actions"></a>
 ### Nested Schema for `actions`
@@ -160,7 +160,7 @@ Required:
 
 - `action_type` (String) `BUILD`, `TEST`, `ANALYZE` or `ARCHIVE`.
 - `is_required_to_pass` (Boolean) Whether this action must pass for the workflow to succeed.
-- `scheme` (String) Shared Xcode scheme.
+- `scheme` (String) The name of a shared Xcode scheme in `container_file_path`. Xcode Cloud sees only shared schemes.
 
 Optional:
 
@@ -187,11 +187,11 @@ Optional:
 
 Optional:
 
-- `device_type_identifier` (String) Device type identifier.
-- `device_type_name` (String) Device display name.
+- `device_type_identifier` (String) The device type identifier, from `apple_ci_xcode_versions` `test_destinations`.
+- `device_type_name` (String) The device's display name, as `apple_ci_xcode_versions` lists it.
 - `kind` (String) `SIMULATOR` or `MAC`.
-- `runtime_identifier` (String) Runtime identifier.
-- `runtime_name` (String) Runtime display name.
+- `runtime_identifier` (String) The runtime identifier, from `apple_ci_xcode_versions` `available_runtimes`.
+- `runtime_name` (String) The runtime's display name, as `apple_ci_xcode_versions` lists it.
 
 
 
@@ -210,7 +210,7 @@ Optional:
 
 Optional:
 
-- `matchers` (Attributes List) Changed-file matchers. (see [below for nested schema](#nestedatt--branch_start_condition--files_and_folders_rule--matchers))
+- `matchers` (Attributes List) The changed files this rule looks at. Each matcher sets any of `directory`, `file_extension` and `file_name`. (see [below for nested schema](#nestedatt--branch_start_condition--files_and_folders_rule--matchers))
 - `mode` (String) `START_IF_ANY_FILE_MATCHES` or `DO_NOT_START_IF_ALL_FILES_MATCH`.
 
 <a id="nestedatt--branch_start_condition--files_and_folders_rule--matchers"></a>
@@ -218,9 +218,9 @@ Optional:
 
 Optional:
 
-- `directory` (String) Directory to match.
-- `file_extension` (String) File extension to match.
-- `file_name` (String) File name to match.
+- `directory` (String) Match changed files under this directory, relative to the repository root.
+- `file_extension` (String) Match changed files with this extension.
+- `file_name` (String) Match changed files with this name.
 
 
 
@@ -373,7 +373,7 @@ Required:
 
 Optional:
 
-- `matchers` (Attributes List) Changed-file matchers. (see [below for nested schema](#nestedatt--pull_request_start_condition--files_and_folders_rule--matchers))
+- `matchers` (Attributes List) The changed files this rule looks at. Each matcher sets any of `directory`, `file_extension` and `file_name`. (see [below for nested schema](#nestedatt--pull_request_start_condition--files_and_folders_rule--matchers))
 - `mode` (String) `START_IF_ANY_FILE_MATCHES` or `DO_NOT_START_IF_ALL_FILES_MATCH`.
 
 <a id="nestedatt--pull_request_start_condition--files_and_folders_rule--matchers"></a>
@@ -381,9 +381,9 @@ Optional:
 
 Optional:
 
-- `directory` (String) Directory to match.
-- `file_extension` (String) File extension to match.
-- `file_name` (String) File name to match.
+- `directory` (String) Match changed files under this directory, relative to the repository root.
+- `file_extension` (String) Match changed files with this extension.
+- `file_name` (String) Match changed files with this name.
 
 
 
@@ -421,8 +421,8 @@ Optional:
 
 - `days` (List of String) Days: `SUNDAY`, `MONDAY`, `TUESDAY`, `WEDNESDAY`, `THURSDAY`, `FRIDAY`, `SATURDAY`.
 - `frequency` (String) `WEEKLY`, `DAILY` or `HOURLY`.
-- `hour` (Number) Hour (0–23).
-- `minute` (Number) Minute (0–59).
+- `hour` (Number) The hour to start at, 0–23, in `timezone`.
+- `minute` (Number) The minute past the hour to start at, 0–59.
 - `timezone` (String) Time zone identifier, for example `Europe/Warsaw`.
 
 
@@ -459,7 +459,7 @@ Optional:
 
 Optional:
 
-- `matchers` (Attributes List) Changed-file matchers. (see [below for nested schema](#nestedatt--tag_start_condition--files_and_folders_rule--matchers))
+- `matchers` (Attributes List) The changed files this rule looks at. Each matcher sets any of `directory`, `file_extension` and `file_name`. (see [below for nested schema](#nestedatt--tag_start_condition--files_and_folders_rule--matchers))
 - `mode` (String) `START_IF_ANY_FILE_MATCHES` or `DO_NOT_START_IF_ALL_FILES_MATCH`.
 
 <a id="nestedatt--tag_start_condition--files_and_folders_rule--matchers"></a>
@@ -467,9 +467,9 @@ Optional:
 
 Optional:
 
-- `directory` (String) Directory to match.
-- `file_extension` (String) File extension to match.
-- `file_name` (String) File name to match.
+- `directory` (String) Match changed files under this directory, relative to the repository root.
+- `file_extension` (String) Match changed files with this extension.
+- `file_name` (String) Match changed files with this name.
 
 
 

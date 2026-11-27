@@ -65,18 +65,8 @@ func (r *bundleIDCapabilityResource) Schema(_ context.Context, _ resource.Schema
 				},
 			},
 			"capability_type": schema.StringAttribute{
-				MarkdownDescription: "The type of capability to enable. Valid values include:\n" +
-					"- `ICLOUD` - iCloud services\n" +
-					"- `PUSH_NOTIFICATIONS` - Push notifications\n" +
-					"- `IN_APP_PURCHASE` - In-app purchases\n" +
-					"- `GAME_CENTER` - Game Center integration\n" +
-					"- `APP_GROUPS` - App Groups for data sharing\n" +
-					"- `APPLE_PAY` - Apple Pay payments\n" +
-					"- `ASSOCIATED_DOMAINS` - Associated domains\n" +
-					"- `HEALTHKIT` - HealthKit data access\n" +
-					"- `HOMEKIT` - HomeKit device control\n" +
-					"- `SIRIKIT` - SiriKit integration\n" +
-					"- `WALLET` - Wallet passes\n\n" +
+				MarkdownDescription: "The type of capability to enable. Valid values: " +
+					backtickList(models.ValidCapabilityTypes) + ".\n\n" +
 					"Note the spelling: Apple writes HEALTHKIT, HOMEKIT, CLASSKIT and SIRIKIT without an " +
 					"underscore, and Wallet as WALLET. Capabilities that Xcode configures rather than the " +
 					"App Store Connect API -- APP_ATTEST, WEATHER_KIT, GROUP_ACTIVITIES and similar -- are " +

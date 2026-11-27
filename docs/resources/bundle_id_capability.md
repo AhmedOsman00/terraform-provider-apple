@@ -131,18 +131,7 @@ resource "apple_bundle_id_capability" "data_protection" {
 ### Required
 
 - `bundle_id` (String) The Bundle ID that this capability is associated with. This can be either the Apple-generated Bundle ID or a reference to a bundle_id resource.
-- `capability_type` (String) The type of capability to enable. Valid values include:
-- `ICLOUD` - iCloud services
-- `PUSH_NOTIFICATIONS` - Push notifications
-- `IN_APP_PURCHASE` - In-app purchases
-- `GAME_CENTER` - Game Center integration
-- `APP_GROUPS` - App Groups for data sharing
-- `APPLE_PAY` - Apple Pay payments
-- `ASSOCIATED_DOMAINS` - Associated domains
-- `HEALTHKIT` - HealthKit data access
-- `HOMEKIT` - HomeKit device control
-- `SIRIKIT` - SiriKit integration
-- `WALLET` - Wallet passes
+- `capability_type` (String) The type of capability to enable. Valid values: `ACCESS_WIFI_INFORMATION`, `APP_GROUPS`, `APPLE_PAY`, `APPLE_ID_AUTH`, `ASSOCIATED_DOMAINS`, `AUTOFILL_CREDENTIAL_PROVIDER`, `CLASSKIT`, `COREMEDIA_HLS_LOW_LATENCY`, `DATA_PROTECTION`, `GAME_CENTER`, `HEALTHKIT`, `HOMEKIT`, `HOT_SPOT`, `ICLOUD`, `IN_APP_PURCHASE`, `INTER_APP_AUDIO`, `MAPS`, `MULTIPATH`, `NETWORK_CUSTOM_PROTOCOL`, `NETWORK_EXTENSIONS`, `NFC_TAG_READING`, `PERSONAL_VPN`, `PUSH_NOTIFICATIONS`, `SIRIKIT`, `SYSTEM_EXTENSION_INSTALL`, `USER_MANAGEMENT`, `WALLET`, `WIRELESS_ACCESSORY_CONFIGURATION`.
 
 Note the spelling: Apple writes HEALTHKIT, HOMEKIT, CLASSKIT and SIRIKIT without an underscore, and Wallet as WALLET. Capabilities that Xcode configures rather than the App Store Connect API -- APP_ATTEST, WEATHER_KIT, GROUP_ACTIVITIES and similar -- are not accepted here. This cannot be changed after creation.
 

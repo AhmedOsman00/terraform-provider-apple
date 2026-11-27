@@ -120,7 +120,7 @@ output "enabled_devices_by_platform" {
 - `platforms` (List of String) Filter devices by multiple platforms. Valid values: IOS, MAC_OS, TV_OS, VISION_OS
 - `sort_by` (String) Field to sort by. Valid values: name, udid, platform, device_class, status, added_date
 - `sort_order` (String) Sort order. Valid values: asc, desc. Defaults to asc.
-- `status` (String) Filter devices by status. Valid values: ENABLED, PROCESSING, INELIGIBLE
+- `status` (String) Filter devices by status: `ENABLED`, `DISABLED`, `PROCESSING` or `INELIGIBLE`. A destroyed `apple_device` is `DISABLED`, since Apple has no way to delete one.
 - `udid_pattern` (String) Filter devices by UDID using a regular expression pattern
 
 ### Read-Only
@@ -135,10 +135,10 @@ output "enabled_devices_by_platform" {
 Read-Only:
 
 - `added_date` (String) Date when the device was added (ISO 8601 format)
-- `device_class` (String) Device class
+- `device_class` (String) The device class Apple determined, such as `IPHONE` or `MAC`.
 - `id` (String) Unique identifier for the device
-- `model` (String) Device model
-- `name` (String) Device name
-- `platform` (String) Device platform
-- `status` (String) Device status
+- `model` (String) The device model Apple reports.
+- `name` (String) The device's name in the Developer Portal.
+- `platform` (String) The device platform: `IOS`, `MAC_OS`, `TV_OS` or `VISION_OS`.
+- `status` (String) The device status: `ENABLED`, `DISABLED`, `PROCESSING` or `INELIGIBLE`.
 - `udid` (String) Device UDID (Unique Device Identifier)
