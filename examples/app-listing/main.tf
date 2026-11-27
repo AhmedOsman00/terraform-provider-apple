@@ -83,11 +83,13 @@ resource "apple_app_age_rating_declaration" "this" {
 
   advertising                 = var.advisory.advertising
   age_assurance               = var.advisory.age_assurance
+  dating_and_relationships    = var.advisory.dating_and_relationships
   gambling                    = var.advisory.gambling
   health_or_wellness_topics   = var.advisory.health_or_wellness_topics
   loot_box                    = var.advisory.loot_box
   messaging_and_chat          = var.advisory.messaging_and_chat
   parental_controls           = var.advisory.parental_controls
+  shared_location             = var.advisory.shared_location
   social_media                = var.advisory.social_media
   social_media_age_restricted = var.advisory.social_media_age_restricted
   unrestricted_web_access     = var.advisory.unrestricted_web_access

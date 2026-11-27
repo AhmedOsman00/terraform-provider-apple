@@ -323,10 +323,12 @@ resource "apple_app_age_rating_declaration" "test" {
 
   advertising               = false
   age_assurance             = false
+  dating_and_relationships  = false
   health_or_wellness_topics = false
   loot_box                  = false
   messaging_and_chat        = false
   parental_controls         = false
+  shared_location           = false
   social_media              = false
 }
 `, testAccAppID(), cartoonViolence)

@@ -160,11 +160,13 @@ type ageRatingDeclarationModel struct {
 
 	Advertising              types.Bool `tfsdk:"advertising"`
 	AgeAssurance             types.Bool `tfsdk:"age_assurance"`
+	DatingAndRelationships   types.Bool `tfsdk:"dating_and_relationships"`
 	Gambling                 types.Bool `tfsdk:"gambling"`
 	HealthOrWellnessTopics   types.Bool `tfsdk:"health_or_wellness_topics"`
 	LootBox                  types.Bool `tfsdk:"loot_box"`
 	MessagingAndChat         types.Bool `tfsdk:"messaging_and_chat"`
 	ParentalControls         types.Bool `tfsdk:"parental_controls"`
+	SharedLocation           types.Bool `tfsdk:"shared_location"`
 	SocialMedia              types.Bool `tfsdk:"social_media"`
 	SocialMediaAgeRestricted types.Bool `tfsdk:"social_media_age_restricted"`
 	UnrestrictedWebAccess    types.Bool `tfsdk:"unrestricted_web_access"`

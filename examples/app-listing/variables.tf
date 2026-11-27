@@ -244,11 +244,13 @@ variable "advisory" {
 
     advertising                 = optional(bool, false)
     age_assurance               = optional(bool, false)
+    dating_and_relationships    = optional(bool, false)
     gambling                    = optional(bool, false)
     health_or_wellness_topics   = optional(bool, false)
     loot_box                    = optional(bool, false)
     messaging_and_chat          = optional(bool, false)
     parental_controls           = optional(bool, false)
+    shared_location             = optional(bool, false)
     social_media                = optional(bool, false)
     social_media_age_restricted = optional(bool, false)
     unrestricted_web_access     = optional(bool, false)

@@ -800,16 +800,16 @@ cross-variable validation.
   naming Apple's attribute (`missingAgeRatingAnswers` maps them to Terraform
   names, from the model's JSON tags), so the first apply against a new app has
   to answer everything. Once answered, a question can be left out again.
-  Apple already reports `datingAndRelationships`, `sharedLocation` and
-  `gracRatingClassificationNumber`, which the provider does not model yet. Apple revised this
+  Apple already reports `gracRatingClassificationNumber`, which the provider
+  does not model yet. Apple revised this
   questionnaire and the provider models both forms: `INFREQUENT`/`FREQUENT`
   alongside `INFREQUENT_OR_MILD`/`FREQUENT_OR_INTENSE`, and
   `age_rating_override_v2` (where `SEVENTEEN_PLUS` became `EIGHTEEN_PLUS`)
   alongside `age_rating_override`. The booleans `age_assurance`, `loot_box`,
   `messaging_and_chat`, `parental_controls`, `social_media`,
   `social_media_age_restricted`, `user_generated_content`, `advertising`,
-  `health_or_wellness_topics` and `guns_or_other_weapons` exist only on the
-  newer form. A metadata file written against the older questionnaire — the
+  `health_or_wellness_topics`, `guns_or_other_weapons`, `shared_location` and
+  `dating_and_relationships` exist only on the newer form. A metadata file written against the older questionnaire — the
   attribute set EAS still emits — is missing all of them.
 - **`apple_app_store_version`**: the one resource here with a real create and a
   real delete. `platform` is `RequiresReplace` and accepts `TV_OS` and

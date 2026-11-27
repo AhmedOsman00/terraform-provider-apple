@@ -211,6 +211,16 @@ func (r *ageRatingDeclarationResource) Schema(_ context.Context, _ resource.Sche
 				Optional:            true,
 				Computed:            true,
 			},
+			"shared_location": schema.BoolAttribute{
+				MarkdownDescription: "Whether customers can share their location with other customers.",
+				Optional:            true,
+				Computed:            true,
+			},
+			"dating_and_relationships": schema.BoolAttribute{
+				MarkdownDescription: "Whether the app is for dating or finding a relationship.",
+				Optional:            true,
+				Computed:            true,
+			},
 			"social_media": schema.BoolAttribute{
 				MarkdownDescription: "Whether the app includes social media features.",
 				Optional:            true,
@@ -559,11 +569,13 @@ func ageRatingAttributes(plan *ageRatingDeclarationModel) models.AgeRatingDeclar
 		ViolenceRealisticProlongedGraphicOrSadistic: stringOrNil(plan.ViolenceRealisticProlongedGraphicOrSadistic),
 		Advertising:                                 boolOrNil(plan.Advertising),
 		AgeAssurance:                                boolOrNil(plan.AgeAssurance),
+		DatingAndRelationships:                      boolOrNil(plan.DatingAndRelationships),
 		Gambling:                                    boolOrNil(plan.Gambling),
 		HealthOrWellnessTopics:                      boolOrNil(plan.HealthOrWellnessTopics),
 		LootBox:                                     boolOrNil(plan.LootBox),
 		MessagingAndChat:                            boolOrNil(plan.MessagingAndChat),
 		ParentalControls:                            boolOrNil(plan.ParentalControls),
+		SharedLocation:                              boolOrNil(plan.SharedLocation),
 		SocialMedia:                                 boolOrNil(plan.SocialMedia),
 		SocialMediaAgeRestricted:                    boolOrNil(plan.SocialMediaAgeRestricted),
 		UnrestrictedWebAccess:                       boolOrNil(plan.UnrestrictedWebAccess),
@@ -603,11 +615,13 @@ func applyAgeRating(model *ageRatingDeclarationModel, declaration *models.AgeRat
 	model.ViolenceRealisticProlongedGraphicOrSadistic = stringOrNull(declaration.Attributes.ViolenceRealisticProlongedGraphicOrSadistic)
 	model.Advertising = boolOrNull(declaration.Attributes.Advertising)
 	model.AgeAssurance = boolOrNull(declaration.Attributes.AgeAssurance)
+	model.DatingAndRelationships = boolOrNull(declaration.Attributes.DatingAndRelationships)
 	model.Gambling = boolOrNull(declaration.Attributes.Gambling)
 	model.HealthOrWellnessTopics = boolOrNull(declaration.Attributes.HealthOrWellnessTopics)
 	model.LootBox = boolOrNull(declaration.Attributes.LootBox)
 	model.MessagingAndChat = boolOrNull(declaration.Attributes.MessagingAndChat)
 	model.ParentalControls = boolOrNull(declaration.Attributes.ParentalControls)
+	model.SharedLocation = boolOrNull(declaration.Attributes.SharedLocation)
 	model.SocialMedia = boolOrNull(declaration.Attributes.SocialMedia)
 	model.SocialMediaAgeRestricted = boolOrNull(declaration.Attributes.SocialMediaAgeRestricted)
 	model.UnrestrictedWebAccess = boolOrNull(declaration.Attributes.UnrestrictedWebAccess)

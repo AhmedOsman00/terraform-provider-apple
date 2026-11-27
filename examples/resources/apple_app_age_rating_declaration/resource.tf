@@ -34,11 +34,13 @@ resource "apple_app_age_rating_declaration" "example" {
   # questionnaire and did not exist on the original one.
   advertising                 = false
   age_assurance               = false
+  dating_and_relationships    = false
   gambling                    = false
   health_or_wellness_topics   = false
   loot_box                    = false
   messaging_and_chat          = false
   parental_controls           = false
+  shared_location             = false
   social_media                = false
   social_media_age_restricted = false
   unrestricted_web_access     = false

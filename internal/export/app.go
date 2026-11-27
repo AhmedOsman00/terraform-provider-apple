@@ -209,11 +209,13 @@ func (e *exporter) exportAppInfo(f *file, app models.App) error {
 	}{
 		{"advertising", d.Advertising},
 		{"age_assurance", d.AgeAssurance},
+		{"dating_and_relationships", d.DatingAndRelationships},
 		{"gambling", d.Gambling},
 		{"health_or_wellness_topics", d.HealthOrWellnessTopics},
 		{"loot_box", d.LootBox},
 		{"messaging_and_chat", d.MessagingAndChat},
 		{"parental_controls", d.ParentalControls},
+		{"shared_location", d.SharedLocation},
 		{"social_media", d.SocialMedia},
 		{"social_media_age_restricted", d.SocialMediaAgeRestricted},
 		{"unrestricted_web_access", d.UnrestrictedWebAccess},
