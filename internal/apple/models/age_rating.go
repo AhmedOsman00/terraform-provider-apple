@@ -86,11 +86,13 @@ type AgeRatingDeclarationAttributes struct {
 	// Yes/no facts about the app.
 	Advertising              *bool `json:"advertising,omitempty"`
 	AgeAssurance             *bool `json:"ageAssurance,omitempty"`
+	DatingAndRelationships   *bool `json:"datingAndRelationships,omitempty"`
 	Gambling                 *bool `json:"gambling,omitempty"`
 	HealthOrWellnessTopics   *bool `json:"healthOrWellnessTopics,omitempty"`
 	LootBox                  *bool `json:"lootBox,omitempty"`
 	MessagingAndChat         *bool `json:"messagingAndChat,omitempty"`
 	ParentalControls         *bool `json:"parentalControls,omitempty"`
+	SharedLocation           *bool `json:"sharedLocation,omitempty"`
 	SocialMedia              *bool `json:"socialMedia,omitempty"`
 	SocialMediaAgeRestricted *bool `json:"socialMediaAgeRestricted,omitempty"`
 	UnrestrictedWebAccess    *bool `json:"unrestrictedWebAccess,omitempty"`

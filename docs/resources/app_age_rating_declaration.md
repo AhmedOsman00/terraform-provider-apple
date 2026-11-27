@@ -67,11 +67,13 @@ resource "apple_app_age_rating_declaration" "example" {
   # questionnaire and did not exist on the original one.
   advertising                 = false
   age_assurance               = false
+  dating_and_relationships    = false
   gambling                    = false
   health_or_wellness_topics   = false
   loot_box                    = false
   messaging_and_chat          = false
   parental_controls           = false
+  shared_location             = false
   social_media                = false
   social_media_age_restricted = false
   unrestricted_web_access     = false
@@ -98,6 +100,7 @@ resource "apple_app_age_rating_declaration" "example" {
 - `age_rating_override_v2` (String) The revised override, in which `SEVENTEEN_PLUS` became `EIGHTEEN_PLUS`. One of `NONE`, `NINE_PLUS`, `THIRTEEN_PLUS`, `SIXTEEN_PLUS`, `EIGHTEEN_PLUS` or `UNRATED`.
 - `alcohol_tobacco_or_drug_use_or_references` (String) References to or depictions of alcohol, tobacco or drug use. One of `NONE`, `INFREQUENT_OR_MILD`, `FREQUENT_OR_INTENSE`, `INFREQUENT` or `FREQUENT`.
 - `contests` (String) Contests the app runs. One of `NONE`, `INFREQUENT_OR_MILD`, `FREQUENT_OR_INTENSE`, `INFREQUENT` or `FREQUENT`.
+- `dating_and_relationships` (Boolean) Whether the app is for dating or finding a relationship.
 - `developer_age_rating_info_url` (String) A link to the developer's own explanation of the app's content, shown alongside the rating in territories that require one.
 - `gambling` (Boolean) Whether the app offers real-money gambling. Apple rates any app answering `true` 18+ and restricts where it can be sold.
 - `gambling_simulated` (String) Simulated gambling — casino games played with no real money at stake. One of `NONE`, `INFREQUENT_OR_MILD`, `FREQUENT_OR_INTENSE`, `INFREQUENT` or `FREQUENT`.
@@ -114,6 +117,7 @@ resource "apple_app_age_rating_declaration" "example" {
 - `profanity_or_crude_humor` (String) Profanity or crude humor. One of `NONE`, `INFREQUENT_OR_MILD`, `FREQUENT_OR_INTENSE`, `INFREQUENT` or `FREQUENT`.
 - `sexual_content_graphic_and_nudity` (String) Graphic sexual content and nudity. One of `NONE`, `INFREQUENT_OR_MILD`, `FREQUENT_OR_INTENSE`, `INFREQUENT` or `FREQUENT`.
 - `sexual_content_or_nudity` (String) Sexual content or nudity. One of `NONE`, `INFREQUENT_OR_MILD`, `FREQUENT_OR_INTENSE`, `INFREQUENT` or `FREQUENT`.
+- `shared_location` (Boolean) Whether customers can share their location with other customers.
 - `social_media` (Boolean) Whether the app includes social media features.
 - `social_media_age_restricted` (Boolean) Whether those social media features are restricted by age.
 - `unrestricted_web_access` (Boolean) Whether the app can open arbitrary web pages — an in-app browser with no filtering. Apple rates any app answering `true` at least 17+.

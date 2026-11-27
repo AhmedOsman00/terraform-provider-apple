@@ -1,3 +1,15 @@
+## 0.9.0 (Unreleased)
+
+ENHANCEMENTS:
+
+* **`apple_app_age_rating_declaration`: `shared_location` and
+  `dating_and_relationships`.** Apple added both questions to the age rating
+  questionnaire, and App Store Connect asks every app to answer them by
+  January 15, 2027, or sooner when another answer in that section changes.
+  Like the other answers they are optional and computed, so leaving them out
+  keeps whatever Apple holds. `apple terraform export` writes them when
+  Apple has an answer.
+
 ## 0.8.3 (November 27, 2026)
 
 BUG FIXES:

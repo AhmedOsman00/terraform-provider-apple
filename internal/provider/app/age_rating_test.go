@@ -46,10 +46,10 @@ func TestMissingAgeRatingAnswers(t *testing.T) {
 }
 
 // TestMissingAgeRatingAnswersNamesUnmodeledQuestions covers a question Apple
-// added before the provider did: Apple already reports datingAndRelationships
-// and sharedLocation, which the provider has no attribute for.
+// added before the provider did: Apple already reports
+// gracRatingClassificationNumber, which the provider has no attribute for.
 func TestMissingAgeRatingAnswersNamesUnmodeledQuestions(t *testing.T) {
-	msg := "You must provide a value for the attribute 'datingAndRelationships' with this request; " +
+	msg := "You must provide a value for the attribute 'gracRatingClassificationNumber' with this request; " +
 		"You must provide a value for the attribute 'lootBox' with this request; " +
 		"You must provide a value for the attribute 'lootBox' with this request"
 
@@ -57,12 +57,12 @@ func TestMissingAgeRatingAnswersNamesUnmodeledQuestions(t *testing.T) {
 	if !reflect.DeepEqual(modeled, []string{"loot_box"}) {
 		t.Errorf("modeled = %v, want [loot_box] once", modeled)
 	}
-	if !reflect.DeepEqual(unmodeled, []string{"datingAndRelationships"}) {
-		t.Errorf("unmodeled = %v, want [datingAndRelationships]", unmodeled)
+	if !reflect.DeepEqual(unmodeled, []string{"gracRatingClassificationNumber"}) {
+		t.Errorf("unmodeled = %v, want [gracRatingClassificationNumber]", unmodeled)
 	}
 
 	detail := incompleteAgeRatingDetail("123", msg)
-	for _, s := range []string{"loot_box", "datingAndRelationships", "App Store Connect"} {
+	for _, s := range []string{"loot_box", "gracRatingClassificationNumber", "App Store Connect"} {
 		if !strings.Contains(detail, s) {
 			t.Errorf("detail does not mention %q:\n%s", s, detail)
 		}
