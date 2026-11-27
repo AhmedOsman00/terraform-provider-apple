@@ -82,7 +82,7 @@ Cannot be changed after creation: Apple's update request has no `inAppPurchaseTy
 
 ### Optional
 
-- `family_sharable` (Boolean) Whether the purchase can be shared with the customer's Family Sharing group. Defaults to `false`. Can be updated in place, but Apple treats turning it off as a change affecting existing customers.
+- `family_sharable` (Boolean) Whether the purchase can be shared with the customer's Family Sharing group. Leave it unset to keep what Apple holds, which for a new purchase is `false`. Can be updated in place, but Apple treats turning it off as a change affecting existing customers.
 - `review_note` (String) A note for App Review explaining how to reach and test the purchase. Can be updated in place.
 
 ### Read-Only

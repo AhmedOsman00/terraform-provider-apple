@@ -72,7 +72,7 @@ This is App Store Connect's *Content Rights Information* question. Leaving it un
 
 ### Read-Only
 
-- `bundle_id` (String) The app's bundle identifier. Read-only here — repointing a live app at a different App ID is not something a Terraform attribute should be able to do by accident.
+- `bundle_id` (String) The app's bundle identifier, such as `com.example.app`: the string, not an `apple_bundle_id`'s `id`. Read-only here — repointing a live app at a different App ID is not something a Terraform attribute should be able to do by accident.
 - `name` (String) The app's name in App Store Connect. Set on the website when the app was created; the customer-facing name is on `apple_app_info_localization`.
 - `sku` (String) The app's SKU, fixed when the app record was created.
 

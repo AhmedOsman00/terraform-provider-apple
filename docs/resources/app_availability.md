@@ -91,7 +91,7 @@ resource "apple_app_availability" "staggered" {
 
 Required:
 
-- `territory` (String) The three-letter Apple territory code, for example `USA`, `GBR` or `EGY` — not the two-letter ISO 3166-1 alpha-2 code.
+- `territory` (String) The three-letter Apple territory code, for example `USA`, `GBR` or `EGY` — not the two-letter ISO 3166-1 alpha-2 code. The same code other resources call `territory_id`.
 
 Optional:
 

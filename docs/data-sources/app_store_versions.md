@@ -82,7 +82,7 @@ output "latest_version_string" {
 
 ### Optional
 
-- `app_version_state` (String) Return only versions in this state, for example `PREPARE_FOR_SUBMISSION`, `IN_REVIEW` or `READY_FOR_DISTRIBUTION`. Matched exactly, case-insensitively.
+- `app_version_state` (String) Return only versions in this state, one of `ACCEPTED`, `DEVELOPER_REJECTED`, `IN_REVIEW`, `INVALID_BINARY`, `METADATA_REJECTED`, `PENDING_APPLE_RELEASE`, `PENDING_DEVELOPER_RELEASE`, `PREPARE_FOR_SUBMISSION`, `PROCESSING_FOR_DISTRIBUTION`, `READY_FOR_DISTRIBUTION`, `READY_FOR_REVIEW`, `REJECTED`, `REPLACED_WITH_NEW_VERSION`, `WAITING_FOR_EXPORT_COMPLIANCE`, `WAITING_FOR_REVIEW`. Matched exactly, case-insensitively.
 - `limit` (Number) Maximum number of versions to return. Applied after filtering and sorting.
 - `platform` (String) Return only versions for this platform: `IOS`, `MAC_OS`, `TV_OS` or `VISION_OS`. Applied by Apple, not in memory.
 - `sort_by` (String) Field to sort by: `version_string`, `created_date`, `app_version_state` or `platform`. Sort by `created_date` with `sort_order` `desc` for the most recent release first — `version_string` is compared as text, so `1.10` sorts before `1.9`.

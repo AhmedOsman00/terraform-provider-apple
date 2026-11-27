@@ -123,7 +123,8 @@ func (r *appSettingsResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Computed: true,
 			},
 			"bundle_id": schema.StringAttribute{
-				MarkdownDescription: "The app's bundle identifier. Read-only here — repointing a live " +
+				MarkdownDescription: "The app's bundle identifier, such as `com.example.app`: the string, not an " +
+					"`apple_bundle_id`'s `id`. Read-only here — repointing a live " +
 					"app at a different App ID is not something a Terraform attribute should be able to " +
 					"do by accident.",
 				Computed: true,

@@ -94,7 +94,7 @@ func (d *appsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 							Computed:            true,
 						},
 						"bundle_id": schema.StringAttribute{
-							MarkdownDescription: "The app's bundle identifier.",
+							MarkdownDescription: "The app's bundle identifier, such as `com.example.app`: the string, not an `apple_bundle_id`'s `id`.",
 							Computed:            true,
 						},
 						"sku": schema.StringAttribute{

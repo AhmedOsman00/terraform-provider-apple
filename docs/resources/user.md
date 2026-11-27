@@ -111,7 +111,7 @@ resource "apple_user" "release_manager" {
 ### Optional
 
 - `all_apps_visible` (Boolean) Whether the member can see every app on the team, including ones created after they joined. Set it to `false` and name the apps in `visible_apps` to restrict them. Apple decides this for you when neither is configured.
-- `provisioning_allowed` (Boolean) Whether the member may create signing certificates and provisioning profiles in the Developer Portal — the access `apple_certificate` and `apple_profile` need. Defaults to `false`, which is Apple's own default for a new member.
+- `provisioning_allowed` (Boolean) Whether the member may create signing certificates and provisioning profiles in the Developer Portal — the access `apple_certificate` and `apple_profile` need. Leave it unset to keep the member's current answer: this resource adopts a member who is already on the team, so a default would revoke access nobody configured.
 - `visible_apps` (Set of String) The Apple IDs of the apps this member can see, used when `all_apps_visible` is `false`. An empty set is a member who can see none.
 
 Leave it unset to let Apple's existing answer stand — the list is only read back when the configuration sets it, because a member who sees every app is reported as seeing all of them and adopting that would write your whole app catalogue into state.

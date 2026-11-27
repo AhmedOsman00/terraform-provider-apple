@@ -156,8 +156,8 @@ locals {
 
 ### Read-Only
 
-- `added_date` (String) Date when the device was added (ISO 8601 format)
+- `added_date` (String) Date when the device was added (ISO 8601 format).
 - `device_class` (String) Device class (automatically determined by Apple)
-- `id` (String) Unique identifier for the device assigned by Apple
+- `id` (String) Unique identifier for the device assigned by Apple.
 - `model` (String) Device model (automatically determined by Apple)
 - `status` (String) Device status (automatically determined by Apple)

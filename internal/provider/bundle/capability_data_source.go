@@ -51,7 +51,7 @@ func (d *bundleIDCapabilitiesDataSource) Schema(_ context.Context, _ datasource.
 				Validators:          GetBundleIDValidator(),
 			},
 			"capability_type": schema.StringAttribute{
-				MarkdownDescription: "Filter by capability type (e.g., ICLOUD, PUSH_NOTIFICATIONS, IN_APP_PURCHASE).",
+				MarkdownDescription: "Filter by capability type, one of " + backtickList(models.ValidCapabilityTypes) + ".",
 				Optional:            true,
 				Validators:          GetCapabilityTypeValidator(),
 			},
@@ -94,7 +94,7 @@ func (d *bundleIDCapabilitiesDataSource) Schema(_ context.Context, _ datasource.
 							Computed:            true,
 						},
 						"capability_type": schema.StringAttribute{
-							MarkdownDescription: "The type of capability (e.g., ICLOUD, PUSH_NOTIFICATIONS).",
+							MarkdownDescription: "The type of capability, for example `ICLOUD` or `PUSH_NOTIFICATIONS`.",
 							Computed:            true,
 						},
 						"settings": schema.ListNestedAttribute{

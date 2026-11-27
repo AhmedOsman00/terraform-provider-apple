@@ -200,10 +200,19 @@ invitations; `app` = listing.
         fake that keeps its offers between requests).
   - [x] the screenshot set (against a fake with the upload flow and the
         ten-screenshot limit), `apple_beta_tester` and `apple_user_invitation`.
-- [ ] **Schema audit before freezing**: one pass over every resource for
-      naming consistency, `RequiresReplace` vs in-place, defaults and
-      descriptions. The mutual-exclusivity validators left as TODOs in
-      `apple_bundle_ids` and `apple_certificates` are done (0.9.1). Anything
+- [x] **Schema audit before freezing** (0.10.0): one pass over all 64 types
+      for naming, plan modifiers, defaults and descriptions. Fixed: the
+      device ID that reissued profiles, the defaults that overwrote adopted
+      values, the ignored `apple_profiles` `bundle_id` filter, the refused
+      `DISABLED` device status, the exclusive filters, the Xcode Cloud data
+      sources' missing standard attributes, and thin or incomplete
+      descriptions. One rename: `in_app_purchase_version_id`. Kept on
+      purpose: `apple_app_availability`'s `territory` and the three meanings
+      of `bundle_id`, both following Apple's names, with descriptions that now
+      say which is meant.
+- [ ] Check every `RequiresReplace` against Apple's update requests in the
+      OpenAPI spec. The audit compared them with the descriptions and
+      `CLAUDE.md` only. Anything
       renamed has to happen before 1.0.
 - [ ] **Compatibility policy** (`COMPATIBILITY.md`), covering the provider
       schema and import IDs, the CLI's flags, `APPLE_*` variables, exit codes and

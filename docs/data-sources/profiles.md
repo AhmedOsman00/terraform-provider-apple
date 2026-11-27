@@ -218,7 +218,7 @@ output "profile_statistics" {
 
 ### Optional
 
-- `bundle_id` (String) Filter Profiles by the associated Bundle ID.
+- `bundle_id` (String) Return only profiles issued for this Bundle ID, named either by Apple's ID (an `apple_bundle_id`'s `id`) or by its identifier, such as `com.example.app`. The profile record does not carry it, so this costs one request per profile that passes the other filters.
 - `limit` (Number) Maximum number of Profiles to return. Must be between 1 and 200.
 - `name_pattern` (String) Filter Profiles by name using a regular expression pattern. For example, `.*Development.*` to match all Profiles containing 'Development' in the name.
 - `platform` (String) Filter Profiles by platform. Valid values are:
@@ -270,15 +270,15 @@ Defaults to `name` if not specified.
 
 Read-Only:
 
-- `bundle_id` (String) The Bundle ID associated with this profile.
-- `certificates` (List of String) List of certificate IDs included in the profile.
+- `bundle_id` (String) Apple's ID of the Bundle ID this profile was issued for (an `apple_bundle_id`'s `id`, not the `com.example.app` identifier). Read with one request per profile returned.
+- `certificates` (List of String) Always empty: this data source does not read a profile's certificates, which would cost a paginated request per profile on every plan. Import the profile as an `apple_profile` to read them.
 - `created_date` (String) The date and time when the profile was created.
-- `devices` (List of String) List of device IDs included in the profile.
+- `devices` (List of String) Always empty: this data source does not read a profile's devices, which would cost a paginated request per profile on every plan. Import the profile as an `apple_profile` to read them.
 - `expiration_date` (String) The date and time when the profile expires.
 - `id` (String) The unique Apple-generated identifier for the Profile.
-- `name` (String) The name of the Profile.
+- `name` (String) The profile's name in the Developer Portal.
 - `platform` (String) The platform for the Profile.
 - `profile_content` (String) Base64-encoded profile content.
 - `profile_state` (String) The current state of the profile.
-- `profile_type` (String) The type of profile.
-- `uuid` (String) The UUID of the profile.
+- `profile_type` (String) The profile type, such as `IOS_APP_STORE` or `IOS_APP_DEVELOPMENT`.
+- `uuid` (String) The profile's UUID, which Xcode uses to refer to it.

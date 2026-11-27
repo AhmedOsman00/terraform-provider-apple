@@ -71,7 +71,7 @@ data "apple_apps" "sorted" {
 
 Read-Only:
 
-- `bundle_id` (String) The app's bundle identifier.
+- `bundle_id` (String) The app's bundle identifier, such as `com.example.app`: the string, not an `apple_bundle_id`'s `id`.
 - `id` (String) Apple's identifier for the app, the one to pass to `apple_subscription_group`. This is the numeric ID that appears in the App Store Connect URL, not the bundle identifier.
 - `name` (String) The app's name in App Store Connect.
 - `primary_locale` (String) The app's primary locale, which is the locale a subscription must at minimum be localized into.
