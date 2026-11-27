@@ -1042,6 +1042,19 @@ The CLI's credential-free tests (`internal/cli/*_test.go`) drive whole commands 
 
 All forty-one resources now have acceptance coverage. `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go` and `internal/provider/user/schema_test.go` are a second, cheaper net under the app listing, TestFlight and team membership resources: the framework validates a schema only when the provider server starts, so a Required+Computed attribute or a malformed nested block would otherwise surface only in the acceptance tier — which needs credentials and a real app and so never runs in CI. It runs every schema through `ValidateImplementation` and pins the resource type names, since renaming one is breaking. Checks go through `testAccAPIClient()` (provider_test.go), which builds a client from the same environment variables the provider reads: a `CheckDestroy` that only inspects Terraform state passes even when the resource is still live in the portal, so every existence and destroy check asks Apple. `testAccCheckDestroyAll` composes the checks for configurations that create several kinds of resource; the bundle ID checks predate this and still assert nothing.
 
+**Upgrade tests** (`internal/provider/upgrade_test.go`) check the 1.x promise
+directly: `TestAccUpgrade/<case>` applies a configuration with the last
+released provider (`ExternalProviders`, from `APPLE_TEST_UPGRADE_FROM` or the
+newest reachable `v*` tag) and then expects an empty plan from the working
+tree. Every case reuses an existing acceptance test's configuration and guard,
+so it creates nothing that test does not. `upgradeCases()` is a function, not a
+variable, so each run draws new product IDs. `TestUpgradeCasesCoverEveryResource`
+runs without credentials. It builds every case's configuration and fails on a
+registered resource that none creates and `upgradeExempt` does not name, so a
+new resource needs a case, or a reason it has none. A case that needs a
+resource newer than the release being upgraded from sets `since` and skips
+until that release exists.
+
 Two things constrain what the acceptance tier is allowed to do:
 
 - **Devices are permanent.** Apple has no device delete, so `device_resource_test.go` registers two fake UDIDs that stay in the team forever and consume device slots. Nothing new should register devices — which is why the profile tests use `IOS_APP_STORE` (needs no devices) rather than a development or ad hoc type. The UDIDs are hardcoded and `Delete` only disables, so a second run of those tests hits Apple's 409 and fails on `Device Already Exists`: they pass once per team, ever. CI skips them for that reason; run them by hand when you have accepted the slots.

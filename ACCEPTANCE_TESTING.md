@@ -628,6 +628,41 @@ is left out with a note rather than failing.
 |---|---|---|---|
 | `TestAccExport_firstPlanChangesNothing` | None | Nothing. Reads the team's Developer Portal records, the test app's listing, products and TestFlight setup, and the team's members, then plans. | No change. |
 
+## Upgrades
+
+`TestAccUpgrade` checks that state written by the last release plans cleanly
+on the working tree. Each subtest applies one configuration with the released
+provider, downloaded from the Registry, then plans it with the working tree and
+fails unless the plan is empty. The configurations are those of the matching
+`_basic` tests, under the same guards, so a subtest creates the same things at
+Apple as that test, then destroys them with the working tree. Each subtest is
+listed with the test whose configuration it reuses.
+
+The release comes from `APPLE_TEST_UPGRADE_FROM` (for example `0.8.2`), or else
+the newest `v*` tag reachable from `HEAD`. A shallow clone has no tags, so the
+test skips there, and `acceptance.yml` checks out the full history for it.
+`TestUpgradeCasesCoverEveryResource` runs without credentials and fails when a
+registered resource has no subtest and no recorded exemption. The exemptions are
+`apple_device`, which would register a UDID for good, and `apple_ci_workflow`.
+
+| Subtest (`TestAccUpgrade/…`) | Reuses the configuration of | Guard |
+|---|---|---|
+| `bundleID`, `bundleIDCapability`, `merchantID`, `passTypeID`, `certificate`, `profile` | the `_basic` test of each (identifiers `com.test.terraform-upgrade`, `merchant.com.test.terraform-upgrade`, `pass.com.test.terraform-upgrade`; profile "Terraform Upgrade Profile") | Credentials |
+| `appSettings`, `appInfo`, `appInfoLocalization`, `ageRatingDeclaration`, `betaAppReviewDetail` | the matching test under App listing metadata and TestFlight; each edits the app in place | `APPLE_TEST_APP_ID` |
+| `appStoreVersion`, `appStoreVersionLocalization`, `appStoreReviewDetail`, `appScreenshotSet` | the matching version tests; each creates and deletes a `99.x.y` version | `APPLE_TEST_APP_ID` |
+| `subscriptionGroupLocalization`, `subscriptionComplete`, `subscriptionPriceSchedule`, `subscriptionIntroductoryOffer`, `subscriptionIntroductoryOfferSchedule`, `subscriptionReviewScreenshot` | the matching subscription tests, with random product IDs | `APPLE_TEST_APP_ID` |
+| `inAppPurchaseComplete`, `inAppPurchaseReviewScreenshot` | the matching in-app purchase tests, with random product IDs | `APPLE_TEST_APP_ID` |
+| `betaGroupExternal`, `betaGroupInternal`, `betaAppLocalization` | the matching TestFlight tests | `APPLE_TEST_APP_ID` |
+| `appStoreVersionBuild`, `betaBuildLocalization`, `betaGroupBuild` | the build tests | the build variables (step 5) |
+| `appPriceSchedule`, `appAvailability` | the app pricing tests; the change cannot be undone | `APPLE_TEST_ALLOW_APP_PRICING` (step 4) |
+| `betaTester` | `TestAccBetaTesterResource_basic`; sends a TestFlight invitation | `APPLE_TEST_BETA_TESTER_EMAIL` (step 6) |
+| `userInvitation` | `TestAccUserInvitationResource_basic`; emails an invitation | `APPLE_TEST_USER_INVITE_EMAIL` (step 7) |
+| `user` | `TestAccUserResource_basic`; removes the member on destroy | `APPLE_TEST_USER_EMAIL` + `APPLE_TEST_ALLOW_USER_REMOVAL` (step 8) |
+
+A run of step 2 includes the upgrade subtests, which roughly doubles its length.
+To run them alone: `make testacc-local RUN=TestAccUpgrade`, or one with
+`RUN=TestAccUpgrade/bundleID`.
+
 ## The apple CLI
 
 `internal/cli/acceptance_test.go` only reads. It needs `APPLE_TEST_BUNDLE_ID`,
