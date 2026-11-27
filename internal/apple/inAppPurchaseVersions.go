@@ -9,9 +9,17 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
+
+// inAppPurchaseVersionCreateAttempts and inAppPurchaseVersionCreateBackoff
+// bound the retry in EnsureEditableInAppPurchaseVersion. The backoff is a
+// variable so tests can shorten it.
+const inAppPurchaseVersionCreateAttempts = 3
+
+var inAppPurchaseVersionCreateBackoff = 2 * time.Second
 
 // editableVersionStates are the states in which a version's localizations can
 // still be changed. Everything else is either in review or already superseded.
@@ -130,16 +138,44 @@ func (c *Client) GetEditableInAppPurchaseVersion(purchaseID string) (*models.InA
 // and is being changed again -- exactly the point at which App Store Connect's
 // own UI opens a new version. Versions cannot be deleted, so the one created
 // here outlives the Terraform resource that caused it.
+//
+// The create is retried on a 5xx, looking for an editable version before each
+// retry, the way CreateProfile looks for its profile. Apple answers
+// POST /v1/inAppPurchaseVersions with a 500 "An unexpected error occurred" when
+// it overlaps the availability and price schedule writes on a new purchase,
+// which is how Terraform applies a configuration that creates all three, and
+// it creates nothing when it does: the list is still empty afterwards, and the
+// next attempt succeeds. Checked against the live API, November 2026.
 func (c *Client) EnsureEditableInAppPurchaseVersion(purchaseID string, authToken *string) (*models.InAppPurchaseVersion, error) {
-	version, err := c.GetEditableInAppPurchaseVersion(purchaseID)
-	if err != nil {
-		return nil, err
-	}
-	if version != nil {
-		return version, nil
+	var lastErr error
+	for attempt := 0; attempt < inAppPurchaseVersionCreateAttempts; attempt++ {
+		if attempt > 0 {
+			time.Sleep(inAppPurchaseVersionCreateBackoff)
+		}
+
+		// Looking first is what makes a retry safe: a 500 that arrived after
+		// Apple created the version leaves one to adopt, and a second create
+		// would leave two drafts behind, since versions cannot be deleted.
+		version, err := c.GetEditableInAppPurchaseVersion(purchaseID)
+		if err != nil {
+			return nil, err
+		}
+		if version != nil {
+			return version, nil
+		}
+
+		version, err = c.CreateInAppPurchaseVersion(purchaseID, authToken)
+		if err == nil {
+			return version, nil
+		}
+		if !isRetryableServerError(err) {
+			return nil, err
+		}
+		lastErr = err
 	}
 
-	return c.CreateInAppPurchaseVersion(purchaseID, authToken)
+	return nil, fmt.Errorf("creating a version of in-app purchase %q failed after %d attempts: %w",
+		purchaseID, inAppPurchaseVersionCreateAttempts, lastErr)
 }
 
 // versionNumber reads a version number for ordering, treating an unreported one

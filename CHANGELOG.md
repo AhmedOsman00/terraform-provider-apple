@@ -1,3 +1,16 @@
+## Unreleased
+
+BUG FIXES:
+
+* **`apple_in_app_purchase_localization` no longer fails when it is created
+  alongside the purchase's price schedule and availability.** Terraform applies
+  the three together, and Apple answers the in-app purchase version the
+  localization needs with HTTP 500 "An unexpected error occurred" when its
+  create overlaps the other two writes. It creates nothing when it does. The
+  provider now looks for an editable version and retries the create, up to
+  three attempts, so a version Apple did create is adopted rather than
+  duplicated.
+
 ## 0.8.2 (November 25, 2026)
 
 BUG FIXES:

@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 )
@@ -219,6 +220,100 @@ func TestEnsureEditableInAppPurchaseVersion(t *testing.T) {
 		}
 		if version.ID != "vnew" {
 			t.Errorf("version = %q, want a freshly created one", version.ID)
+		}
+	})
+}
+
+// TestEnsureEditableInAppPurchaseVersionRetries covers the 500 Apple answers a
+// version create with when it overlaps the availability and price schedule
+// writes on a new purchase. A retry has to look first, because versions cannot
+// be deleted and a second create would leave two drafts.
+func TestEnsureEditableInAppPurchaseVersionRetries(t *testing.T) {
+	defer func(backoff time.Duration) { inAppPurchaseVersionCreateBackoff = backoff }(inAppPurchaseVersionCreateBackoff)
+	inAppPurchaseVersionCreateBackoff = 0
+
+	const (
+		empty    = `{"data":[]}`
+		draft    = `{"data":[{"type":"inAppPurchaseVersions","id":"v1","attributes":{"version":1,"state":"PREPARE_FOR_SUBMISSION"}}]}`
+		created  = `{"data":{"type":"inAppPurchaseVersions","id":"v1","attributes":{"version":1,"state":"PREPARE_FOR_SUBMISSION"}}}`
+		failure  = `{"errors":[{"status":"500","title":"An unexpected error occurred.","detail":"An unexpected error occurred on the server side."}]}`
+		conflict = `{"errors":[{"status":"409","title":"The request cannot be fulfilled.","detail":"Conflict."}]}`
+	)
+
+	// serve answers the version list with lists[n] on the nth read and each
+	// create with posts[n], and counts the creates.
+	serve := func(lists []string, posts []int) (*httptest.Server, *int) {
+		reads, creates := 0, 0
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if r.Method == http.MethodPost {
+				status := posts[min(creates, len(posts)-1)]
+				creates++
+				w.WriteHeader(status)
+				switch status {
+				case http.StatusCreated:
+					fmt.Fprint(w, created)
+				case http.StatusConflict:
+					fmt.Fprint(w, conflict)
+				default:
+					fmt.Fprint(w, failure)
+				}
+				return
+			}
+			fmt.Fprint(w, lists[min(reads, len(lists)-1)])
+			reads++
+		}))
+		return srv, &creates
+	}
+
+	t.Run("a create that failed with a 500 is sent again", func(t *testing.T) {
+		srv, creates := serve([]string{empty}, []int{http.StatusInternalServerError, http.StatusCreated})
+		defer srv.Close()
+
+		version, err := newTestClient(srv).EnsureEditableInAppPurchaseVersion("iap1", nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if version.ID != "v1" || *creates != 2 {
+			t.Errorf("version = %q after %d creates, want v1 after 2", version.ID, *creates)
+		}
+	})
+
+	t.Run("a 500 after Apple created the version adopts it", func(t *testing.T) {
+		srv, creates := serve([]string{empty, draft}, []int{http.StatusInternalServerError})
+		defer srv.Close()
+
+		version, err := newTestClient(srv).EnsureEditableInAppPurchaseVersion("iap1", nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if version.ID != "v1" || *creates != 1 {
+			t.Errorf("version = %q after %d creates, want v1 after 1 -- a second create leaves two drafts", version.ID, *creates)
+		}
+	})
+
+	t.Run("a 4xx is not retried", func(t *testing.T) {
+		srv, creates := serve([]string{empty}, []int{http.StatusConflict})
+		defer srv.Close()
+
+		if _, err := newTestClient(srv).EnsureEditableInAppPurchaseVersion("iap1", nil); err == nil {
+			t.Fatal("expected the 409 to be reported")
+		}
+		if *creates != 1 {
+			t.Errorf("%d creates, want 1", *creates)
+		}
+	})
+
+	t.Run("gives up after the last attempt", func(t *testing.T) {
+		srv, creates := serve([]string{empty}, []int{http.StatusInternalServerError})
+		defer srv.Close()
+
+		_, err := newTestClient(srv).EnsureEditableInAppPurchaseVersion("iap1", nil)
+		if err == nil || !strings.Contains(err.Error(), "after 3 attempts") || !strings.Contains(err.Error(), "status 500") {
+			t.Fatalf("error = %v, want the 500 reported after 3 attempts", err)
+		}
+		if *creates != inAppPurchaseVersionCreateAttempts {
+			t.Errorf("%d creates, want %d", *creates, inAppPurchaseVersionCreateAttempts)
 		}
 	})
 }
