@@ -36,8 +36,8 @@ func patternsAttribute() schema.SingleNestedAttribute {
 func filesRuleAttribute() schema.SingleNestedAttribute {
 	return schema.SingleNestedAttribute{Optional: true, MarkdownDescription: "Restrict automatic starts by changed files.", Attributes: map[string]schema.Attribute{
 		"mode": optionalString("`START_IF_ANY_FILE_MATCHES` or `DO_NOT_START_IF_ALL_FILES_MATCH`.", "START_IF_ANY_FILE_MATCHES", "DO_NOT_START_IF_ALL_FILES_MATCH"),
-		"matchers": schema.ListNestedAttribute{Optional: true, MarkdownDescription: "Changed-file matchers.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
-			"directory": optionalString("Directory to match."), "file_extension": optionalString("File extension to match."), "file_name": optionalString("File name to match."),
+		"matchers": schema.ListNestedAttribute{Optional: true, MarkdownDescription: "The changed files this rule looks at. Each matcher sets any of `directory`, `file_extension` and `file_name`.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
+			"directory": optionalString("Match changed files under this directory, relative to the repository root."), "file_extension": optionalString("Match changed files with this extension."), "file_name": optionalString("Match changed files with this name."),
 		}}},
 	}}
 }
@@ -56,7 +56,7 @@ func actionAttribute() schema.ListNestedAttribute {
 	return schema.ListNestedAttribute{Required: true, MarkdownDescription: "Ordered workflow actions. Supports build, test, analyze and archive.", Validators: []validator.List{listvalidator.SizeAtLeast(1)}, NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 		"name":                        schema.StringAttribute{Computed: true, MarkdownDescription: "The action's display name, normalized by Apple — for example, `Build - iOS`."},
 		"action_type":                 schema.StringAttribute{Required: true, MarkdownDescription: "`BUILD`, `TEST`, `ANALYZE` or `ARCHIVE`.", Validators: []validator.String{stringvalidator.OneOf("BUILD", "TEST", "ANALYZE", "ARCHIVE")}},
-		"scheme":                      schema.StringAttribute{Required: true, MarkdownDescription: "Shared Xcode scheme."},
+		"scheme":                      schema.StringAttribute{Required: true, MarkdownDescription: "The name of a shared Xcode scheme in `container_file_path`. Xcode Cloud sees only shared schemes."},
 		"platform":                    optionalString("`MACOS`, `IOS`, `TVOS`, `WATCHOS` or `VISIONOS`.", "MACOS", "IOS", "TVOS", "WATCHOS", "VISIONOS"),
 		"destination":                 optionalString("Build destination: `ANY_IOS_DEVICE`, `ANY_IOS_SIMULATOR`, `ANY_TVOS_DEVICE`, `ANY_TVOS_SIMULATOR`, `ANY_WATCHOS_DEVICE`, `ANY_WATCHOS_SIMULATOR`, `ANY_MAC`, `ANY_MAC_CATALYST`, `ANY_VISIONOS_DEVICE` or `ANY_VISIONOS_SIMULATOR`.", "ANY_IOS_DEVICE", "ANY_IOS_SIMULATOR", "ANY_TVOS_DEVICE", "ANY_TVOS_SIMULATOR", "ANY_WATCHOS_DEVICE", "ANY_WATCHOS_SIMULATOR", "ANY_MAC", "ANY_MAC_CATALYST", "ANY_VISIONOS_DEVICE", "ANY_VISIONOS_SIMULATOR"),
 		"is_required_to_pass":         schema.BoolAttribute{Required: true, MarkdownDescription: "Whether this action must pass for the workflow to succeed."},
@@ -65,15 +65,25 @@ func actionAttribute() schema.ListNestedAttribute {
 			"kind":           optionalString("`USE_SCHEME_SETTINGS` or `SPECIFIC_TEST_PLANS`.", "USE_SCHEME_SETTINGS", "SPECIFIC_TEST_PLANS"),
 			"test_plan_name": optionalString("Test plan name when selecting a specific test plan."),
 			"test_destinations": schema.ListNestedAttribute{Optional: true, MarkdownDescription: "Test devices and runtimes; discover available values with `apple_ci_xcode_versions`.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
-				"device_type_name": optionalString("Device display name."), "device_type_identifier": optionalString("Device type identifier."), "runtime_name": optionalString("Runtime display name."), "runtime_identifier": optionalString("Runtime identifier."), "kind": optionalString("`SIMULATOR` or `MAC`.", "SIMULATOR", "MAC"),
+				"device_type_name": optionalString("The device's display name, as `apple_ci_xcode_versions` lists it."), "device_type_identifier": optionalString("The device type identifier, from `apple_ci_xcode_versions` `test_destinations`."), "runtime_name": optionalString("The runtime's display name, as `apple_ci_xcode_versions` lists it."), "runtime_identifier": optionalString("The runtime identifier, from `apple_ci_xcode_versions` `available_runtimes`."), "kind": optionalString("`SIMULATOR` or `MAC`.", "SIMULATOR", "MAC"),
 			}}},
 		}},
 	}}}
 }
+
+// workflowRelationshipDescriptions says what each relationship ID names and
+// where to read it.
+var workflowRelationshipDescriptions = map[string]string{
+	"product_id":        "The Xcode Cloud product the workflow belongs to: an ID from `apple_ci_products`. Changing it replaces the workflow.",
+	"repository_id":     "The repository the workflow builds: an ID from `apple_scm_repositories`. Changing it replaces the workflow.",
+	"xcode_version_id":  "The Xcode version to build with: an ID from `apple_ci_xcode_versions`.",
+	"mac_os_version_id": "The macOS version to build on: an ID from `apple_ci_mac_os_versions`. Apple checks that it supports the Xcode version.",
+}
+
 func (r *workflowResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := map[string]schema.Attribute{
-		"id":                  schema.StringAttribute{Computed: true, MarkdownDescription: "Apple workflow ID.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
-		"name":                schema.StringAttribute{Required: true, MarkdownDescription: "Workflow name."},
+		"id":                  schema.StringAttribute{Computed: true, MarkdownDescription: "Apple's ID for the workflow.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
+		"name":                schema.StringAttribute{Required: true, MarkdownDescription: "The workflow's name, as Xcode Cloud shows it."},
 		"description":         schema.StringAttribute{Required: true, MarkdownDescription: "Workflow description; may be empty."},
 		"is_enabled":          schema.BoolAttribute{Required: true, MarkdownDescription: "Whether the workflow can start builds."},
 		"clean":               schema.BoolAttribute{Required: true, MarkdownDescription: "Start builds with a clean environment."},
@@ -88,13 +98,13 @@ func (r *workflowResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 		"schedule": schema.SingleNestedAttribute{Optional: true, MarkdownDescription: "Build schedule in the named time zone.", Attributes: map[string]schema.Attribute{
 			"frequency": optionalString("`WEEKLY`, `DAILY` or `HOURLY`.", "WEEKLY", "DAILY", "HOURLY"),
 			"days":      schema.ListAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Days: `SUNDAY`, `MONDAY`, `TUESDAY`, `WEDNESDAY`, `THURSDAY`, `FRIDAY`, `SATURDAY`.", Validators: []validator.List{listvalidator.ValueStringsAre(stringvalidator.OneOf("SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"))}},
-			"hour":      schema.Int64Attribute{Optional: true, MarkdownDescription: "Hour (0–23).", Validators: []validator.Int64{int64validator.Between(0, 23)}},
-			"minute":    schema.Int64Attribute{Optional: true, MarkdownDescription: "Minute (0–59).", Validators: []validator.Int64{int64validator.Between(0, 59)}},
+			"hour":      schema.Int64Attribute{Optional: true, MarkdownDescription: "The hour to start at, 0–23, in `timezone`.", Validators: []validator.Int64{int64validator.Between(0, 23)}},
+			"minute":    schema.Int64Attribute{Optional: true, MarkdownDescription: "The minute past the hour to start at, 0–59.", Validators: []validator.Int64{int64validator.Between(0, 59)}},
 			"timezone":  optionalString("Time zone identifier, for example `Europe/Warsaw`."),
 		}},
 	}}
 	for _, name := range []string{"product_id", "repository_id", "xcode_version_id", "mac_os_version_id"} {
-		a := schema.StringAttribute{Required: true, MarkdownDescription: "Apple relationship ID."}
+		a := schema.StringAttribute{Required: true, MarkdownDescription: workflowRelationshipDescriptions[name]}
 		if name == "product_id" || name == "repository_id" {
 			a.PlanModifiers = []planmodifier.String{stringplanmodifier.RequiresReplace()}
 		}
