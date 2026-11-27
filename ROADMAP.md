@@ -1,6 +1,6 @@
 # Road to 1.0
 
-What stands between today's provider (0.8.2) and CLI (0.3.3) and a 1.0 of each.
+What stands between today's provider (0.8.3) and CLI (0.4.0) and a 1.0 of each.
 Ordered by priority: correctness first, then proof, then the promise, then reach.
 
 A 1.0 means: every resource and CLI command has run against the live API,
@@ -95,7 +95,7 @@ certificate and revokes the original.
       import it as `apple_certificate` with `csr_content` from the same private
       key (2a), then point profiles at the resource's `id`.
 
-### 2c. Per-app scoping for `--app` (`feature/`, CLI changelog: behaviour change)
+### 2c. Per-app scoping for `--app` (CLI 0.4.0)
 
 Today `--app` filters only the listing, products and TestFlight. Signing and
 team are always exported for the whole account, so `--app com.acme` still
@@ -153,8 +153,8 @@ invitations; `app` = listing.
 
 ## 3. Verify everything against the live API
 
-- [ ] Move fenn-money to provider 0.8.2 and CLI 0.3.3. That covers the retries
-      and the export version pin for free.
+- [ ] Move fenn-money to provider 0.8.3 and CLI 0.4.0. That covers the retries,
+      the export version pin and the in-app purchase version fix for free.
 - [ ] **`apple release submit`**: add it to fenn-money's `release.yml` after
       "Attach the build", or run it once by hand. It is the most important
       unverified command.
@@ -181,7 +181,13 @@ invitations; `app` = listing.
       `has_access_to_all_builds`) were all of this kind. `TestAccUpgrade`
       covers every resource except `apple_device` and `apple_ci_workflow`,
       and a unit test keeps it that way.
-- [ ] Run `TestAccUpgrade` against the live API, and once per release after.
+- [x] Run `TestAccUpgrade` against the live API (November 27, 2026, from
+      0.8.2): every case that applied planned nothing. The run found two bugs,
+      fixed in 0.8.3: the in-app purchase version 500 and the age rating
+      questions Apple requires on a new app. Repeat once per release.
+- [ ] Run the four App Store version upgrade cases. They need a test app that
+      has shipped a release, because Apple will not create a second version
+      while an unreleased first one is being prepared.
 - [ ] Upgrade tests for imports: import with the previous release, then plan
       with the working tree. The profile import regression was of this kind,
       and `TestAccUpgrade` only covers state written by an apply.

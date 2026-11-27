@@ -1,4 +1,4 @@
-## Unreleased
+## 0.8.3 (November 27, 2026)
 
 BUG FIXES:
 
