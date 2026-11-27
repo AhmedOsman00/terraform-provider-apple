@@ -22,7 +22,8 @@ import (
 // apple_subscription imports were fixed alongside the export in 0.8.0, and
 // apple_beta_group stopped replacing an imported external group there too.
 // apple_subscription_price_schedule counts from 0.8.1, whose import stopped
-// adopting Apple's price history. When an exporter starts relying on a newer release, raise its entry here
+// adopting Apple's price history, and apple_app_age_rating_declaration from
+// 0.9.0, which added two questions the exporter writes. When an exporter starts relying on a newer release, raise its entry here
 // and MinProviderVersion with it.
 var introducedIn = map[string]string{
 	"apple_bundle_id":                      "0.1.0",
@@ -41,7 +42,6 @@ var introducedIn = map[string]string{
 	"apple_subscription_group":             "0.1.0",
 	"apple_subscription_localization":      "0.1.0",
 
-	"apple_app_age_rating_declaration":      "0.2.0",
 	"apple_app_availability":                "0.2.0",
 	"apple_app_info":                        "0.2.0",
 	"apple_app_info_localization":           "0.2.0",
@@ -67,6 +67,10 @@ var introducedIn = map[string]string{
 	// 0.8.1 imports only the price in effect per territory and leaves an
 	// UPFRONT plan type unset, which is what the exporter now writes.
 	"apple_subscription_price_schedule": "0.8.1",
+
+	// 0.9.0 added shared_location and dating_and_relationships, which the
+	// exporter writes whenever Apple holds an answer for them.
+	"apple_app_age_rating_declaration": "0.9.0",
 }
 
 // TestMinProviderVersion fails when an exporter names a resource that
