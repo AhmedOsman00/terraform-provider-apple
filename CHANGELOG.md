@@ -1,4 +1,4 @@
-## 0.9.0 (Unreleased)
+## 0.9.0 (November 27, 2026)
 
 ENHANCEMENTS:
 

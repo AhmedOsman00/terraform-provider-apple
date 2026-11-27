@@ -1,6 +1,6 @@
 # Road to 1.0
 
-What stands between today's provider (0.8.3) and CLI (0.4.0) and a 1.0 of each.
+What stands between today's provider (0.9.0) and CLI (0.4.0) and a 1.0 of each.
 Ordered by priority: correctness first, then proof, then the promise, then reach.
 
 A 1.0 means: every resource and CLI command has run against the live API,
@@ -17,6 +17,8 @@ flags, exit codes and `--json` output change only through a deprecation cycle.
   subscriptions and in-app purchases with review screenshots, TestFlight groups,
   testers and pages, users and invitations), plus `version`, `release preflight`,
   `signing install/clean`, `build verify/upload/wait` and `testflight notes`.
+- **`apple release submit`**: submitted fenn-money for App Review by hand
+  (CLI 0.3.0, 2026-11-27).
 
 ## 1. Fix: changing the price of an approved subscription (0.8.1)
 
@@ -155,9 +157,8 @@ invitations; `app` = listing.
 
 - [ ] Move fenn-money to provider 0.8.3 and CLI 0.4.0. That covers the retries,
       the export version pin and the in-app purchase version fix for free.
-- [ ] **`apple release submit`**: add it to fenn-money's `release.yml` after
-      "Attach the build", or run it once by hand. It is the most important
-      unverified command.
+- [x] **`apple release submit`**: run by hand on fenn-money (CLI 0.3.0,
+      2026-11-27) and the submission went through.
 - [ ] Run these on a scratch app, since fenn-money doesn't use them:
       `apple_bundle_id`, `apple_merchant_id`, `apple_pass_type_id`,
       `apple_beta_group_build`, `apple_beta_build_localization`,
