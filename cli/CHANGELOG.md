@@ -1,3 +1,13 @@
+## 0.4.1 (Unreleased)
+
+BUG FIXES:
+
+* **`apple terraform export` pins provider `>= 0.9.0`.** The export now
+  writes `shared_location` and `dating_and_relationships` on
+  `apple_app_age_rating_declaration` when Apple holds an answer for them.
+  Provider 0.8.x has neither attribute and would reject the configuration, so
+  release this CLI only after provider 0.9.0.
+
 ## 0.4.0 (November 27, 2026)
 
 BEHAVIOUR CHANGES:
