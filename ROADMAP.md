@@ -55,7 +55,8 @@ resource can set a first price but never change it.
 - [x] Error text names the subscription's state instead of always saying
       "in review".
 - [x] `httptest` tests for each case above.
-- [ ] One live run that raises the price of an approved subscription.
+- [x] One live run that changes the price of an approved subscription
+      (fenn-money, 2026-11-27).
 
 ## 2. Adopting an existing account
 
@@ -155,8 +156,8 @@ invitations; `app` = listing.
 
 ## 3. Verify everything against the live API
 
-- [ ] Move fenn-money to provider 0.8.3 and CLI 0.4.0. That covers the retries,
-      the export version pin and the in-app purchase version fix for free.
+- [x] Move fenn-money to provider 0.9.0 and CLI 0.4.1 (2026-11-27). Its CI
+      still installs CLI 0.3.3 through `setup-apple`'s default.
 - [x] **`apple release submit`**: run by hand on fenn-money (CLI 0.3.0,
       2026-11-27) and the submission went through.
 - [ ] Run these on a scratch app, since fenn-money doesn't use them:
@@ -193,9 +194,11 @@ invitations; `app` = listing.
       with the working tree. The profile import regression was of this kind,
       and `TestAccUpgrade` only covers state written by an apply.
 - [ ] **Unit tests for create/read/update/delete code** that runs only against the
-      live API today, through `httptest` and `resource.UnitTest`, for the riskiest
-      reconcilers: the subscription price schedule, the introductory offer
-      schedule, the screenshot set, `apple_beta_tester`, `apple_user_invitation`.
+      live API today, through `httptest`, for the riskiest reconcilers:
+  - [x] the subscription price schedule (read, import, delete, the error
+        mapping) and the introductory offer schedule (every path, against a
+        fake that keeps its offers between requests).
+  - [ ] the screenshot set, `apple_beta_tester`, `apple_user_invitation`.
 - [ ] **Schema audit before freezing**: one pass over every resource for
       naming consistency, `RequiresReplace` vs in-place, defaults and
       descriptions. Implement the mutual-exclusivity validators left as TODOs

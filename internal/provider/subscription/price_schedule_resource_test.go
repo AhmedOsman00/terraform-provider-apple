@@ -27,11 +27,16 @@ type priceServer struct {
 	mu       sync.Mutex
 	requests []string
 	bodies   map[string][]string
+	// refuse answers the request it names with a 409 carrying this detail,
+	// the way Apple refuses a price write.
+	refuse map[string]string
+	// missing makes every request answer 404, as for a deleted subscription.
+	missing bool
 }
 
 func newPriceServer(t *testing.T, state string, prices string) (*priceServer, *apple.Client) {
 	t.Helper()
-	ps := &priceServer{bodies: map[string][]string{}}
+	ps := &priceServer{bodies: map[string][]string{}, refuse: map[string]string{}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -39,9 +44,21 @@ func newPriceServer(t *testing.T, state string, prices string) (*priceServer, *a
 		ps.mu.Lock()
 		ps.requests = append(ps.requests, key)
 		ps.bodies[key] = append(ps.bodies[key], string(body))
+		refusal, refused := ps.refuse[key]
+		missing := ps.missing
 		ps.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
+		if missing {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"errors":[{"status":"404","title":"The specified resource does not exist","detail":"not found"}]}`)
+			return
+		}
+		if refused {
+			w.WriteHeader(http.StatusConflict)
+			fmt.Fprintf(w, `{"errors":[{"status":"409","code":"ENTITY_ERROR","title":"There is a problem with the request entity","detail":%q}]}`, refusal)
+			return
+		}
 		switch key {
 		case "GET /v1/subscriptions/sub-1":
 			fmt.Fprintf(w, `{"data":{"type":"subscriptions","id":"sub-1","attributes":{"state":%q}}}`, state)
