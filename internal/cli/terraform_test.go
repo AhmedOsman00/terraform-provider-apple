@@ -134,7 +134,41 @@ func TestTerraformExportRejectsAnUnknownPart(t *testing.T) {
 	if code := h.run("terraform", "export", "--out", t.TempDir(), "--only", "billing"); code != 2 {
 		t.Fatalf("exit %d, want 2", code)
 	}
-	if !strings.Contains(h.errOut.String(), "signing, app, products, testflight, team") {
+	if !strings.Contains(h.errOut.String(), "bundle-ids, certificates, devices") || !strings.Contains(h.errOut.String(), "signing, team or app") {
 		t.Errorf("error does not list the parts: %s", h.errOut)
+	}
+}
+
+func TestTerraformExportListsWithoutWriting(t *testing.T) {
+	t.Parallel()
+	h, _ := newExportHarness(t)
+	dir := filepath.Join(t.TempDir(), "never")
+
+	if code := h.run("terraform", "export", "--list", "--only", "users"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.errOut)
+	}
+	for _, want := range []string{"Account, or shared by several apps", "users", "import apple_user.dev_example_com  (team.tf)", "1 records to import"} {
+		if !strings.Contains(h.out.String(), want) {
+			t.Errorf("--list output lacks %q:\n%s", want, h.out)
+		}
+	}
+
+	if code := h.run("terraform", "export", "--list", "--json", "--out", dir, "--only", "team"); code != 0 {
+		t.Fatalf("--json: exit %d: %s", code, h.errOut)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("--list wrote %s", dir)
+	}
+}
+
+func TestTerraformExportNeedsOutUnlessListing(t *testing.T) {
+	t.Parallel()
+	h, fake := newExportHarness(t)
+
+	if code := h.run("terraform", "export", "--only", "team"); code != 2 {
+		t.Fatalf("exit %d, want 2", code)
+	}
+	if fake.requests != 0 {
+		t.Errorf("asked Apple %d times before refusing", fake.requests)
 	}
 }

@@ -123,32 +123,32 @@ Aliases keep today's commands working: `signing` = bundle-ids, profiles,
 certificates, devices, merchant-ids, pass-type-ids; `team` = users,
 invitations; `app` = listing.
 
-- [ ] An app owns its own Bundle ID and every one under it (`com.acme.*`),
+- [x] An app owns its own Bundle ID and every one under it (`com.acme.*`),
       except one that is another app record's own Bundle ID
       (`com.acme.staging` goes with that app, not as an extension). This needs
       one `GetApps` call even under `--app`.
-- [ ] Bundle IDs that look related but sit outside the prefix
+- [x] Bundle IDs that look related but sit outside the prefix
       (`com-acme-widget`) are listed in `EXPORT_NOTES.md` as unclaimed, not
       guessed at.
-- [ ] Profiles are matched through `GetProfileLinkages`, which the export
+- [x] Profiles are matched through `GetProfileLinkages`, which the export
       already calls per profile.
-- [ ] Referenced devices are written as `data.apple_devices` with
+- [x] Referenced devices are written as `data.apple_devices` with
       `udid_pattern = "^<udid>$"`. When `devices` is named in `--only`,
       profiles refer to the `apple_device` resources instead.
-- [ ] Defaults: without `--app` and `--only`, the whole account, unchanged.
+- [x] Defaults: without `--app` and `--only`, the whole account, unchanged.
       With `--app` alone, the app parts plus referenced certificates and
       devices. An explicit `--only` always wins, so
       `--app com.acme --only users` exports only users.
-- [ ] Files: under `--app`, signing goes in `<bundle_id>_signing.tf` beside
+- [x] Files: under `--app`, signing goes in `<bundle_id>_signing.tf` beside
       `<bundle_id>.tf`, `_products.tf` and `_testflight.tf`. A certificate
       shared by two apps is written once. A whole-account export keeps
       `signing.tf` and `team.tf` as they are, so the golden output only grows.
-- [ ] `--list` reads the account and prints what would be written, by app and
+- [x] `--list` reads the account and prints what would be written, by app and
       part, plus referenced and unclaimed records, without writing anything
       (`--out` not required; `--json` gives the same as data).
-- [ ] `--help` and the generated CLI reference carry the full list of resource
+- [x] `--help` and the generated CLI reference carry the full list of resource
       types per part, so what an export can contain is fixed and documented.
-- [ ] Golden output for a fake account with an extension, a staging app and a
+- [x] Golden output for a fake account with an extension, a staging app and a
       shared certificate; `make validate-examples` over it.
 
 ## 3. Verify everything against the live API

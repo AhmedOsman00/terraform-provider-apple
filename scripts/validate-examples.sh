@@ -4,7 +4,7 @@
 
 # Run `terraform validate` over every directory under examples/, and over the
 # configuration `apple terraform export` writes for its test account
-# (internal/export/testdata/golden), so an export written against an attribute
+# (internal/export/testdata/golden, and golden_app for one scoped to an app), so an export written against an attribute
 # the schema does not have fails here rather than in a user's first plan.
 #
 # `make generate` only runs `terraform fmt`, which catches syntax but not a
@@ -79,7 +79,7 @@ EOF
   else
     failed+=("$dir")
   fi
-done < <(cd "$REPO_ROOT" && find examples internal/export/testdata/golden -type f -name '*.tf' -exec dirname {} \; | sort -u)
+done < <(cd "$REPO_ROOT" && find examples internal/export/testdata/golden internal/export/testdata/golden_app -type f -name '*.tf' -exec dirname {} \; | sort -u)
 
 if [ ${#failed[@]} -ne 0 ]; then
   echo

@@ -4,88 +4,301 @@
 package export
 
 import (
+	"regexp"
+	"slices"
+	"strings"
+
+	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple/models"
 	"github.com/zclconf/go-cty/cty"
 )
 
-// exportSigning writes the Developer Portal: Bundle IDs and their
-// capabilities, devices, merchant and pass type IDs, certificates and
-// profiles. They go in one file, because a profile refers to all the rest.
+// exportSigning writes the Developer Portal for the whole account: Bundle IDs
+// and their capabilities, devices, merchant and pass type IDs, certificates
+// and profiles. They go in one file, because a profile refers to all the rest.
 func (e *exporter) exportSigning() error {
 	f := e.file("signing.tf")
 
-	e.progress("Reading Bundle IDs")
-	if bundleIDs, err := e.src.GetBundleIDs(); err != nil {
-		if err := e.failed("Bundle IDs", err); err != nil {
-			return err
-		}
-	} else {
-		for _, bundleID := range bundleIDs {
-			if err := e.exportBundleID(f, bundleID); err != nil {
+	if e.wants(PartBundleIDs) {
+		e.progress("Reading Bundle IDs")
+		if bundleIDs, err := e.src.GetBundleIDs(); err != nil {
+			if err := e.failed("Bundle IDs", err); err != nil {
 				return err
+			}
+		} else {
+			for _, bundleID := range bundleIDs {
+				if err := e.exportBundleID(f, bundleID); err != nil {
+					return err
+				}
 			}
 		}
 	}
 
-	e.progress("Reading devices")
-	if devices, err := e.src.GetDevices(); err != nil {
-		if err := e.failed("devices", err); err != nil {
+	if e.wants(PartDevices) {
+		if devices, ok, err := e.readDevices(); err != nil || !ok {
 			return err
-		}
-	} else {
-		for _, device := range devices {
-			e.exportDevice(f, device)
+		} else {
+			for _, device := range devices {
+				e.exportDevice(f, device)
+			}
 		}
 	}
 
-	e.progress("Reading merchant IDs")
-	if merchants, err := e.src.GetMerchantIDs(); err != nil {
-		if err := e.failed("merchant IDs", err); err != nil {
+	if err := e.exportMerchantAndPassTypeIDs(f); err != nil {
+		return err
+	}
+
+	if e.wants(PartCertificates) {
+		if certificates, ok, err := e.readCertificates(); err != nil || !ok {
 			return err
-		}
-	} else {
-		for _, merchant := range merchants {
-			b, _ := e.resource(f, "apple_merchant_id", merchant.ID, merchant.Attributes.Identifier, merchant.Attributes.Identifier)
-			b.str("identifier", merchant.Attributes.Identifier)
-			b.str("display_name", merchant.Attributes.DisplayName)
+		} else {
+			for _, certificate := range certificates {
+				e.exportCertificate(f, certificate)
+			}
 		}
 	}
 
-	e.progress("Reading pass type IDs")
-	if passTypes, err := e.src.GetPassTypeIDs(); err != nil {
-		if err := e.failed("pass type IDs", err); err != nil {
-			return err
-		}
-	} else {
-		for _, passType := range passTypes {
-			b, _ := e.resource(f, "apple_pass_type_id", passType.ID, passType.Attributes.Identifier, passType.Attributes.Identifier)
-			b.str("identifier", passType.Attributes.Identifier)
-			b.str("name", passType.Attributes.Name)
-		}
+	if !e.wants(PartProfiles) {
+		return nil
 	}
-
-	e.progress("Reading certificates")
-	if certificates, err := e.src.GetCertificates(); err != nil {
-		if err := e.failed("certificates", err); err != nil {
-			return err
-		}
-	} else {
-		for _, certificate := range certificates {
-			e.exportCertificate(f, certificate)
-		}
-	}
-
 	e.progress("Reading profiles")
 	profiles, err := e.src.GetProfiles()
 	if err != nil {
 		return e.failed("profiles", err)
 	}
 	for _, profile := range profiles {
-		if err := e.exportProfile(f, profile); err != nil {
-			return err
+		if !e.exportableProfile(profile, true) {
+			continue
+		}
+		linkages, err := e.src.GetProfileLinkages(profile.ID)
+		if err != nil {
+			if err := e.failed("the bundle ID, certificates and devices of profile "+profile.Attributes.Name, err); err != nil {
+				return err
+			}
+			continue
+		}
+		e.exportProfile(f, profile, linkages)
+	}
+
+	return nil
+}
+
+func (e *exporter) readDevices() ([]models.Device, bool, error) {
+	e.progress("Reading devices")
+	devices, err := e.src.GetDevices()
+	if err != nil {
+		return nil, false, e.failed("devices", err)
+	}
+	return devices, true, nil
+}
+
+func (e *exporter) readCertificates() ([]models.Certificate, bool, error) {
+	e.progress("Reading certificates")
+	certificates, err := e.src.GetCertificates()
+	if err != nil {
+		return nil, false, e.failed("certificates", err)
+	}
+	return certificates, true, nil
+}
+
+// exportMerchantAndPassTypeIDs writes the two account-wide identifiers no app
+// owns: a merchant or pass type ID is shared by whichever apps name it in an
+// entitlement, and nothing Apple returns says which.
+func (e *exporter) exportMerchantAndPassTypeIDs(f *file) error {
+	if e.wants(PartMerchantIDs) {
+		e.progress("Reading merchant IDs")
+		if merchants, err := e.src.GetMerchantIDs(); err != nil {
+			if err := e.failed("merchant IDs", err); err != nil {
+				return err
+			}
+		} else {
+			for _, merchant := range merchants {
+				b, _ := e.resource(f, "apple_merchant_id", merchant.ID, merchant.Attributes.Identifier, merchant.Attributes.Identifier)
+				b.str("identifier", merchant.Attributes.Identifier)
+				b.str("display_name", merchant.Attributes.DisplayName)
+			}
 		}
 	}
 
+	if e.wants(PartPassTypeIDs) {
+		e.progress("Reading pass type IDs")
+		if passTypes, err := e.src.GetPassTypeIDs(); err != nil {
+			if err := e.failed("pass type IDs", err); err != nil {
+				return err
+			}
+		} else {
+			for _, passType := range passTypes {
+				b, _ := e.resource(f, "apple_pass_type_id", passType.ID, passType.Attributes.Identifier, passType.Attributes.Identifier)
+				b.str("identifier", passType.Attributes.Identifier)
+				b.str("name", passType.Attributes.Name)
+			}
+		}
+	}
+	return nil
+}
+
+// appProfile is a profile issued for one of the apps being exported, with
+// what it was issued for.
+type appProfile struct {
+	app      models.App
+	profile  models.Profile
+	linkages *apple.ProfileLinkages
+}
+
+// exportScopedSigning writes the signing material of the apps --app names:
+// the Bundle IDs each one owns (claimBundleIDs), the profiles issued for
+// those, and the certificates and devices the profiles use. Each app's goes in
+// <bundle_id>_signing.tf; a certificate or device two of them use, and the
+// account-wide parts --only names, go in signing.tf, so each is written once.
+func (e *exporter) exportScopedSigning(selected []models.App) error {
+	e.progress("Reading apps")
+	all, err := e.src.GetApps()
+	if err != nil {
+		if err := e.failed("the team's apps, so Bundle IDs are matched against the selected apps alone", err); err != nil {
+			return err
+		}
+		all = selected
+	}
+
+	e.progress("Reading Bundle IDs")
+	bundleIDs, err := e.src.GetBundleIDs()
+	if err != nil {
+		if err := e.failed("Bundle IDs", err); err != nil {
+			return err
+		}
+	}
+	owners := claimBundleIDs(all, bundleIDs)
+
+	appByID := map[string]models.App{}
+	for _, app := range selected {
+		appByID[app.ID] = app
+	}
+	ownerOf := func(bundleRecordID string) (models.App, bool) {
+		app, ok := appByID[owners[bundleRecordID]]
+		return app, ok
+	}
+	signingFile := func(app models.App) *file {
+		return e.appFile(appBase(app)+"_signing.tf", app.Attributes.BundleID)
+	}
+
+	if e.wants(PartBundleIDs) {
+		for _, app := range selected {
+			for _, bundleID := range bundleIDs {
+				if owner, ok := ownerOf(bundleID.ID); !ok || owner.ID != app.ID {
+					continue
+				}
+				if err := e.exportBundleID(signingFile(app), bundleID); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	unclaimed := unclaimedBundleIDs(selected, bundleIDs, owners)
+	for _, app := range selected {
+		for _, bundleID := range unclaimed[app.ID] {
+			e.note(Skipped, "",
+				"Bundle ID %s looks as though it belongs to %s, but it is outside %s.*, so it was not exported with it. If it does belong to the app, export it with --only bundle-ids and no --app.",
+				bundleID.Attributes.Identifier, app.Attributes.BundleID, app.Attributes.BundleID)
+		}
+	}
+
+	// The profiles decide which certificates and devices are referenced, so
+	// they are read whenever any of the three is wanted.
+	var profiles []appProfile
+	if e.wantsAny(PartProfiles, PartCertificates, PartDevices) {
+		e.progress("Reading profiles")
+		all, err := e.src.GetProfiles()
+		if err != nil {
+			if err := e.failed("profiles", err); err != nil {
+				return err
+			}
+		}
+		for _, profile := range all {
+			if !e.exportableProfile(profile, false) {
+				continue
+			}
+			linkages, err := e.src.GetProfileLinkages(profile.ID)
+			if err != nil {
+				if err := e.failed("the bundle ID, certificates and devices of profile "+profile.Attributes.Name, err); err != nil {
+					return err
+				}
+				continue
+			}
+			if app, ok := ownerOf(linkages.BundleID); ok {
+				profiles = append(profiles, appProfile{app: app, profile: profile, linkages: linkages})
+			}
+		}
+	}
+
+	// usedBy maps a certificate or device ID to the apps whose profiles use
+	// it, in the order they were selected.
+	usedBy := func(ids func(*apple.ProfileLinkages) []string) map[string][]models.App {
+		users := map[string][]models.App{}
+		for _, p := range profiles {
+			for _, id := range ids(p.linkages) {
+				if !slices.ContainsFunc(users[id], func(a models.App) bool { return a.ID == p.app.ID }) {
+					users[id] = append(users[id], p.app)
+				}
+			}
+		}
+		return users
+	}
+	referencedFile := func(apps []models.App) *file {
+		if len(apps) == 1 {
+			return signingFile(apps[0])
+		}
+		return e.file("signing.tf")
+	}
+
+	if e.wants(PartCertificates) && len(profiles) > 0 {
+		users := usedBy(func(l *apple.ProfileLinkages) []string { return l.CertificateIDs })
+		if certificates, ok, err := e.readCertificates(); err != nil {
+			return err
+		} else if ok {
+			for _, certificate := range certificates {
+				if apps, used := users[certificate.ID]; used {
+					e.exportCertificate(referencedFile(apps), certificate)
+				}
+			}
+		}
+	}
+
+	switch {
+	case e.named(PartDevices):
+		// Named, devices are the account part they are without --app: every
+		// enabled device, as a resource.
+		if devices, ok, err := e.readDevices(); err != nil {
+			return err
+		} else if ok {
+			for _, device := range devices {
+				e.exportDevice(e.file("signing.tf"), device)
+			}
+		}
+	case e.wants(PartDevices) && len(profiles) > 0:
+		users := usedBy(func(l *apple.ProfileLinkages) []string { return l.DeviceIDs })
+		if len(users) == 0 {
+			break
+		}
+		if devices, ok, err := e.readDevices(); err != nil {
+			return err
+		} else if ok {
+			for _, device := range devices {
+				if apps, used := users[device.ID]; used {
+					e.referenceDevice(referencedFile(apps), device)
+				}
+			}
+		}
+	}
+
+	if err := e.exportMerchantAndPassTypeIDs(e.file("signing.tf")); err != nil {
+		return err
+	}
+
+	if e.wants(PartProfiles) {
+		for _, p := range profiles {
+			e.exportProfile(signingFile(p.app), p.profile, p.linkages)
+		}
+	}
 	return nil
 }
 
@@ -159,6 +372,19 @@ func (e *exporter) exportDevice(f *file, device models.Device) {
 	b.str("platform", string(device.Attributes.Platform))
 }
 
+// referenceDevice reads a device a profile uses through a data source, for an
+// export scoped to some apps: the device belongs to the account, and managing
+// it from one app's configuration would let that configuration rename or
+// disable it for every other.
+func (e *exporter) referenceDevice(f *file, device models.Device) {
+	if device.Attributes.Status == models.DeviceStatusDISABLED {
+		e.note(Skipped, "", "Device %q (%s) is disabled, so it was left out.", device.Attributes.Name, device.Attributes.UDID)
+		return
+	}
+	b, _ := e.dataSource(f, "apple_devices", device.ID, device.Attributes.Name)
+	b.str("udid_pattern", "^"+regexp.QuoteMeta(device.Attributes.UDID)+"$")
+}
+
 // exportCertificate writes a data source, never a resource. Apple does not
 // return the CSR a certificate was issued from, and the export has no other
 // source for one, so an apple_certificate written here would have no
@@ -179,22 +405,29 @@ func (e *exporter) exportCertificate(f *file, certificate models.Certificate) {
 		certificate.Attributes.DisplayName, certificate.Attributes.SerialNumber, certificate.Attributes.SerialNumber, addr.String())
 }
 
-func (e *exporter) exportProfile(f *file, profile models.Profile) error {
+// exportableProfile is false for a profile the export leaves out: one that is
+// no longer active, or has no type. noted says whether to say so, which an
+// export scoped to some apps cannot, since it has not yet read which app the
+// profile was for.
+func (e *exporter) exportableProfile(profile models.Profile, noted bool) bool {
 	name := profile.Attributes.Name
 	if profile.Attributes.ProfileState != nil && *profile.Attributes.ProfileState != models.ProfileStateActive {
-		e.note(Skipped, "", "Profile %q is %s, so it was left out.", name, *profile.Attributes.ProfileState)
-		return nil
+		if noted {
+			e.note(Skipped, "", "Profile %q is %s, so it was left out.", name, *profile.Attributes.ProfileState)
+		}
+		return false
 	}
 	if profile.Attributes.ProfileType == nil {
-		e.note(Skipped, "", "Profile %q has no type Apple reports, so it was left out.", name)
-		return nil
+		if noted {
+			e.note(Skipped, "", "Profile %q has no type Apple reports, so it was left out.", name)
+		}
+		return false
 	}
+	return true
+}
 
-	linkages, err := e.src.GetProfileLinkages(profile.ID)
-	if err != nil {
-		return e.failed("the bundle ID, certificates and devices of profile "+name, err)
-	}
-
+func (e *exporter) exportProfile(f *file, profile models.Profile, linkages *apple.ProfileLinkages) {
+	name := profile.Attributes.Name
 	b, _ := e.resource(f, "apple_profile", profile.ID, profile.ID, name)
 	b.str("name", name)
 	b.str("profile_type", string(*profile.Attributes.ProfileType))
@@ -202,21 +435,30 @@ func (e *exporter) exportProfile(f *file, profile models.Profile) error {
 
 	certificates := make([]value, 0, len(linkages.CertificateIDs))
 	for _, id := range linkages.CertificateIDs {
-		if addr, ok := e.addresses["data.apple_certificates/"+id]; ok {
-			certificates = append(certificates, ref(addr.traversal("certificates", 0, "id")))
-		} else {
-			certificates = append(certificates, literal(cty.StringVal(id)))
-		}
+		certificates = append(certificates, e.firstOf(id, "apple_certificates"))
 	}
 	b.refs("certificates", certificates)
 
 	if len(linkages.DeviceIDs) > 0 {
 		devices := make([]value, 0, len(linkages.DeviceIDs))
 		for _, id := range linkages.DeviceIDs {
-			devices = append(devices, e.idOf("apple_device", id))
+			if addr, ok := e.addresses["apple_device/"+id]; ok {
+				devices = append(devices, ref(addr.traversal("id")))
+			} else {
+				devices = append(devices, e.firstOf(id, "apple_devices"))
+			}
 		}
 		b.refs("devices", devices)
 	}
+}
 
-	return nil
+// firstOf refers to the one record a listing data source was written to find,
+// and otherwise writes Apple's ID as it is.
+func (e *exporter) firstOf(appleID, dataType string) value {
+	if addr, ok := e.addresses["data."+dataType+"/"+appleID]; ok {
+		// The listing attribute is named after the data source:
+		// apple_certificates has certificates, apple_devices has devices.
+		return ref(addr.traversal(strings.TrimPrefix(dataType, "apple_"), 0, "id"))
+	}
+	return literal(cty.StringVal(appleID))
 }

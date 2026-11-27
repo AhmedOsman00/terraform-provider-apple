@@ -30,6 +30,7 @@ var introducedIn = map[string]string{
 	"apple_certificate":                    "0.1.0",
 	"apple_certificates":                   "0.1.0",
 	"apple_device":                         "0.1.0",
+	"apple_devices":                        "0.1.0",
 	"apple_in_app_purchase":                "0.1.0",
 	"apple_in_app_purchase_availability":   "0.1.0",
 	"apple_in_app_purchase_localization":   "0.1.0",

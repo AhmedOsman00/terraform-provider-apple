@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/export"
@@ -29,6 +30,7 @@ func newTerraformExportCommand(a *app) *cobra.Command {
 		out   string
 		apps  []string
 		only  []string
+		list  bool
 		force bool
 	)
 
@@ -43,22 +45,36 @@ func newTerraformExportCommand(a *app) *cobra.Command {
 			"Certificates are read through data sources rather than imported, since importing one\n" +
 			"reissues it and revokes the original. Screenshots are left out, since Apple keeps their\n" +
 			"bytes and not the files. Demo account passwords become sensitive variables.\n\n" +
-			"--only takes signing, app, products, testflight and team. app, products and testflight are\n" +
-			"per app: every app on the team, or those named by --app. Nothing is written to Apple, and\n" +
-			"terraform is not run.",
+			"Without --app and --only, the whole account is exported. --app (by App Store Connect ID or\n" +
+			"bundle identifier, repeatable) exports those apps' own parts: the listing, products and\n" +
+			"TestFlight, the Bundle IDs under the app's own (com.acme.app and com.acme.app.*, except one\n" +
+			"that is another app's), and the profiles issued for them. The certificates and devices those\n" +
+			"profiles use are read through data sources, and the account's merchant IDs, pass type IDs,\n" +
+			"users and invitations are left out unless --only names them. An explicit --only always wins:\n" +
+			"--app com.acme.app --only users exports only users.\n\n" +
+			"--list reads the account the same way and prints what would be written, by app and part,\n" +
+			"without writing anything; --out is then not needed.\n\n" +
+			"Parts (--only):\n" + export.DescribeParts() + "\n" +
+			"Nothing is written to Apple, and terraform is not run.",
 		Args: exactArgs(0),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			var domains []export.Domain
+			var parts []export.Part
 			for _, name := range only {
-				domain, err := export.ParseDomain(name)
+				named, err := export.ParsePart(name)
 				if err != nil {
 					return usageError("--only: %v", err)
 				}
-				domains = append(domains, domain)
+				for _, part := range named {
+					if !slices.Contains(parts, part) {
+						parts = append(parts, part)
+					}
+				}
 			}
 
-			if err := checkOutputDirectory(out, force); err != nil {
-				return err
+			if !list {
+				if err := checkOutputDirectory(out, force); err != nil {
+					return err
+				}
 			}
 
 			client, err := a.api()
@@ -68,11 +84,18 @@ func newTerraformExportCommand(a *app) *cobra.Command {
 
 			result, err := export.Run(client, export.Options{
 				Apps:     apps,
-				Domains:  domains,
+				Parts:    parts,
 				Progress: a.logf,
 			})
 			if err != nil {
 				return err
+			}
+
+			if list {
+				return a.emit(struct {
+					Contents []export.Entry `json:"contents"`
+					Notes    []export.Note  `json:"notes"`
+				}{result.Contents, result.Notes}, renderContents(result))
 			}
 
 			if err := os.MkdirAll(out, 0o755); err != nil {
@@ -96,12 +119,81 @@ func newTerraformExportCommand(a *app) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&out, "out", "", "the directory to write into; it must be empty or not exist yet")
-	cmd.Flags().StringSliceVar(&apps, "app", nil, "an app to export, by App Store Connect ID or bundle identifier; repeat for several (default every app)")
-	cmd.Flags().StringSliceVar(&only, "only", nil, "export only these parts: signing, app, products, testflight, team (default all)")
+	cmd.Flags().StringVar(&out, "out", "", "the directory to write into; it must be empty or not exist yet (not needed with --list)")
+	cmd.Flags().StringSliceVar(&apps, "app", nil, "an app to export, by App Store Connect ID or bundle identifier; repeat for several (default every app, and the whole account)")
+	cmd.Flags().StringSliceVar(&only, "only", nil, "export only these parts, or the aliases signing, team and app; see the list above (default all, or under --app every part that is not the account's)")
+	cmd.Flags().BoolVar(&list, "list", false, "print what would be written, by app and part, and write nothing")
 	cmd.Flags().BoolVar(&force, "force", false, "write into --out even when it already holds files, replacing any of the same name")
-	_ = cmd.MarkFlagRequired("out")
 	return cmd
+}
+
+// renderContents is --list: each app's blocks by part, then those of the
+// account or several apps, then the notes, which carry the unclaimed Bundle
+// IDs and everything else left out.
+func renderContents(result *export.Result) string {
+	type group struct {
+		app   string
+		parts map[export.Part][]export.Entry
+		order []export.Part
+	}
+	var groups []*group
+	byApp := map[string]*group{}
+	for _, entry := range result.Contents {
+		g, ok := byApp[entry.App]
+		if !ok {
+			g = &group{app: entry.App, parts: map[export.Part][]export.Entry{}}
+			byApp[entry.App] = g
+			groups = append(groups, g)
+		}
+		if _, ok := g.parts[entry.Part]; !ok {
+			g.order = append(g.order, entry.Part)
+		}
+		g.parts[entry.Part] = append(g.parts[entry.Part], entry)
+	}
+	// The account's own blocks come last, after every app.
+	slices.SortStableFunc(groups, func(x, y *group) int {
+		switch {
+		case x.app == "" && y.app != "":
+			return 1
+		case x.app != "" && y.app == "":
+			return -1
+		}
+		return 0
+	})
+
+	var b strings.Builder
+	for _, g := range groups {
+		heading := g.app
+		if heading == "" {
+			heading = "Account, or shared by several apps"
+		}
+		fmt.Fprintf(&b, "%s\n", heading)
+		for _, part := range g.order {
+			fmt.Fprintf(&b, "  %s\n", part)
+			for _, entry := range g.parts[part] {
+				kind := "import"
+				if !entry.Import {
+					kind = "read  "
+				}
+				fmt.Fprintf(&b, "    %s %s  (%s)\n", kind, entry.Address, entry.File)
+			}
+		}
+	}
+	if len(result.Contents) == 0 {
+		b.WriteString("Nothing to export.\n")
+	}
+	fmt.Fprintf(&b, "\n%d records to import.", result.ImportCount())
+	if len(result.Notes) > 0 {
+		fmt.Fprintf(&b, " %d notes:\n", len(result.Notes))
+		for _, note := range result.Notes {
+			if note.Address != "" {
+				fmt.Fprintf(&b, "  - [%s] %s: %s\n", note.Severity, note.Address, note.Message)
+			} else {
+				fmt.Fprintf(&b, "  - [%s] %s\n", note.Severity, note.Message)
+			}
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // checkOutputDirectory refuses to write over an existing configuration: an

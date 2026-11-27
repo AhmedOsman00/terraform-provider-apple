@@ -1,3 +1,34 @@
+## Unreleased
+
+BEHAVIOUR CHANGES:
+
+* **`apple terraform export --app` exports that app's signing, and not the
+  rest of the account.** Before, `--app` filtered only the listing, products
+  and TestFlight, and every Bundle ID, device, merchant ID, pass type ID and
+  user in the account was still written. Now an app's export holds the Bundle
+  IDs under its own (`com.acme.app` and `com.acme.app.*`, except one that is
+  another app record's own, such as `com.acme.app.staging`) and the profiles
+  issued for them. Those go in `<bundle_id>_signing.tf`. The certificates and
+  devices the profiles use are read through data sources, and one that two of
+  the named apps share is written once, in `signing.tf`. Merchant IDs, pass
+  type IDs, users and invitations belong to the account, so `--app` leaves
+  them out unless `--only` names them. A Bundle ID that looks like the app's
+  but is outside its prefix (`com-acme-app-tests`) is listed in
+  `EXPORT_NOTES.md` rather than guessed at. Without `--app` the export is
+  unchanged.
+
+FEATURES:
+
+* **`--only` takes finer parts**: `listing`, `products`, `testflight`,
+  `bundle-ids`, `profiles`, `certificates`, `devices`, `merchant-ids`,
+  `pass-type-ids`, `users` and `invitations`. The old names still work, as
+  aliases: `signing`, `team` and `app` (now `listing`). An explicit `--only`
+  always wins, so `--app com.acme.app --only users` exports only users.
+  `--help` lists every resource type each part can write.
+* **`--list`** reads the account and prints what an export would write, by
+  app and part, with the notes, and writes nothing. `--out` is not needed with
+  it, and `--json` gives the same as data.
+
 ## 0.3.3 (November 25, 2026)
 
 NOTES:

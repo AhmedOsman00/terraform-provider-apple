@@ -38,7 +38,7 @@ Generation runs `terraform fmt` but never `terraform validate`, which is why
 builds the provider into a throwaway filesystem mirror, synthesizes a
 `required_providers` block for the example directories that have none, and runs
 `terraform init` + `terraform validate` in each, and in
-`internal/export/testdata/golden`. That is the only check that
+`internal/export/testdata/golden` and `golden_app`. That is the only check that
 catches an example written against a schema the provider does not have — a
 `settings { ... }` block where the schema is a `ListNestedAttribute`, an
 attribute that does not exist, or a value a validator rejects. `dev_overrides`
@@ -198,7 +198,39 @@ every imported profile planned a reissue), `apple_app_settings` import adopts
 the URLs that `Read` deliberately does not refresh, and `apple_subscription`
 import adopts `review_note` as `apple_in_app_purchase`'s does.
 
-`testdata/golden/` is the whole output for the fake account. Regenerate it with
+**`--app` scopes signing to the app, and `--only` takes parts** (`parts.go`:
+`listing`, `products`, `testflight`, `bundle-ids`, `profiles`, `certificates`,
+`devices`, `merchant-ids`, `pass-type-ids`, `users`, `invitations`, with
+`signing`, `team` and `app` kept as aliases). Each part has a scope: an `app`
+part is the named apps' own, a `referenced` one (certificates, devices) is only
+what their profiles use, and an `account` one is left out under `--app` unless
+`--only` names it. An explicit `--only` always wins. Without `--app` nothing is
+scoped, and the output is what it was before parts existed, which is what
+`testdata/golden/` pins. Under `--app`, `exportScopedSigning` writes:
+
+- The Bundle IDs `claimBundleIDs` (`scope.go`) gives the app: its own and every
+  one under it, assigned by **longest prefix across every app on the team**, so
+  `com.acme.app.staging` goes with the staging app record when one exists. That
+  is why it calls `GetApps` even when `--app` names one app. A lookalike outside
+  the prefix (`com-acme-app-tests`) is a note, never a guess.
+- The profiles whose `GetProfileLinkages` bundle ID the app owns. An inactive
+  profile is skipped without a note, since its app is unknown before the
+  linkage read.
+- The certificates and devices those profiles use, as data sources
+  (`data.apple_devices` with an anchored `udid_pattern`), in the app's
+  `<bundle_id>_signing.tf`, or in `signing.tf` when several named apps use one,
+  so each is written once. A device is the account's, so managing it from one
+  app's configuration would let it rename or disable it for all. Naming
+  `devices` in `--only` exports every device as a resource instead.
+
+`Parts[].Types` is what `--help` prints as the complete list a part can write;
+`TestEveryTypeHasAPart` fails on an exporter writing a type it does not list.
+`Result.Contents` records every block with its app and part, which is what
+`--list` prints.
+
+`testdata/golden/` is the whole output for the fake account, and
+`testdata/golden_app/` the `--app com.example.app` output for `scopedAccount`
+(an extension, a staging app, a shared certificate). Regenerate both with
 `go test ./internal/export -update` and read the diff, because that diff is what
 users get. `make validate-examples` runs `terraform validate` over it, which is
 what checks the exporter against the schema. The directory is excluded from

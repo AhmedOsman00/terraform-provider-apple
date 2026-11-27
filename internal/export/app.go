@@ -52,28 +52,36 @@ func (e *exporter) selectApps() ([]models.App, error) {
 // exportApp writes one app's listing, products and TestFlight setup, each in
 // a file of its own named after the bundle identifier.
 func (e *exporter) exportApp(app models.App) error {
-	base := slug(app.Attributes.BundleID)
-	if base == "unnamed" {
-		base = slug(app.ID)
-	}
+	base := appBase(app)
+	bundle := app.Attributes.BundleID
 	e.progress("Reading %s (%s)", app.Attributes.Name, app.Attributes.BundleID)
 
-	if e.wants(DomainApp) {
-		if err := e.exportListing(e.file(base+".tf"), app); err != nil {
+	if e.wants(PartListing) {
+		if err := e.exportListing(e.appFile(base+".tf", bundle), app); err != nil {
 			return err
 		}
 	}
-	if e.wants(DomainProducts) {
-		if err := e.exportProducts(e.file(base+"_products.tf"), app); err != nil {
+	if e.wants(PartProducts) {
+		if err := e.exportProducts(e.appFile(base+"_products.tf", bundle), app); err != nil {
 			return err
 		}
 	}
-	if e.wants(DomainTestFlight) {
-		if err := e.exportTestFlight(e.file(base+"_testflight.tf"), app); err != nil {
+	if e.wants(PartTestFlight) {
+		if err := e.exportTestFlight(e.appFile(base+"_testflight.tf", bundle), app); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// appBase is the stem of an app's file names: its bundle identifier, or its
+// ID when it has none.
+func appBase(app models.App) string {
+	base := slug(app.Attributes.BundleID)
+	if base == "unnamed" {
+		base = slug(app.ID)
+	}
+	return base
 }
 
 func (e *exporter) exportListing(f *file, app models.App) error {

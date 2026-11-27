@@ -18,19 +18,24 @@ func (e *exporter) exportTeam() error {
 	f := e.file("team.tf")
 	f.comment("Users and Access.\nRemoving an apple_user removes that person from the team, which the API cannot undo.")
 
-	e.progress("Reading team members")
-	users, err := e.src.GetUsers()
-	if err != nil {
-		if err := e.failed("the team's members (this needs an API key with the Admin role)", err); err != nil {
-			return err
+	if e.wants(PartUsers) {
+		e.progress("Reading team members")
+		users, err := e.src.GetUsers()
+		if err != nil {
+			if err := e.failed("the team's members (this needs an API key with the Admin role)", err); err != nil {
+				return err
+			}
 		}
-	}
-	for _, user := range users {
-		if err := e.exportUser(f, user); err != nil {
-			return err
+		for _, user := range users {
+			if err := e.exportUser(f, user); err != nil {
+				return err
+			}
 		}
 	}
 
+	if !e.wants(PartInvitations) {
+		return nil
+	}
 	e.progress("Reading invitations")
 	invitations, err := e.src.GetUserInvitations()
 	if err != nil {
