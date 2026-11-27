@@ -202,8 +202,8 @@ invitations; `app` = listing.
         ten-screenshot limit), `apple_beta_tester` and `apple_user_invitation`.
 - [ ] **Schema audit before freezing**: one pass over every resource for
       naming consistency, `RequiresReplace` vs in-place, defaults and
-      descriptions. Implement the mutual-exclusivity validators left as TODOs
-      (`bundle/data_source.go:65`, `certificate/data_source.go:69,88`). Anything
+      descriptions. The mutual-exclusivity validators left as TODOs in
+      `apple_bundle_ids` and `apple_certificates` are done (0.9.1). Anything
       renamed has to happen before 1.0.
 - [ ] **Compatibility policy** (`COMPATIBILITY.md`), covering the provider
       schema and import IDs, the CLI's flags, `APPLE_*` variables, exit codes and
