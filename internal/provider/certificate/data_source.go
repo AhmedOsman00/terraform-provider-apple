@@ -11,8 +11,10 @@ import (
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -65,8 +67,8 @@ func (d *certificatesDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 					"Cannot be used together with `certificate_type`.",
 				Optional:    true,
 				ElementType: types.StringType,
-				Validators:  []validator.List{
-					// TODO: Add custom validator to ensure mutual exclusivity with certificate_type
+				Validators: []validator.List{
+					listvalidator.ConflictsWith(path.MatchRoot("certificate_type")),
 				},
 			},
 			"platform": schema.StringAttribute{
@@ -84,8 +86,8 @@ func (d *certificatesDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 					"Cannot be used together with `platform`.",
 				Optional:    true,
 				ElementType: types.StringType,
-				Validators:  []validator.List{
-					// TODO: Add custom validator to ensure mutual exclusivity with platform
+				Validators: []validator.List{
+					listvalidator.ConflictsWith(path.MatchRoot("platform")),
 				},
 			},
 			"name_pattern": schema.StringAttribute{

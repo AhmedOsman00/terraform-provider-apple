@@ -9,8 +9,10 @@ import (
 	"github.com/AhmedOsman00/terraform-provider-apple/internal/apple"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -61,8 +63,8 @@ func (d *bundleIDsDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 					"Cannot be used together with `platform`.",
 				Optional:    true,
 				ElementType: types.StringType,
-				Validators:  []validator.List{
-					// TODO: Add custom validator to ensure mutual exclusivity with platform
+				Validators: []validator.List{
+					listvalidator.ConflictsWith(path.MatchRoot("platform")),
 				},
 			},
 			"identifier_pattern": schema.StringAttribute{

@@ -1,3 +1,15 @@
+## 0.9.1 (Unreleased)
+
+BUG FIXES:
+
+* **`apple_bundle_ids` and `apple_certificates` refuse a singular filter
+  beside its plural.** Their descriptions have always said `platform` and
+  `platforms`, and `certificate_type` and `certificate_types`, cannot be used
+  together, but nothing enforced it: both were applied, so a Bundle ID or
+  certificate had to match each. Setting both is now an error at plan time
+  naming the two attributes. A value not known until apply is checked once it
+  is known.
+
 ## 0.9.0 (November 27, 2026)
 
 ENHANCEMENTS:
