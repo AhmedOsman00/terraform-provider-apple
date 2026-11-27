@@ -125,7 +125,7 @@ func TestAccInAppPurchaseResource_completesMetadata(t *testing.T) {
 					resource.TestCheckResourceAttr("apple_in_app_purchase_localization.test", "locale", "en-US"),
 					resource.TestCheckResourceAttr("apple_in_app_purchase_localization.test", "name", name),
 					// The version is resolved by the provider, never configured.
-					resource.TestCheckResourceAttrSet("apple_in_app_purchase_localization.test", "version_id"),
+					resource.TestCheckResourceAttrSet("apple_in_app_purchase_localization.test", "in_app_purchase_version_id"),
 					resource.TestCheckResourceAttr("apple_in_app_purchase_price_schedule.test", "base_territory", "USA"),
 					resource.TestCheckResourceAttr("apple_in_app_purchase_price_schedule.test", "prices.#", "1"),
 					resource.TestCheckResourceAttrSet("apple_in_app_purchase_price_schedule.test", "id"),

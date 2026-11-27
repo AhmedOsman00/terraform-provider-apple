@@ -15,7 +15,7 @@ resource "apple_in_app_purchase" "pro_unlock" {
 #
 # Apple attaches localizations to an in-app purchase version rather than to the
 # purchase itself; the provider resolves the version and reports it as
-# version_id.
+# in_app_purchase_version_id.
 resource "apple_in_app_purchase_localization" "pro_unlock_en" {
   in_app_purchase_id = apple_in_app_purchase.pro_unlock.id
   locale             = "en-US"
