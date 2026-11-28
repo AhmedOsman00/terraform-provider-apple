@@ -135,7 +135,8 @@ func TestSortAppCategories(t *testing.T) {
 
 func pricePoints() []models.AppPricePoint {
 	return []models.AppPricePoint{
-		{ID: "a", Attributes: models.AppPricePointAttributes{CustomerPrice: "0", Proceeds: "0"}},
+		// Apple reports the free price point as "0.0", not "0".
+		{ID: "a", Attributes: models.AppPricePointAttributes{CustomerPrice: "0.0", Proceeds: "0.0"}},
 		{ID: "b", Attributes: models.AppPricePointAttributes{CustomerPrice: "9.99", Proceeds: "6.99"}},
 		{ID: "c", Attributes: models.AppPricePointAttributes{CustomerPrice: "9.99", Proceeds: "7.00"}},
 	}
@@ -172,11 +173,20 @@ func TestFilterAppPricePoints(t *testing.T) {
 			want:    []string{"a"},
 		},
 		{
-			// The comparison is a string match, not a numeric one: Apple reports
-			// prices as decimal strings and "9.990" is simply not a price it
-			// published.
-			name:    "trailing zero does not match",
+			name:    "the free point matches however zero is written",
+			filters: AppPricePointFilters{CustomerPrice: "0.00"},
+			want:    []string{"a"},
+		},
+		{
+			// The comparison is numeric: Apple's formatting is not fixed, so a
+			// trailing zero names the same price.
+			name:    "trailing zero matches",
 			filters: AppPricePointFilters{CustomerPrice: "9.990"},
+			want:    []string{"b", "c"},
+		},
+		{
+			name:    "a nearby price does not match",
+			filters: AppPricePointFilters{CustomerPrice: "9.9"},
 			want:    []string{},
 		},
 	}

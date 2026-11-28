@@ -60,7 +60,7 @@ output "usa_proceeds" {
 
 ### Optional
 
-- `customer_price` (String) Return only price points whose customer price matches this string exactly, for example `9.99` — or `0` for the free price point. Applied in memory after Apple's territory filter. Note that the same numeric price means a different amount of money in each territory's currency.
+- `customer_price` (String) Return only price points whose customer price equals this number, for example `9.99` — or `0` for the free price point. Compared as a number, so `0`, `0.0` and `0.00` all match, as Apple reports the free point as `0.0`. Applied in memory after Apple's territory filter. Note that the same numeric price means a different amount of money in each territory's currency.
 - `limit` (Number) Maximum number of price points to return. Applied after filtering.
 - `territories` (List of String) Three-letter Apple territory codes to restrict the catalogue to, for example `["USA", "GBR", "EGY"]`. Applied by Apple, not in memory. Omitting this returns every territory, which is rarely what you want.
 

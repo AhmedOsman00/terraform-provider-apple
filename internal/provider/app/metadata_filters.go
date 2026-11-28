@@ -5,6 +5,7 @@ package app
 
 import (
 	"fmt"
+	"math/big"
 	"reflect"
 	"regexp"
 	"sort"
@@ -80,9 +81,8 @@ type AppPricePointFilters struct {
 
 // FilterAppPricePoints applies filters to Apple's app price catalogue.
 //
-// customer_price is an exact string match, not a numeric comparison: Apple
-// reports prices as decimal strings, and "9.99" and "9.990" are different
-// records rather than the same number written twice.
+// customer_price is compared as a number (samePrice), so "0" finds the free
+// price point Apple reports as "0.0".
 func FilterAppPricePoints(points []models.AppPricePoint, filters AppPricePointFilters) []models.AppPricePoint {
 	if filters.CustomerPrice == "" {
 		return points
@@ -90,7 +90,7 @@ func FilterAppPricePoints(points []models.AppPricePoint, filters AppPricePointFi
 
 	filtered := make([]models.AppPricePoint, 0, len(points))
 	for _, point := range points {
-		if point.Attributes.CustomerPrice == filters.CustomerPrice {
+		if samePrice(filters.CustomerPrice, point.Attributes.CustomerPrice) {
 			filtered = append(filtered, point)
 		}
 	}
@@ -318,4 +318,23 @@ func PricePointIDsByTerritory(points []models.AppPricePoint) map[string]string {
 	}
 
 	return ids
+}
+
+// samePrice reports whether a configured customer price names the same amount
+// as one Apple reports.
+//
+// The comparison is numeric, because Apple's formatting is not fixed: it
+// reports the free price point as "0.0" and trims trailing zeros elsewhere
+// ("0.5", not "0.50"), so an exact string match left customer_price = "0"
+// matching nothing. Both sides are parsed as exact decimals rather than
+// floats, so 9.99 never equals 9.9. A value that does not parse falls back to
+// string equality; the validator keeps a configured one from getting there.
+func samePrice(configured, reported string) bool {
+	a, okA := new(big.Rat).SetString(configured)
+	b, okB := new(big.Rat).SetString(reported)
+	if !okA || !okB {
+		return configured == reported
+	}
+
+	return a.Cmp(b) == 0
 }

@@ -29,6 +29,13 @@ BUG FIXES:
 * **Device names and Merchant ID display names are limited to 64 characters,
   not 64 bytes.** A name with a curly apostrophe, as iPhones name themselves,
   or an accented letter was refused before reaching the limit.
+* **`customer_price` finds the free app price point again.** The filter on
+  `apple_app_price_points`, `apple_in_app_purchase_price_points` and
+  `apple_subscription_price_points` compared strings exactly, and Apple now
+  reports the free point as `0.0`, so `customer_price = "0"` matched nothing
+  and a free app could not be priced as documented. Prices are now compared as
+  numbers, so `0`, `0.0` and `9.90` match however Apple formats them, while
+  `9.9` still never matches `9.99`.
 
 ## 0.10.0 (November 27, 2026)
 

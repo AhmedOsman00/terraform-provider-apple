@@ -5,6 +5,7 @@ package provider
 
 import (
 	"fmt"
+	"math/big"
 	"strconv"
 	"testing"
 
@@ -105,8 +106,15 @@ data "apple_app_price_points" "test" {
 }`, testAccAppID()),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("data.apple_app_price_points.test", "filtered_count", "1"),
-					resource.TestCheckResourceAttr("data.apple_app_price_points.test",
-						"price_points.0.customer_price", "0"),
+					// Numerically zero, however Apple writes it: it reports "0.0"
+					// today, and the filter is what this step is about.
+					resource.TestCheckResourceAttrWith("data.apple_app_price_points.test",
+						"price_points.0.customer_price", func(value string) error {
+							if price, ok := new(big.Rat).SetString(value); !ok || price.Sign() != 0 {
+								return fmt.Errorf("customer_price = %q, want a zero price", value)
+							}
+							return nil
+						}),
 				),
 			},
 		},

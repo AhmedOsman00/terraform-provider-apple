@@ -60,8 +60,9 @@ func (d *subscriptionPricePointsDataSource) Schema(_ context.Context, _ datasour
 				ElementType: types.StringType,
 			},
 			"customer_price": schema.StringAttribute{
-				MarkdownDescription: "Return only price points whose customer price matches this string exactly, " +
-					"for example `9.99`. Applied in memory after Apple's territory filter. Note that the " +
+				MarkdownDescription: "Return only price points whose customer price equals this number, " +
+					"for example `9.99`. Compared as a number, so `9.90` and `9.9` match the same point, " +
+					"whichever way Apple formats it. Applied in memory after Apple's territory filter. Note that the " +
 					"same numeric price means a different amount of money in each territory's currency.",
 				Optional:   true,
 				Validators: []validator.String{PriceValidator},

@@ -932,8 +932,11 @@ cross-variable validation.
   that marks `id` unknown. It is a different Apple resource with its own price
   point catalogue — `/v1/apps/{id}/appPricePoints` — and an app's price points
   are not interchangeable with a subscription's or a purchase's. **Apple retired
-  price tiers**; a free app is a price point whose `customerPrice` is `0`, not
-  the absence of a schedule. Unlike the in-app purchase inline create, an
+  price tiers**; a free app is a price point whose `customerPrice` is zero (Apple
+  writes it `0.0`), not the absence of a schedule. Every `customer_price` filter
+  compares as an exact decimal (`samePrice`, one per package), never as a
+  string: Apple trims trailing zeros, so a string match left `customer_price = "0"`
+  matching nothing. Unlike the in-app purchase inline create, an
   `appPrices` object names only the price point: there is no second relationship
   repeating the parent.
 - **`apple_app_availability`**: `/v2/appAvailabilities`, and a richer record
