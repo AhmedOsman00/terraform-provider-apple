@@ -109,7 +109,9 @@ func GetUDIDValidator() []validator.String {
 // GetNameValidator returns validators for Device name fields.
 func GetNameValidator() []validator.String {
 	return []validator.String{
-		stringvalidator.LengthBetween(1, 64),
+		// Characters, not bytes: an iPhone names itself with a curly
+		// apostrophe, which is three bytes in UTF-8.
+		stringvalidator.UTF8LengthBetween(1, 64),
 	}
 }
 

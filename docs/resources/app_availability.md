@@ -80,7 +80,7 @@ resource "apple_app_availability" "staggered" {
 
 ### Optional
 
-- `available_in_new_territories` (Boolean) Whether the app is offered automatically in territories the App Store adds in future. Defaults to `true`, matching App Store Connect's own default. Set it to `false` to keep the territory list exactly as configured.
+- `available_in_new_territories` (Boolean) Whether the app is offered automatically in territories the App Store adds in future. Left unset, a new availability is created with `true`, App Store Connect's own default, and an existing one keeps the answer Apple holds, so an import plans no change. Set it to `false` to keep the territory list exactly as configured.
 
 ### Read-Only
 

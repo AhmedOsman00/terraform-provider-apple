@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
@@ -139,11 +138,14 @@ func (r *userInvitationResource) Schema(_ context.Context, _ resource.SchemaRequ
 			},
 			"provisioning_allowed": schema.BoolAttribute{
 				MarkdownDescription: "Whether the person may create signing certificates and provisioning " +
-					"profiles once they join. Defaults to `false`.",
+					"profiles once they join. Left unset, it is not sent, and a new invitation takes Apple's " +
+					"default of `false`; an imported one keeps the answer Apple holds. There is " +
+					"deliberately no Terraform default: the attribute forces replacement, so a default " +
+					"would cancel and resend an imported invitation that allows provisioning.",
 				Optional: true,
 				Computed: true,
-				Default:  booldefault.StaticBool(false),
 				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
 					boolplanmodifier.RequiresReplace(),
 				},
 			},
