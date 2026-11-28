@@ -60,10 +60,11 @@ func TestDataSourceSchemas(t *testing.T) {
 	t.Parallel()
 
 	dataSources := map[string]func() datasource.DataSource{
-		"apple_apps":               NewAppsDataSource,
-		"apple_app_categories":     NewAppCategoriesDataSource,
-		"apple_app_price_points":   NewAppPricePointsDataSource,
-		"apple_app_store_versions": NewAppStoreVersionsDataSource,
+		"apple_apps":                          NewAppsDataSource,
+		"apple_app_categories":                NewAppCategoriesDataSource,
+		"apple_app_price_points":              NewAppPricePointsDataSource,
+		"apple_app_price_point_equalizations": NewAppPricePointEqualizationsDataSource,
+		"apple_app_store_versions":            NewAppStoreVersionsDataSource,
 	}
 
 	for name, newDataSource := range dataSources {

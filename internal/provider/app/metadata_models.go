@@ -269,6 +269,22 @@ type appPricePointsDataSourceModel struct {
 	FilteredCount types.Int64 `tfsdk:"filtered_count"`
 }
 
+// appPricePointEqualizationsDataSourceModel maps the equalization lookup: one
+// base price point in, the equivalent point per territory out.
+type appPricePointEqualizationsDataSourceModel struct {
+	// Scope
+	PricePointID types.String `tfsdk:"price_point_id"`
+
+	// Filter configuration, applied by Apple.
+	Territories types.List `tfsdk:"territories"`
+
+	// Output. price_point_ids is the apple_territories.ids kind of deviation,
+	// for the same reason the subscription equalization carries one.
+	PricePoints   []appPricePointModel    `tfsdk:"price_points"`
+	PricePointIDs map[string]types.String `tfsdk:"price_point_ids"`
+	TotalCount    types.Int64             `tfsdk:"total_count"`
+}
+
 // appScreenshotSetModel maps one display type's screenshots on a version
 // localization.
 //

@@ -291,3 +291,31 @@ func camelToSnake(s string) string {
 	}
 	return b.String()
 }
+
+// PricePointIDsByTerritory indexes app price points by the territory they
+// price, the map an equalization read exposes as price_point_ids.
+//
+// A point without a territory linkage is skipped rather than keyed under the
+// empty string, and a repeated territory keeps the first, so response order
+// cannot change the result.
+func PricePointIDsByTerritory(points []models.AppPricePoint) map[string]string {
+	ids := make(map[string]string, len(points))
+
+	for _, point := range points {
+		if point.Relationships == nil || point.Relationships.Territory == nil {
+			continue
+		}
+
+		territory := point.Relationships.Territory.Data.ID
+		if territory == "" {
+			continue
+		}
+		if _, seen := ids[territory]; seen {
+			continue
+		}
+
+		ids[territory] = point.ID
+	}
+
+	return ids
+}

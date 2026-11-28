@@ -726,3 +726,80 @@ func TestMatchScreenshots(t *testing.T) {
 		})
 	}
 }
+
+// equalizedPricePoint builds a price point carrying a territory linkage, the
+// shape an equalization read returns.
+func equalizedPricePoint(id, territory string) models.AppPricePoint {
+	return models.AppPricePoint{
+		ID: id,
+		Relationships: &models.AppPricePointRelationships{
+			Territory: &models.ResourceIdentifier{
+				Data: models.ResourceData{Type: "territories", ID: territory},
+			},
+		},
+	}
+}
+
+func TestPricePointIDsByTerritory(t *testing.T) {
+	tests := []struct {
+		name   string
+		points []models.AppPricePoint
+		want   map[string]string
+	}{
+		{
+			name:   "no points is an empty map, not nil",
+			points: nil,
+			want:   map[string]string{},
+		},
+		{
+			name: "one entry per territory",
+			points: []models.AppPricePoint{
+				equalizedPricePoint("eq-gbr", "GBR"),
+				equalizedPricePoint("eq-egy", "EGY"),
+			},
+			want: map[string]string{"GBR": "eq-gbr", "EGY": "eq-egy"},
+		},
+		{
+			name: "a point with no territory linkage is skipped",
+			points: []models.AppPricePoint{
+				{ID: "bare"},
+				{ID: "no-territory", Relationships: &models.AppPricePointRelationships{}},
+				equalizedPricePoint("eq-gbr", "GBR"),
+			},
+			want: map[string]string{"GBR": "eq-gbr"},
+		},
+		{
+			name: "an empty territory ID is skipped rather than keyed on the empty string",
+			points: []models.AppPricePoint{
+				equalizedPricePoint("eq-blank", ""),
+				equalizedPricePoint("eq-gbr", "GBR"),
+			},
+			want: map[string]string{"GBR": "eq-gbr"},
+		},
+		{
+			name: "a repeated territory keeps the first, so response order cannot change the result",
+			points: []models.AppPricePoint{
+				equalizedPricePoint("eq-gbr", "GBR"),
+				equalizedPricePoint("eq-gbr-again", "GBR"),
+			},
+			want: map[string]string{"GBR": "eq-gbr"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := PricePointIDsByTerritory(tt.points)
+			if got == nil {
+				t.Fatal("got a nil map, want an empty one")
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+			for territory, id := range tt.want {
+				if got[territory] != id {
+					t.Errorf("%s = %q, want %q", territory, got[territory], id)
+				}
+			}
+		})
+	}
+}

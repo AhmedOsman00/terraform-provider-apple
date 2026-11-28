@@ -46,7 +46,7 @@ cannot be used for this: it makes `terraform init` refuse to run.
 
 `tfplugindocs` builds `docs/` from provider/resource/data-source `MarkdownDescription` strings plus the matching files under `examples/`. CI (`.github/workflows/test.yml`) fails the `generate` job if `make generate` produces a diff, so regenerate and commit whenever a schema, example, or guide changes.
 
-`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All sixty-seven pages are checked in: `index.md`, forty-one under `resources/`, twenty-three under `data-sources/`, and two under `guides/`.
+`docs/` is fully generated and must never be hand-edited — tfplugindocs deletes and re-renders the whole directory on every run. All sixty-nine pages are checked in: `index.md`, forty-one under `resources/`, twenty-five under `data-sources/`, and two under `guides/`.
 
 Hand-written prose lives in `templates/`, which is the only part of the docs pipeline a human edits directly. `templates/guides/<name>.md.tmpl` renders to `docs/guides/<name>.md`; a `templates/` directory does not suppress the auto-generated resource and data-source pages, which are still built from the schemas into a temporary directory. Two guides exist: `getting-started` (credentials, installing the provider from the Registry and overriding it with a local build, first configuration, import IDs per resource) and `code-signing` (the `fastlane match` replacement, the state-vs-bundle distribution model, adopting a match certificate).
 
@@ -282,7 +282,7 @@ kind the way `subscription` is — `settings_resource.go`, `info_resource.go`,
 `screenshot_set_resource.go`, `price_schedule_resource.go` and
 `availability_resource.go`, alongside
 `category_data_source.go`, `price_point_data_source.go`,
-`version_data_source.go` and the unprefixed `data_source.go` for `apple_apps`.
+`price_point_equalizations_data_source.go`, `version_data_source.go` and the unprefixed `data_source.go` for `apple_apps`.
 The shared state structs, validators and helpers live in `metadata_models.go`
 and the pure filter functions in `metadata_filters.go`, keeping the original
 `models.go` / `filters.go` for `apple_apps` itself. There is still no
@@ -411,7 +411,8 @@ request that grants it, so a configuration carrying it could never apply.
 
 `inapppurchase` is the same shape for one-time purchases: `localization_*.go`,
 `price_schedule_resource.go`, `availability_resource.go`,
-`review_screenshot_resource.go` and `price_point_data_source.go` alongside the
+`review_screenshot_resource.go`, `price_point_data_source.go` and
+`price_point_equalizations_data_source.go` alongside the
 unprefixed `resource.go` / `data_source.go` for `apple_in_app_purchase`. It shares no Apple-domain code
 with `subscription` — Apple models the two as separate resources, and a price
 point from one is meaningless to the other. The one exception is the review
@@ -676,10 +677,18 @@ cross-variable validation.
   encodes its subscription — so the read is per subscription and its results are
   not portable to another. Whether Apple returns the base territory's own point
   is Apple's call, which is why the examples `merge` the base point in rather
-  than assume. The same endpoint exists for the other two catalogues
-  (`/v1/inAppPurchasePricePoints/{id}/equalizations`,
-  `/v1/appPricePoints/{id}/equalizations`) and is not implemented; those
-  catalogues share nothing with this one.
+  than assume. The same endpoint exists for the other two catalogues and is
+  read by `apple_in_app_purchase_price_point_equalizations` and
+  `apple_app_price_point_equalizations`, each in its own package over its own
+  price point type, because the catalogues share nothing. **Their purpose is
+  different**, and their descriptions say so: an in-app purchase or app price
+  schedule takes a `base_territory` and Apple equalizes it into every other
+  storefront by itself, so those two are not needed to sell everywhere. They
+  report what that equalization charges, and give the IDs to pin as manual
+  prices, which do not move when Apple adjusts equalized ones for exchange
+  rates or taxes. Unlike the subscription one, their `territories` is a
+  `types.List`, for the unknown-value reason under
+  `apple_app_store_version_localization`.
 - **`apple_subscription_availability`**: the same singular, `POST`-replaces, no-`PATCH`, no-`DELETE` shape as `apple_in_app_purchase_availability`, and the same consequences — `Update` posts again, `Delete` warns and drops state only, and `ModifyPlan` marks `id` unknown when anything else changes because Apple issues a new record ID on every `POST`. It is a separate Apple resource from the in-app purchase one (`/v1/subscriptionAvailabilities` against `/v1/inAppPurchaseAvailabilities`) and the two share no code, the same way the two price catalogues do not. The record carries only `availableInNewTerritories`; the territory list is a paginated collection under `/v1/subscriptionAvailabilities/{id}/availableTerritories`, so `Read` takes two requests. Import ID is the subscription ID. Its real significance is ordering: it gates pricing, so a subscription cannot leave `MISSING_METADATA` without it. `available_territories` is required, and Apple's default of every territory applies only to a product whose availability has never been set — once this resource exists, selling everywhere means naming everywhere, which is what `data.apple_territories.all.ids` is for.
 - **`apple_subscription_introductory_offer`**: one introductory offer (a free
   trial, a reduced price per period, or a reduced price paid once) in one
@@ -1076,7 +1085,7 @@ The CLI releases from `cli-v*` tags through `.github/workflows/cli-release.yml`,
 
 Two tiers:
 
-- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`, `internal/apple/uploads_test.go`, `internal/apple/buildUploads_test.go`, `internal/apple/profiles_test.go`, `internal/apple/retry_test.go`, `internal/export/export_test.go`, `internal/provider/media/files_test.go`, `internal/provider/media/schema_test.go`, `internal/provider/subscription/introductory_offer_schedule_resource_test.go`, `internal/provider/subscription/introductory_offer_schedule_crud_test.go`, `internal/provider/subscription/price_schedule_resource_test.go`, `internal/provider/subscription/price_schedule_crud_test.go`, `internal/provider/app/screenshot_set_resource_test.go`, `internal/provider/beta/tester_resource_test.go`, `internal/provider/user/invitation_resource_test.go`, `internal/provider/plan_modifier_order_test.go`, `internal/provider/id_state_test.go`, `internal/provider/profile/data_source_test.go`, `internal/provider/ci/catalogue_filters_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`. `uploads_test.go` sets `HTTPClient` and `UploadHTTPClient` to two counting transports over one `httptest.NewTLSServer` and asserts which network carried each request and that no part carried an `Authorization` header — that test is the guarantee the two networks stay separate. It shortens `assetPollInterval`/`assetPollAttempts` rather than waiting.
+- **Credential-free** (`internal/apple/pagination_test.go`, `internal/apple/subscriptions_test.go`, `internal/apple/inAppPurchases_test.go`, `internal/apple/builds_test.go`, `internal/apple/beta_test.go`, `internal/provider/bundle/capability_models_test.go`, `internal/provider/certificate/renewal_test.go`, `internal/provider/device/models_test.go`, `internal/provider/app/metadata_filters_test.go`, `internal/provider/app/schema_test.go`, `internal/provider/beta/schema_test.go`, `internal/apple/users_test.go`, `internal/provider/user/filters_test.go`, `internal/provider/user/schema_test.go`, `internal/apple/uploads_test.go`, `internal/apple/buildUploads_test.go`, `internal/apple/profiles_test.go`, `internal/apple/retry_test.go`, `internal/apple/equalizations_test.go`, `internal/export/export_test.go`, `internal/provider/media/files_test.go`, `internal/provider/media/schema_test.go`, `internal/provider/subscription/introductory_offer_schedule_resource_test.go`, `internal/provider/subscription/introductory_offer_schedule_crud_test.go`, `internal/provider/subscription/price_schedule_resource_test.go`, `internal/provider/subscription/price_schedule_crud_test.go`, `internal/provider/app/screenshot_set_resource_test.go`, `internal/provider/beta/tester_resource_test.go`, `internal/provider/user/invitation_resource_test.go`, `internal/provider/plan_modifier_order_test.go`, `internal/provider/id_state_test.go`, `internal/provider/profile/data_source_test.go`, `internal/provider/ci/catalogue_filters_test.go`): `httptest`-backed client tests and pure-function tests. `apple.Client` has all-exported fields, so pointing one at a test server needs no production seam — `&apple.Client{HostURL: srv.URL, HTTPClient: srv.Client(), Token: "test"}`. `uploads_test.go` sets `HTTPClient` and `UploadHTTPClient` to two counting transports over one `httptest.NewTLSServer` and asserts which network carried each request and that no part carried an `Authorization` header — that test is the guarantee the two networks stay separate. It shortens `assetPollInterval`/`assetPollAttempts` rather than waiting.
 - **Acceptance** (`internal/provider/*_test.go`, package `provider`): `terraform-plugin-testing` against the real API. `testAccPreCheck` skips when credentials are absent.
 
 The CLI's credential-free tests (`internal/cli/*_test.go`) drive whole commands through `run` against `fakeConnect`, an `httptest` App Store Connect whose build state advances on each look, with a fake clock so waits finish at once. `internal/cli/acceptance_test.go` only reads, and needs `APPLE_TEST_BUNDLE_ID`.

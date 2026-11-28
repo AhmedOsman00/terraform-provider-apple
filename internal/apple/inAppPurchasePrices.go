@@ -203,3 +203,31 @@ func (c *Client) GetInAppPurchasePricePoints(purchaseID string, territories []st
 		params,
 	)
 }
+
+// GetInAppPurchasePricePointEqualizations retrieves the price point equivalent
+// to one base price point in every other territory.
+//
+// An in-app purchase price schedule already equalizes its base territory into
+// every other storefront by itself, so unlike the subscription read this is not
+// what prices a purchase worldwide. It answers what that equalization charges,
+// and gives the IDs to pin as manual prices: an equalized price follows Apple's
+// later currency and tax adjustments, and a manual one does not.
+//
+// The returned records are ordinary InAppPurchasePricePoints belonging to the
+// same purchase the base point does. include=territory is what makes each one
+// identifiable, as in the catalogue read; the territory filter is optional and
+// applied server-side.
+func (c *Client) GetInAppPurchasePricePointEqualizations(pricePointID string, territories []string) ([]models.InAppPurchasePricePoint, error) {
+	params := url.Values{}
+	params.Set("include", "territory")
+	if len(territories) > 0 {
+		params.Set("filter[territory]", strings.Join(territories, ","))
+	}
+
+	return getAllPagesQuery[models.InAppPurchasePricePoint](
+		c,
+		fmt.Sprintf("/v1/inAppPurchasePricePoints/%s/equalizations", pricePointID),
+		defaultPageSize,
+		params,
+	)
+}

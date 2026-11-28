@@ -113,6 +113,41 @@ data "apple_app_price_points" "test" {
 	})
 }
 
+// TestAccAppPricePointEqualizationsDataSource_basic reads the app price point
+// Apple considers equivalent to the USA 0.99 point in every other territory.
+// It writes nothing, so it is safe on any app, like the catalogue read.
+func TestAccAppPricePointEqualizationsDataSource_basic(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckSubscription(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+data "apple_app_price_points" "base" {
+  app_id         = %[1]q
+  territories    = ["USA"]
+  customer_price = "0.99"
+}
+
+data "apple_app_price_point_equalizations" "all" {
+  price_point_id = data.apple_app_price_points.base.price_points[0].id
+}
+
+data "apple_app_price_point_equalizations" "narrowed" {
+  price_point_id = data.apple_app_price_points.base.price_points[0].id
+  territories    = ["GBR", "EGY"]
+}`, testAccAppID()),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("data.apple_app_price_point_equalizations.all", "price_points.0.id"),
+					resource.TestCheckResourceAttrSet("data.apple_app_price_point_equalizations.all", "price_point_ids.GBR"),
+					resource.TestCheckResourceAttr("data.apple_app_price_point_equalizations.narrowed", "total_count", "2"),
+					resource.TestCheckResourceAttrSet("data.apple_app_price_point_equalizations.narrowed", "price_point_ids.EGY"),
+				),
+			},
+		},
+	})
+}
+
 // TestAccAppStoreVersionsDataSource_basic lists the test app's versions.
 func TestAccAppStoreVersionsDataSource_basic(t *testing.T) {
 	resource.Test(t, resource.TestCase{

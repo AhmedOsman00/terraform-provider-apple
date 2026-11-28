@@ -144,6 +144,24 @@ type inAppPurchasePricePointsDataSourceModel struct {
 	FilteredCount types.Int64 `tfsdk:"filtered_count"`
 }
 
+// inAppPurchasePricePointEqualizationsDataSourceModel maps the equalization
+// lookup: one base price point in, the equivalent point per territory out.
+type inAppPurchasePricePointEqualizationsDataSourceModel struct {
+	// Scope
+	PricePointID types.String `tfsdk:"price_point_id"`
+
+	// Filter configuration, applied by Apple. A types.List rather than a Go
+	// slice, so a list built from a variable or a for expression decodes while
+	// still unknown.
+	Territories types.List `tfsdk:"territories"`
+
+	// Output. price_point_ids is the apple_territories.ids kind of deviation,
+	// for the same reason the subscription equalization carries one.
+	PricePoints   []inAppPurchasePricePointModel `tfsdk:"price_points"`
+	PricePointIDs map[string]types.String        `tfsdk:"price_point_ids"`
+	TotalCount    types.Int64                    `tfsdk:"total_count"`
+}
+
 // In-app purchase validators.
 var (
 	// ProductIDValidator validates an in-app purchase product identifier.
@@ -280,6 +298,25 @@ func stringOrNull(s *string) types.String {
 		return types.StringNull()
 	}
 	return types.StringValue(*s)
+}
+
+// stringListValues returns the known, non-null strings in a list, or nil for a
+// list that is null or unknown.
+func stringListValues(list types.List) []string {
+	if list.IsNull() || list.IsUnknown() {
+		return nil
+	}
+
+	values := make([]string, 0, len(list.Elements()))
+	for _, element := range list.Elements() {
+		value, ok := element.(types.String)
+		if !ok || value.IsNull() || value.IsUnknown() {
+			continue
+		}
+		values = append(values, value.ValueString())
+	}
+
+	return values
 }
 
 // relationshipID reads an ID out of a to-one relationship, returning null when

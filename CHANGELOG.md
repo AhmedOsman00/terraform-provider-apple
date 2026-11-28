@@ -1,3 +1,17 @@
+## 0.11.0 (Unreleased)
+
+FEATURES:
+
+* **New data sources: `apple_in_app_purchase_price_point_equalizations` and
+  `apple_app_price_point_equalizations`.** Given one base price point, each
+  reads the price point Apple considers equivalent in every other territory,
+  as `apple_subscription_price_point_equalizations` already did for
+  subscriptions, with a `price_point_ids` map from territory code to price
+  point ID. An in-app purchase or app price schedule already equalizes its base
+  territory by itself, so these are for seeing what that charges, and for
+  pinning those prices as manual ones, which stay put when Apple adjusts
+  equalized prices for exchange rates or taxes.
+
 ## 0.10.0 (November 27, 2026)
 
 BREAKING CHANGES:
