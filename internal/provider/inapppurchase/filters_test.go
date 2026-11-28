@@ -242,15 +242,23 @@ func TestFilterInAppPurchasePricePoints(t *testing.T) {
 		}
 	})
 
-	t.Run("customer price is an exact string match", func(t *testing.T) {
+	t.Run("customer price matches", func(t *testing.T) {
 		got := FilterInAppPurchasePricePoints(points, InAppPurchasePricePointFilters{CustomerPrice: "9.99"})
 		if len(got) != 2 || got[0].ID != "b" || got[1].ID != "c" {
 			t.Errorf("got %v, want price points b and c", got)
 		}
 	})
 
-	t.Run("a price that formats differently does not match", func(t *testing.T) {
-		if got := FilterInAppPurchasePricePoints(points, InAppPurchasePricePointFilters{CustomerPrice: "9.990"}); len(got) != 0 {
+	// Apple's formatting is not fixed -- it trims trailing zeros -- so the
+	// comparison is numeric.
+	t.Run("a price that formats differently still matches", func(t *testing.T) {
+		if got := FilterInAppPurchasePricePoints(points, InAppPurchasePricePointFilters{CustomerPrice: "9.990"}); len(got) != 2 {
+			t.Errorf("got %d price points, want 2", len(got))
+		}
+	})
+
+	t.Run("a nearby price does not match", func(t *testing.T) {
+		if got := FilterInAppPurchasePricePoints(points, InAppPurchasePricePointFilters{CustomerPrice: "9.9"}); len(got) != 0 {
 			t.Errorf("got %d price points, want 0", len(got))
 		}
 	})

@@ -63,7 +63,7 @@ data "apple_in_app_purchase_price_points" "region" {
 
 ### Optional
 
-- `customer_price` (String) Return only price points whose customer price matches this string exactly, for example `9.99`. Applied in memory after Apple's territory filter. Note that the same numeric price means a different amount of money in each territory's currency.
+- `customer_price` (String) Return only price points whose customer price equals this number, for example `9.99`. Compared as a number, so `9.90` and `9.9` match the same point, whichever way Apple formats it. Applied in memory after Apple's territory filter. Note that the same numeric price means a different amount of money in each territory's currency.
 - `limit` (Number) Maximum number of price points to return. Applied after filtering.
 - `territories` (List of String) Three-letter Apple territory codes to restrict the catalogue to, for example `["USA", "GBR", "EGY"]`. Applied by Apple, not in memory. Omitting this returns every territory, which is rarely what you want.
 

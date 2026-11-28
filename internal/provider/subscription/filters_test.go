@@ -344,6 +344,11 @@ func TestFilterSubscriptionPricePoints(t *testing.T) {
 			filters: SubscriptionPricePointFilters{CustomerPrice: "9.9"},
 			want:    []string{},
 		},
+		{
+			name:    "a trailing zero names the same price",
+			filters: SubscriptionPricePointFilters{CustomerPrice: "19.990"},
+			want:    []string{"p2"},
+		},
 	}
 
 	for _, tt := range tests {

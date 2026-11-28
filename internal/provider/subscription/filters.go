@@ -5,6 +5,7 @@ package subscription
 
 import (
 	"fmt"
+	"math/big"
 	"regexp"
 	"sort"
 	"strings"
@@ -198,7 +199,7 @@ func FilterSubscriptionPricePoints(points []models.SubscriptionPricePoint, filte
 
 	filtered := make([]models.SubscriptionPricePoint, 0, len(points))
 	for _, point := range points {
-		if point.Attributes.CustomerPrice == filters.CustomerPrice {
+		if samePrice(filters.CustomerPrice, point.Attributes.CustomerPrice) {
 			filtered = append(filtered, point)
 		}
 	}
@@ -884,4 +885,23 @@ func planPriceChanges(planned []subscriptionSchedulePriceModel, reported []model
 	sort.Strings(changes.NoTerritory)
 
 	return changes
+}
+
+// samePrice reports whether a configured customer price names the same amount
+// as one Apple reports.
+//
+// The comparison is numeric, because Apple's formatting is not fixed: it
+// reports the free price point as "0.0" and trims trailing zeros elsewhere
+// ("0.5", not "0.50"), so an exact string match left customer_price = "0"
+// matching nothing. Both sides are parsed as exact decimals rather than
+// floats, so 9.99 never equals 9.9. A value that does not parse falls back to
+// string equality; the validator keeps a configured one from getting there.
+func samePrice(configured, reported string) bool {
+	a, okA := new(big.Rat).SetString(configured)
+	b, okB := new(big.Rat).SetString(reported)
+	if !okA || !okB {
+		return configured == reported
+	}
+
+	return a.Cmp(b) == 0
 }
