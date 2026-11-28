@@ -354,6 +354,7 @@ its price and availability with it, and both are visible in the portal.
 | `TestAccInAppPurchaseResource_validation` | Plan-only | Nothing. | No change. |
 | `TestAccInAppPurchasesDataSource_basic` | Net zero | Two purchases — one non-consumable, one consumable — read back through three data sources. | Two purchases appear and are deleted. |
 | `TestAccInAppPurchasePricePointsDataSource_basic` | Net zero | One purchase; reads Apple's price catalogue for USA and for USA+GBR. | A purchase appears and is deleted. The catalogue is read-only. |
+| `TestAccInAppPurchasePricePointEqualizationsDataSource_basic` | Net zero | One purchase; reads the USA 9.99 price point, then the points Apple equalizes from it — once for every territory and once narrowed to GBR+EGY. | A purchase appears and is deleted. Nothing is priced. |
 
 Three API shapes explain most failures here, and they are not the subscription
 ones. The purchase record has **no app relationship at all**, so nothing can be
@@ -420,6 +421,7 @@ again. It attaches and then detaches; the build itself is never modified.
 | `TestAccAppAvailabilityResource_basic` | **Leaves availability set** — opt-in | Availability in USA + GBR, then USA + GBR + DEU. | Pricing and Availability lists three storefronts. There is no way to undo this. |
 | `TestAccAppCategoriesDataSource_basic` | Net zero | Nothing — and needs no app, only credentials. Reads Apple's category catalogue. | No change. |
 | `TestAccAppPricePointsDataSource_basic` | Net zero | Nothing. Reads the app's price catalogue for USA. | No change. |
+| `TestAccAppPricePointEqualizationsDataSource_basic` | Net zero | Nothing. Reads the USA 0.99 app price point and the points Apple equalizes from it, unfiltered and narrowed to GBR+EGY. | No change. |
 | `TestAccAppStoreVersionsDataSource_basic` | Net zero | Nothing. Lists the app's iOS versions. | No change. |
 
 The version tests are the only ones here that create a deletable record, and

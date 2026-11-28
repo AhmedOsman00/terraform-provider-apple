@@ -89,6 +89,49 @@ data "apple_in_app_purchase_price_points" "two_territories" {
 	})
 }
 
+// TestAccInAppPurchasePricePointEqualizationsDataSource_basic reads the price
+// point Apple considers equivalent to one base point in every other territory.
+// Nothing is priced -- the equalization is a read of Apple's price matrix.
+func TestAccInAppPurchasePricePointEqualizationsDataSource_basic(t *testing.T) {
+	productID := testAccInAppPurchaseProductID()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckInAppPurchase(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInAppPurchaseDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccInAppPurchaseConfig(productID, testAccProductName("Equalizations"), "NON_CONSUMABLE") + `
+data "apple_in_app_purchase_price_points" "base" {
+  in_app_purchase_id = apple_in_app_purchase.test.id
+  territories        = ["USA"]
+  customer_price     = "9.99"
+}
+
+data "apple_in_app_purchase_price_point_equalizations" "all" {
+  price_point_id = data.apple_in_app_purchase_price_points.base.price_points[0].id
+}
+
+data "apple_in_app_purchase_price_point_equalizations" "narrowed" {
+  price_point_id = data.apple_in_app_purchase_price_points.base.price_points[0].id
+  territories    = ["GBR", "EGY"]
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckInAppPurchaseExists("apple_in_app_purchase.test"),
+					resource.TestCheckResourceAttrSet("data.apple_in_app_purchase_price_point_equalizations.all", "price_points.0.id"),
+					resource.TestCheckResourceAttrSet("data.apple_in_app_purchase_price_point_equalizations.all", "price_points.0.customer_price"),
+					// Populated only because the client asks for include=territory.
+					resource.TestCheckResourceAttrSet("data.apple_in_app_purchase_price_point_equalizations.all", "price_point_ids.GBR"),
+					// Apple applies the territory filter.
+					resource.TestCheckResourceAttr("data.apple_in_app_purchase_price_point_equalizations.narrowed", "total_count", "2"),
+					resource.TestCheckResourceAttrSet("data.apple_in_app_purchase_price_point_equalizations.narrowed", "price_point_ids.EGY"),
+				),
+			},
+		},
+	})
+}
+
 func testAccInAppPurchasesDataSourceConfig(primary, secondary string) string {
 	return testAccInAppPurchaseConfig(primary, testAccProductName("Pro Unlock"), "NON_CONSUMABLE") + fmt.Sprintf(`
 resource "apple_in_app_purchase" "second" {

@@ -271,10 +271,13 @@ an example):
 Also for 1.0:
 - [ ] Phased release (`appStoreVersionPhasedReleases`): a setting on most
       releases.
-- [ ] Price point equalizations for apps and in-app purchases
-      (`/v1/appPricePoints/{id}/equalizations`,
-      `/v1/inAppPurchasePricePoints/{id}/equalizations`), so selling everywhere
-      no longer means picking 175 price points by hand.
+- [x] Price point equalizations for apps and in-app purchases
+      (`/v3/appPricePoints/{id}/equalizations`,
+      `/v1/inAppPurchasePricePoints/{id}/equalizations`):
+      `apple_app_price_point_equalizations` and
+      `apple_in_app_purchase_price_point_equalizations`. Both price schedules
+      already equalize their base territory, so these report what that charges
+      and give the IDs to pin as manual prices.
 - [ ] Export compliance in the CLI: `build verify` checks
       `ITSAppUsesNonExemptEncryption`, or a command sets
       `usesNonExemptEncryption` on a build. Today it is a manual step that parks
