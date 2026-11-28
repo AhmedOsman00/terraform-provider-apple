@@ -16,7 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -74,12 +74,15 @@ func (r *subscriptionAvailabilityResource) Schema(_ context.Context, _ resource.
 				},
 			},
 			"available_in_new_territories": schema.BoolAttribute{
-				MarkdownDescription: "Whether the subscription is offered automatically in territories the " +
-					"App Store adds in future. Defaults to `true`, matching App Store Connect's own " +
-					"default. Set it to `false` to keep the territory list exactly as configured.",
+				MarkdownDescription: "Whether the subscription is offered automatically in territories the App Store adds in " +
+					"future. Left unset, a new availability is created with `true`, App Store Connect's own " +
+					"default, and an existing one keeps the answer Apple holds, so an import plans no " +
+					"change. Set it to `false` to keep the territory list exactly as configured.",
 				Optional: true,
 				Computed: true,
-				Default:  booldefault.StaticBool(true),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"available_territories": schema.SetAttribute{
 				MarkdownDescription: "The three-letter Apple territory codes the subscription is sold in, " +
@@ -318,7 +321,7 @@ func (r *subscriptionAvailabilityResource) write(ctx context.Context, plan *subs
 
 	availability, err := r.client.CreateSubscriptionAvailability(
 		subscriptionID,
-		plan.AvailableInNewTerritories.ValueBool(),
+		availableInNewTerritories(plan),
 		territories,
 		nil,
 	)
@@ -344,4 +347,20 @@ func (r *subscriptionAvailabilityResource) write(ctx context.Context, plan *subs
 	}
 
 	plan.ID = types.StringValue(availability.ID)
+}
+
+// availableInNewTerritories resolves the answer to send, and records it in the
+// plan.
+//
+// The attribute has no Terraform default, so that an imported availability
+// keeps Apple's answer. Apple's POST replaces the whole record, though, so a
+// write must send one: an unset value on a new availability is App Store
+// Connect's own default, true. On an update UseStateForUnknown has already
+// carried the answer in state forward.
+func availableInNewTerritories(plan *subscriptionAvailabilityModel) bool {
+	if plan.AvailableInNewTerritories.IsNull() || plan.AvailableInNewTerritories.IsUnknown() {
+		plan.AvailableInNewTerritories = types.BoolValue(true)
+	}
+
+	return plan.AvailableInNewTerritories.ValueBool()
 }

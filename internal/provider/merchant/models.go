@@ -67,7 +67,8 @@ func GetIdentifierValidator() []validator.String {
 // GetDisplayNameValidator returns validators for Merchant ID display name fields.
 func GetDisplayNameValidator() []validator.String {
 	return []validator.String{
-		stringvalidator.LengthBetween(1, 64),
+		// Characters, not bytes, so a name such as "Café" counts as four.
+		stringvalidator.UTF8LengthBetween(1, 64),
 	}
 }
 

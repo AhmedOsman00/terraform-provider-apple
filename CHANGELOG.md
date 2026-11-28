@@ -12,6 +12,24 @@ FEATURES:
   pinning those prices as manual ones, which stay put when Apple adjusts
   equalized prices for exchange rates or taxes.
 
+BUG FIXES:
+
+* **`apple_user_invitation` no longer resends an imported invitation that
+  allows provisioning.** `provisioning_allowed` defaulted to `false` and forces
+  replacement, so a configuration that left it out cancelled the invitation and
+  emailed the person a new one. Leaving it unset now keeps the answer Apple
+  holds; a new invitation still starts at `false`.
+* **The three availability resources keep Apple's
+  `available_in_new_territories` when it is left unset.** It defaulted to
+  `true` on `apple_app_availability`, `apple_subscription_availability` and
+  `apple_in_app_purchase_availability`, so an imported availability holding
+  `false` planned an update that posts a new record. A new availability is still
+  created with `true`. A test now fails on any default on a resource that can
+  be imported, which is how these four were found.
+* **Device names and Merchant ID display names are limited to 64 characters,
+  not 64 bytes.** A name with a curly apostrophe, as iPhones name themselves,
+  or an accented letter was refused before reaching the limit.
+
 ## 0.10.0 (November 27, 2026)
 
 BREAKING CHANGES:

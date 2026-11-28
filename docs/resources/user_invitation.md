@@ -84,7 +84,7 @@ Apple has no update for an invitation, so a changed set replaces it.
 ### Optional
 
 - `all_apps_visible` (Boolean) Whether the person will see every app on the team. Set it to `false` and name the apps in `visible_apps` to restrict them.
-- `provisioning_allowed` (Boolean) Whether the person may create signing certificates and provisioning profiles once they join. Defaults to `false`.
+- `provisioning_allowed` (Boolean) Whether the person may create signing certificates and provisioning profiles once they join. Left unset, it is not sent, and a new invitation takes Apple's default of `false`; an imported one keeps the answer Apple holds. There is deliberately no Terraform default: the attribute forces replacement, so a default would cancel and resend an imported invitation that allows provisioning.
 - `visible_apps` (Set of String) The Apple IDs of the apps the person will see, used when `all_apps_visible` is `false`. Read back only when the configuration sets it, for the reason given on `apple_user`.
 
 ### Read-Only
