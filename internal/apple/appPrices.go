@@ -202,6 +202,10 @@ func (c *Client) GetAppPricePoints(appID string, territories []string) ([]models
 // gives the IDs to pin as manual prices, which do not follow Apple's later
 // currency and tax adjustments the way equalized ones do.
 //
+// The path is /v3, not /v1: app price points are Apple's AppPricePointV3, and
+// /v1/appPricePoints/{id}/equalizations answers 404 "The path provided does not
+// match a defined resource type". The other two catalogues stay on /v1.
+//
 // The returned records are ordinary AppPricePoints, belonging to the same app
 // the base point does. include=territory makes each identifiable; the territory
 // filter is optional and applied server-side.
@@ -214,7 +218,7 @@ func (c *Client) GetAppPricePointEqualizations(pricePointID string, territories 
 
 	return getAllPagesQuery[models.AppPricePoint](
 		c,
-		fmt.Sprintf("/v1/appPricePoints/%s/equalizations", pricePointID),
+		fmt.Sprintf("/v3/appPricePoints/%s/equalizations", pricePointID),
 		defaultPageSize,
 		params,
 	)

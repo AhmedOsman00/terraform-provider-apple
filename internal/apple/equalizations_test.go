@@ -45,7 +45,7 @@ var equalizationReads = []struct {
 	},
 	{
 		name: "app",
-		path: "/v1/appPricePoints/base-usa/equalizations",
+		path: "/v3/appPricePoints/base-usa/equalizations",
 		kind: "appPricePoints",
 		read: func(c *Client, id string, territories []string) ([]equalizedPoint, error) {
 			points, err := c.GetAppPricePointEqualizations(id, territories)
